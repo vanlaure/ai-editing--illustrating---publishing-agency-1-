@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Model files (large binary files)
+models/
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+*.bin
+
+# Output files
+outputs/
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.wav
+*.mp3
+
+# ComfyUI specific
+ComfyUI/models/
+ComfyUI/output/
+ComfyUI/input/
+ComfyUI/temp/
+ComfyUI/custom_nodes/*/
+!ComfyUI/custom_nodes/.gitkeep
+
+# Server data
+server/data/
+server/uploads/
+server/outputs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+test_*.js
+*.test.js
+
+# Temporary files
+*.tmp
+.cache/

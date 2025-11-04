@@ -1,0 +1,8 @@
+{
+  "name": "AI Music Video Generator",
+  "description": "An application that generates a full-length music video from an audio track, lyrics, and creative direction using AI. It automates storyboarding, character design, and scene generation to produce a final, rendered video.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

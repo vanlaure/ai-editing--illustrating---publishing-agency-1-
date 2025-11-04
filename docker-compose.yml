@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  automatic1111:
+    image: universonic/stable-diffusion-webui:latest
+    container_name: a1111-music-video
+    command: --api --listen --port 8080 --xformers --enable-insecure-extension-access --opt-sdp-attention --no-half-vae --skip-torch-cuda-test --medvram --opt-split-attention --disable-safe-unpickle
+    ports:
+      - "7860:8080"
+    volumes:
+      - ./models:/stable-diffusion-webui/models
+      - ./outputs:/stable-diffusion-webui/outputs
+    environment:
+      - SD_WEBUI_RESTARTING=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  comfyui:
+    build:
+      context: .
+      dockerfile: Dockerfile.comfyui
+    container_name: comfyui-music-video
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./models:/app/ComfyUI/models
+      - ./outputs:/app/ComfyUI/output
+      - ./server/data/images:/app/ComfyUI/input
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+volumes:
+  comfyui-data:
+
+networks:
+  default:
+    name: music-video-network

@@ -1,0 +1,9 @@
+{
+  "connector": {
+    "name": "local"
+  },
+  "extends": ["recommended"],
+  "hints": {
+    "typescript-config/strict": "off"
+  }
+}
