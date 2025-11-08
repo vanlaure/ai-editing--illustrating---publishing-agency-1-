@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-text;
+  }
+}
+
+@layer utilities {
+  .focus-mode {
+    @apply overflow-hidden;
+  }
+  
+  .no-print {
+    @media print {
+      display: none !important;
+    }
+  }
+}

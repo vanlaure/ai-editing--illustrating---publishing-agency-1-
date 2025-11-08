@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Manuscript Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Lora', 'serif'],
+                    },
+                    colors: {
+                        'brand-bg': '#0f172a',
+                        'brand-surface': '#020817',
+                        'brand-border': '#1e293b',
+                        'brand-text': '#e5e7eb',
+                        'brand-text-secondary': '#9ca3af',
+                        'brand-primary': '#6366f1',
+                        'brand-primary-hover': '#4f46e5',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top, rgba(99,102,241,0.14), transparent 55%) fixed, #020817;
+            color: #e5e7eb;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e; /* brand-surface */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333333; /* brand-border */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Tiptap Editor Styles */
+        .ProseMirror {
+            height: 100%;
+            padding-bottom: 20vh; /* Ensure space to scroll past the last line */
+        }
+        .ProseMirror-focused {
+            outline: none;
+        }
+        .ProseMirror p.is-editor-empty:first-child::before {
+            content: attr(data-placeholder);
+            float: left;
+            color: #adb5bd;
+            pointer-events: none;
+            height: 0;
+        }
+        .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+            font-family: 'Lora', serif;
+        }
+        .ProseMirror img {
+            max-width: 100%;
+            height: auto;
+        }
+        .ProseMirror img.ProseMirror-selectednode {
+            outline: 3px solid #8A2BE2; /* brand-primary */
+        }
+        
+        /* Grammar Suggestion Highlights */
+        .suggestion-highlight {
+            cursor: pointer;
+            text-decoration-style: wavy;
+            text-decoration-skip-ink: none; /* Ensure the wavy line is continuous */
+        }
+        .suggestion-highlight.type-spelling {
+            text-decoration-color: #ef4444; /* Red */
+        }
+        .suggestion-highlight.type-grammar {
+            text-decoration-color: #3b82f6; /* Blue */
+        }
+        .suggestion-highlight.type-style {
+            text-decoration-color: #22c55e; /* Green */
+        }
+
+        /* Search Result Highlights */
+        .search-result {
+            background-color: rgba(255, 255, 0, 0.3);
+        }
+
+        /* Print styles */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body, #root, .h-screen {
+                height: auto;
+                overflow: visible;
+            }
+            .overflow-y-auto {
+                overflow: visible;
+            }
+            #printable-area {
+                height: auto;
+            }
+            .ProseMirror {
+                padding-bottom: 0;
+            }
+        }
+
+        /* Focus Mode */
+        main.focus-mode .no-focus,
+        div.focus-mode .no-focus {
+            display: none !important;
+        }
+
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "@tiptap/pm/": "https://aistudiocdn.com/@tiptap/pm@^3.7.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0",
+    "react/": "https://aistudiocdn.com/react@^18.3.1/",
+    "react": "https://aistudiocdn.com/react@^18.3.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.3.1/",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "@tiptap/starter-kit": "https://aistudiocdn.com/@tiptap/starter-kit@^3.7.0",
+    "@tiptap/react": "https://aistudiocdn.com/@tiptap/react@^3.7.0",
+    "@tiptap/core": "https://aistudiocdn.com/@tiptap/core@^3.7.0",
+    "@tiptap/extension-underline": "https://aistudiocdn.com/@tiptap/extension-underline@^3.7.0",
+    "@tiptap/extension-image": "https://aistudiocdn.com/@tiptap/extension-image@^3.7.0",
+    "@tiptap/extension-character-count": "https://aistudiocdn.com/@tiptap/extension-character-count@^3.7.0",
+    "pdfjs-dist": "https://aistudiocdn.com/pdfjs-dist@^4.4.168/build/pdf.mjs",
+    "mammoth": "https://aistudiocdn.com/mammoth@^1.8.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
