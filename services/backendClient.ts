@@ -16,6 +16,32 @@ const post = async <T>(path: string, body: Record<string, unknown>): Promise<T> 
 };
 
 export const backendClient = {
+  async extractWorldBible(context: string) {
+    const response = await fetch('/api/world/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || 'Failed to extract series bible from context.');
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.seriesBible) {
+      throw new Error(data.message || 'Invalid series bible response from server.');
+    }
+
+    return data.seriesBible as {
+      characters?: any[];
+      settings?: any[];
+      factions?: any[];
+      items?: any[];
+      timeline?: any[];
+      styleGuidelines?: any;
+    };
+  },
   async syncIndex(documentId: string, text: string) {
     return post<{ documentId: string; segments: ManuscriptSegment[] }>('/documents', {
       documentId,

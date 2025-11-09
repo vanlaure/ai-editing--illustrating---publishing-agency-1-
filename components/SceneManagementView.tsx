@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { SceneIllustration, ColorPalette } from '../types';
 import { PlusIcon, Loader2Icon, Trash2Icon } from './icons/IconDefs';
 
@@ -13,6 +13,10 @@ interface SceneManagementViewProps {
   ) => Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   isGenerating: boolean;
+  seedSceneTitle?: string;
+  seedSceneDescription?: string;
+  seedPaletteId?: string;
+  seedSceneType?: SceneIllustration['sceneType'];
 }
 
 export const SceneManagementView: React.FC<SceneManagementViewProps> = ({
@@ -20,13 +24,41 @@ export const SceneManagementView: React.FC<SceneManagementViewProps> = ({
   palettes,
   onGenerateScene,
   onDeleteScene,
-  isGenerating
+  isGenerating,
+  seedSceneTitle,
+  seedSceneDescription,
+  seedPaletteId,
+  seedSceneType
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | SceneIllustration['sceneType']>('all');
   const [sceneTitle, setSceneTitle] = useState('');
   const [sceneDescription, setSceneDescription] = useState('');
   const [selectedPalette, setSelectedPalette] = useState<string>('');
   const [selectedSceneType, setSelectedSceneType] = useState<SceneIllustration['sceneType']>('key-moment');
+
+  useEffect(() => {
+    if (seedSceneTitle !== undefined) {
+      setSceneTitle(seedSceneTitle);
+    }
+  }, [seedSceneTitle]);
+
+  useEffect(() => {
+    if (seedSceneDescription !== undefined) {
+      setSceneDescription(seedSceneDescription);
+    }
+  }, [seedSceneDescription]);
+
+  useEffect(() => {
+    if (seedPaletteId !== undefined) {
+      setSelectedPalette(seedPaletteId);
+    }
+  }, [seedPaletteId]);
+
+  useEffect(() => {
+    if (seedSceneType !== undefined) {
+      setSelectedSceneType(seedSceneType);
+    }
+  }, [seedSceneType]);
 
   const sceneTypes = [
     { value: 'chapter-opener' as const, label: 'Chapter Opener', color: 'bg-purple-500' },

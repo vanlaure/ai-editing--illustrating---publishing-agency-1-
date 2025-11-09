@@ -24,6 +24,13 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      test: {
+        globals: true,
+        environment: 'happy-dom',
+        setupFiles: './vitest.setup.ts',
+        clearMocks: true,
+        pool: 'threads',
       }
     };
 });

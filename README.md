@@ -61,6 +61,8 @@ Before running this application, ensure you have:
    ```
    GEMINI_API_KEY=your_actual_api_key_here
    VITE_API_BASE_URL=http://localhost:4000/api
+   # Optional: force the client to skip Gemini Imagen and use the public Pollinations pipeline
+   # VITE_IMAGE_BACKEND=pollinations
    ```
 
 ## Running the Application
@@ -78,6 +80,8 @@ The backend service powers document indexing, RAG search, compliance scans, and 
    ```bash
    GEMINI_API_KEY=your_google_gemini_key
    PORT=4000 # optional
+   # Optional: override the Pollinations endpoint the proxy should call
+   # POLLINATIONS_BASE_URL=https://image.pollinations.ai/prompt/
    ```
 3. Start the backend:
    ```bash

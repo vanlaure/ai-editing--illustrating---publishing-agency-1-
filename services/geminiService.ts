@@ -1,4 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
+import { v4 as uuidv4 } from 'uuid';
 import { GrammarIssue, ConsistencyIssue, PublishingOpportunity, MarketingCampaign, ShowVsTellIssue, FactCheckIssue, Source, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, PacingBeat, ContinuityEvent, OutlineItem, LocalizationPack, LocalizedMetadata } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
@@ -6,6 +7,87 @@ const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
 // This function creates a new AI instance. It should be called right before making a Veo API call
 // to ensure it uses the most up-to-date API key from the selection dialog.
 const getVeoAiInstance = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
+
+const PLACEHOLDER_IMAGE_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAJUlEQVR4nO3BMQEAAADCoPdPbQ43oAAAAAAAAAAAAAAA4D8GdgAAAZLvt2kAAAAASUVORK5CYII=';
+const USE_POLLINATIONS_ONLY = (import.meta.env.VITE_IMAGE_BACKEND || '').toLowerCase() === 'pollinations';
+
+const notifyImageFallback = (message: string, type: 'info' | 'error' = 'info') => {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('gemini-image-fallback', { detail: { message, type } }));
+    }
+};
+
+type ImageAspectRatio = '3:4' | '16:9' | '1:1';
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isTransientGeminiError = (error: unknown) => {
+    const message = typeof error === 'string'
+        ? error
+        : error && typeof error === 'object' && 'message' in error
+        ? String((error as any).message)
+        : '';
+    const status = (error as any)?.error?.status || (error as any)?.status;
+    const statusCode = typeof status === 'number' ? status : parseInt(String(status), 10);
+    
+    return (
+        statusCode === 429 ||
+        statusCode === 503 ||
+        (typeof status === 'string' && status.toLowerCase() === 'unavailable') ||
+        message.toLowerCase().includes('429') ||
+        message.toLowerCase().includes('too many requests') ||
+        message.toLowerCase().includes('unavailable') ||
+        message.toLowerCase().includes('overloaded') ||
+        message.includes('503')
+    );
+};
+
+const withGeminiRetry = async <T>(label: string, run: () => Promise<T>, retries = 3, delayMs = 3000): Promise<T> => {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            return await run();
+        } catch (error) {
+            const is429 = (error as any)?.message?.includes('429') || (error as any)?.status === 429;
+            
+            if (attempt === retries || (!isTransientGeminiError(error) && !is429)) {
+                throw error;
+            }
+            
+            // Use longer backoff for rate limits (429 errors)
+            const baseDelay = is429 ? 10000 : delayMs;
+            const backoffDelay = baseDelay * Math.pow(2, attempt);
+            
+            console.warn(`[Gemini:${label}] ${is429 ? 'rate limited' : 'transient failure'} (attempt ${attempt + 1}/${retries + 1}). Retrying in ${backoffDelay}ms...`);
+            await sleep(backoffDelay);
+        }
+    }
+    throw new Error(`Failed to execute Gemini operation: ${label}`);
+};
+
+interface ImageProxyResponse {
+    provider: 'pollinations' | 'picsum';
+    images: string[];
+}
+
+const requestImagesFromProxy = async (prompt: string, numberOfImages: number, aspectRatio: ImageAspectRatio): Promise<string[]> => {
+    const response = await fetch('/api/image-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, count: numberOfImages, aspectRatio })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Image proxy responded with status ${response.status}`);
+    }
+
+    const data = (await response.json()) as ImageProxyResponse;
+    // Don't show notifications for Pollinations - it's a working fallback
+    // Only show notification if using picsum placeholders
+    if (data.provider === 'picsum') {
+        notifyImageFallback('Using public stock imagery while Pollinations/Gemini services are unavailable.', 'error');
+    }
+    return data.images;
+};
 
 
 export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16') => {
@@ -142,7 +224,21 @@ export const generateAudiobook = async (text: string, stylePrompt: string): Prom
     }
 };
 
-export const generateImages = async (prompt: string, numberOfImages: number = 1, aspectRatio: '3:4' | '16:9' | '1:1' = '3:4'): Promise<string[]> => {
+export const generateImages = async (prompt: string, numberOfImages: number = 1, aspectRatio: ImageAspectRatio = '3:4'): Promise<string[]> => {
+    const useProxy = async () => {
+        try {
+            return await requestImagesFromProxy(prompt, numberOfImages, aspectRatio);
+        } catch (proxyError) {
+            console.error('Image proxy failed:', proxyError);
+            notifyImageFallback('Image generation is currently unavailable. Inserted placeholders so you can keep working.', 'error');
+            return Array.from({ length: numberOfImages }, () => PLACEHOLDER_IMAGE_BASE64);
+        }
+    };
+
+    if (USE_POLLINATIONS_ONLY) {
+        return useProxy();
+    }
+
     try {
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
@@ -161,23 +257,40 @@ export const generateImages = async (prompt: string, numberOfImages: number = 1,
         }
         return base64ImageBytesArray;
     } catch (error) {
-        console.error("Error generating image(s):", error);
-        throw new Error("Failed to generate image(s).");
+        const rawMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+        const lowerMessage = rawMessage.toLowerCase();
+        const billingRestricted = lowerMessage.includes('billed users') || lowerMessage.includes('imagen api is only accessible');
+
+        if (billingRestricted) {
+            console.warn('Imagen API is unavailable for this API key. Using proxy fallback.');
+            return useProxy();
+        }
+
+        console.error("Error generating image(s) via Gemini Imagen:", error);
+        return useProxy();
     }
 };
 
 export const generateMoodboardPrompts = async (text: string): Promise<string[]> => {
-    const prompt = `Act as a creative art director. Read the following manuscript excerpt and generate a list of 5-7 distinct, visually descriptive prompts for an AI image generator to create a mood board. The prompts should capture the key characters, settings, moods, and actions of the scene.
+    const prompt = `Act as a professional book illustration art director. Read the following manuscript excerpt carefully and generate 5-7 highly specific, visually descriptive prompts for an AI image generator to create a cohesive mood board for this book.
+
+IMPORTANT GUIDELINES:
+- Each prompt must be directly tied to specific details, characters, settings, or events from THIS manuscript
+- Include specific character descriptions, clothing, physical features mentioned in the text
+- Describe exact locations, time periods, architectural details from the story
+- Capture the unique mood, atmosphere, and tone of THIS particular narrative
+- Reference specific actions, objects, or scenes described in the text
+- Each prompt should feel like it belongs to THIS book, not generic stock imagery
 
 Manuscript Excerpt:
 ---
 ${text.substring(0, 4000)}...
 ---
 
-Return a valid JSON array of strings, where each string is a detailed image prompt. For example: ["A close-up of a grizzled space marine...", "A wide shot of the neon-drenched city streets..."]. Do not include any other text or markdown.`;
+Return a valid JSON array of strings, where each string is a detailed, book-specific image prompt. Each prompt should be 20-40 words and reference actual elements from the manuscript. Do not include any other text or markdown.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await withGeminiRetry('generateMoodboardPrompts', () => ai.models.generateContent({
             model: 'gemini-2.5-pro',
             contents: prompt,
             config: {
@@ -189,9 +302,13 @@ Return a valid JSON array of strings, where each string is a detailed image prom
                     }
                 }
             }
-        });
+        }));
         const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr);
+        if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
+            throw new Error('Unexpected prompt format returned by the AI.');
+        }
+        return parsed;
     } catch (error) {
         console.error("Error generating moodboard prompts:", error);
         throw new Error("Failed to generate moodboard prompts.");
@@ -322,7 +439,7 @@ export const runGrammarCheckAgent = async (text: string): Promise<GrammarIssue[]
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
+        const response = await withGeminiRetry('runGrammarCheckAgent', () => ai.models.generateContent({
             model: 'gemini-2.5-pro',
             contents: `
                 Analyze the following text for spelling, grammar, and style errors.
@@ -352,7 +469,7 @@ export const runGrammarCheckAgent = async (text: string): Promise<GrammarIssue[]
                     },
                 },
             },
-        });
+        }));
         
         const jsonStr = response.text.trim();
         const issues = JSON.parse(jsonStr);
@@ -402,7 +519,7 @@ export const runConsistencyAgent = async (text: string): Promise<ConsistencyIssu
         });
         
         const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        return JSON.parse(jsonStr) as ConsistencyIssue[];
 
     } catch (error) {
         console.error("Error in consistency agent:", error);
@@ -449,7 +566,8 @@ export const runShowVsTellAgent = async (text: string): Promise<ShowVsTellIssue[
         });
         
         const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        const parsed: Omit<SensitivityIssue, 'id'>[] = JSON.parse(jsonStr);
+        return parsed.map(issue => ({ ...issue, id: uuidv4() }));
 
     } catch (error) {
         console.error("Error in Show vs. Tell agent:", error);

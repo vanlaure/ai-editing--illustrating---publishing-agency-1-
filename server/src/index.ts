@@ -7,6 +7,7 @@ import bodyParser from 'body-parser';
 import { createDocumentsRouter } from './routes/documents';
 import { createRagRouter } from './routes/rag';
 import { createAiRouter } from './routes/ai';
+import { createImageRouter } from './routes/images';
 import { FileVectorStore } from './vectorStore/fileStore';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/api', createDocumentsRouter(vectorStore));
 app.use('/api', createRagRouter(vectorStore));
 app.use('/api', createAiRouter());
+app.use('/api', createImageRouter());
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });

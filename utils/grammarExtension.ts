@@ -60,6 +60,7 @@ export const GrammarExtension = Extension.create({
                                         decorations.push(Decoration.inline(from, to, {
                                             class: `suggestion-highlight type-${issue.type}`,
                                             'data-issue-id': decorationId,
+                                            title: issue.explanation || '',
                                         }));
                                     }
                                 });

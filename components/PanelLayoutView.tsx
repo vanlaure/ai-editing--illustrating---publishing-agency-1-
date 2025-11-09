@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PanelLayout, Panel } from '../types';
 import { PlusIcon, Loader2Icon, Trash2Icon } from './icons/IconDefs';
 
@@ -8,7 +8,7 @@ interface PanelLayoutViewProps {
     layoutType: PanelLayout['layoutType'],
     title: string,
     description: string
-  ) => Promise<void>;
+  ) => Promise<PanelLayout>;
   onGeneratePanel: (
     layoutId: string,
     panelDescription: string,
@@ -27,6 +27,10 @@ interface PanelLayoutViewProps {
   ) => void;
   onDeleteLayout: (layoutId: string) => void;
   isGenerating: boolean;
+  seedLayoutTitle?: string;
+  seedLayoutDescription?: string;
+  seedPanelPrompt?: string;
+  seedLayoutType?: PanelLayout['layoutType'];
 }
 
 export const PanelLayoutView: React.FC<PanelLayoutViewProps> = ({
@@ -36,7 +40,11 @@ export const PanelLayoutView: React.FC<PanelLayoutViewProps> = ({
   onAddDialogue,
   onAddSoundEffect,
   onDeleteLayout,
-  isGenerating
+  isGenerating,
+  seedLayoutTitle,
+  seedLayoutDescription,
+  seedPanelPrompt,
+  seedLayoutType
 }) => {
   const [activeTab, setActiveTab] = useState<'storyboard' | 'final-art' | 'publish'>('storyboard');
   const [selectedLayout, setSelectedLayout] = useState<string>('');
@@ -45,6 +53,30 @@ export const PanelLayoutView: React.FC<PanelLayoutViewProps> = ({
   const [newLayoutType, setNewLayoutType] = useState<PanelLayout['layoutType']>('comic');
   const [panelDescription, setPanelDescription] = useState('');
   const [cameraAngle, setCameraAngle] = useState<Panel['cameraAngle']>('medium');
+
+  useEffect(() => {
+    if (seedLayoutTitle !== undefined) {
+      setNewLayoutTitle(seedLayoutTitle);
+    }
+  }, [seedLayoutTitle]);
+
+  useEffect(() => {
+    if (seedLayoutDescription !== undefined) {
+      setNewLayoutDesc(seedLayoutDescription);
+    }
+  }, [seedLayoutDescription]);
+
+  useEffect(() => {
+    if (seedPanelPrompt !== undefined) {
+      setPanelDescription(seedPanelPrompt);
+    }
+  }, [seedPanelPrompt]);
+
+  useEffect(() => {
+    if (seedLayoutType !== undefined) {
+      setNewLayoutType(seedLayoutType);
+    }
+  }, [seedLayoutType]);
 
   const layoutTypes = [
     { value: 'comic' as const, label: 'Comic Book', desc: 'Traditional panel layouts with gutters' },

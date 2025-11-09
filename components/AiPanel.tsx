@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { HistoryPanel } from './HistoryPanel';
 import { BotIcon, CheckIcon, ChevronDownIcon, SparklesIcon, BookCheckIcon, ShieldCheckIcon, BrainCircuitIcon, ClapperboardIcon, ShieldQuestionIcon, MessagesSquareIcon, FeatherIcon, UsersIcon, SitemapIcon } from './icons/IconDefs';
 import { AiCommand, HistoryItem, AI_COMMAND_OPTIONS, ConsistencyIssue, ShowVsTellIssue, FactCheckIssue, Source, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, ComplianceIssue } from '../types';
+import { ReviewFlow } from './ReviewFlow';
+
+type StepStatus = 'pending' | 'in-progress' | 'complete';
 
 interface AiPanelProps {
   onRunCommand: (command: AiCommand, customPrompt: string) => void;
@@ -43,6 +46,9 @@ interface AiPanelProps {
   onRunComplianceScan: () => void;
   isRunningCompliance: boolean;
   complianceIssues: ComplianceIssue[];
+  workflowProgress: { assistant: boolean; editor: boolean; expert: boolean };
+  editorOutstanding: number;
+  expertOutstanding: number;
 }
 
 const AssistantPanel: React.FC<{ onRunCommand: AiPanelProps['onRunCommand'], isLoading: boolean }> = ({ onRunCommand, isLoading }) => {
@@ -189,8 +195,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({
                         {showVsTellIssues.length > 0 && (
                             <div className="space-y-2">
                                 <h4 className="text-xs font-bold uppercase text-brand-text-secondary">Show vs. Tell Issues</h4>
-                                {showVsTellIssues.map((issue, index) => (
-                                    <div key={index} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
+                                {showVsTellIssues.map((issue) => (
+                                    <div key={issue.id} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
                                         <blockquote className="border-l-2 border-red-500/50 pl-2 text-xs italic text-brand-text-secondary/80">
                                             <strong>Telling:</strong> "{issue.quote}"
                                         </blockquote>
@@ -229,8 +235,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({
                     </button>
                     <div className="space-y-2 max-h-[26rem] overflow-y-auto pr-1">
                         {prosePolishIssues.length > 0 ? (
-                            prosePolishIssues.map((issue, index) => (
-                                <div key={index} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
+                            prosePolishIssues.map((issue) => (
+                                <div key={issue.id} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
                                     <blockquote className="border-l-2 border-red-500/50 pl-2 text-xs italic text-brand-text-secondary/80">
                                         <strong>Original:</strong> "{issue.original}"
                                     </blockquote>
@@ -303,8 +309,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({
                          {sensitivityIssues.length > 0 && (
                             <div className="space-y-2">
                                 <h4 className="text-xs font-bold uppercase text-brand-text-secondary mt-4">Sensitivity & Inclusivity</h4>
-                                {sensitivityIssues.map((issue, index) => (
-                                    <div key={index} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
+                                {sensitivityIssues.map((issue) => (
+                                    <div key={issue.id} className="bg-brand-bg p-3 rounded-md text-sm space-y-2">
                                         <blockquote className="border-l-2 border-purple-400/50 pl-2 text-xs italic text-brand-text-secondary/80">
                                             "{issue.quote}"
                                         </blockquote>
@@ -390,6 +396,43 @@ const AiPanelTabButton: React.FC<{label:string, isActive:boolean, onClick:() => 
 
 export const AiPanel: React.FC<AiPanelProps> = (props) => {
   const [activeTab, setActiveTab] = useState('Assistant');
+  const assistantResponses = useMemo(() => props.history.filter(item => item.type === 'agent').length, [props.history]);
+
+  const workflowSteps = useMemo(() => {
+    const assistantStatus: StepStatus = props.workflowProgress.assistant
+      ? (assistantResponses > 0 ? 'complete' : 'in-progress')
+      : 'pending';
+    const editorStatus: StepStatus = props.workflowProgress.editor
+      ? (props.editorOutstanding > 0 ? 'in-progress' : 'complete')
+      : 'pending';
+    const expertStatus: StepStatus = props.workflowProgress.expert
+      ? (props.expertOutstanding > 0 ? 'in-progress' : 'complete')
+      : 'pending';
+
+    return [
+      {
+        id: 'Assistant' as const,
+        label: 'Assistant',
+        description: 'Capture AI drafts or rewrites.',
+        status: assistantStatus,
+        outstanding: assistantStatus === 'in-progress' ? 1 : 0,
+      },
+      {
+        id: 'Editor' as const,
+        label: 'Editor',
+        description: 'Work through highlighted changes.',
+        status: editorStatus,
+        outstanding: props.editorOutstanding,
+      },
+      {
+        id: 'Expert' as const,
+        label: 'Expert',
+        description: 'Run fact, sensitivity, and compliance passes.',
+        status: expertStatus,
+        outstanding: props.expertOutstanding,
+      },
+    ];
+  }, [assistantResponses, props.editorOutstanding, props.expertOutstanding, props.workflowProgress]);
 
   return (
     <div className="w-80 bg-brand-surface flex flex-col no-print no-focus border-l border-brand-border">
@@ -400,6 +443,7 @@ export const AiPanel: React.FC<AiPanelProps> = (props) => {
                 <p className="text-xs text-brand-text-secondary">Your creative co-pilot</p>
             </div>
         </div>
+        <ReviewFlow steps={workflowSteps} activeStep={activeTab} onStepSelect={(stepId) => setActiveTab(stepId)} />
         
         <div className="flex border-b border-brand-border">
             <AiPanelTabButton label="Assistant" Icon={SparklesIcon} isActive={activeTab === 'Assistant'} onClick={() => setActiveTab('Assistant')} />

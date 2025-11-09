@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MoodboardImage, CharacterConcept, SceneIllustration, PanelLayout, Panel, ColorPalette, PaletteColor, StyleGuide, EnvironmentDesign, PropDesign, MapDesign, SymbolDesign, CoverDesign, PrintSpecs, RevisionFeedback, TypographyDesign } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MoodboardImage, CharacterConcept, SceneIllustration, PanelLayout, Panel, ColorPalette, PaletteColor, StyleGuide, EnvironmentDesign, PropDesign, MapDesign, SymbolDesign, CoverDesign, PrintSpecs, RevisionFeedback, TypographyDesign, IllustrationSeeds } from '../types';
 import {
   PaletteIcon,
   ImageIcon,
@@ -9,7 +9,11 @@ import {
   MapIcon,
   BookIcon,
   SettingsIcon,
-  MessageSquareIcon
+  MessageSquareIcon,
+  SparklesIcon,
+  Loader2Icon,
+  SaveIcon,
+  CheckIcon
 } from './icons/IconDefs';
 import { CharacterSheetView } from './CharacterSheetView';
 import { SceneManagementView } from './SceneManagementView';
@@ -27,6 +31,10 @@ interface IllustrationViewProps {
     moodboardImages: MoodboardImage[];
     isLoading: boolean;
     initialText: string;
+    seeds: IllustrationSeeds | null;
+    onPopulateFromManuscript: () => void;
+    isPopulatingFromManuscript: boolean;
+    populateContextSnippet?: string | null;
     
     // Original Character Concepts
     onGenerateCharacterConcepts: (name: string, description: string) => void;
@@ -47,7 +55,7 @@ interface IllustrationViewProps {
     
     // Panel Layouts
     panels: PanelLayout[];
-    onCreateLayout: (layoutType: PanelLayout['layoutType'], title: string, description: string) => Promise<void>;
+    onCreateLayout: (layoutType: PanelLayout['layoutType'], title: string, description: string) => Promise<PanelLayout>;
     onGeneratePanel: (layoutId: string, panelDescription: string, cameraAngle: Panel['cameraAngle']) => Promise<void>;
     onAddDialogue: (layoutId: string, panelId: string, speaker: string, text: string) => void;
     onAddSoundEffect: (layoutId: string, panelId: string, soundEffect: string) => void;
@@ -101,7 +109,14 @@ interface IllustrationViewProps {
 }
 
 type MoodboardViewProps = Pick<IllustrationViewProps, 'onGenerateMoodboard' | 'moodboardImages' | 'isLoading' | 'initialText'>;
-type CharacterDesignViewProps = Pick<IllustrationViewProps, 'onGenerateCharacterConcepts' | 'isGeneratingConcepts' | 'characterConcepts' | 'onSetReferenceImage'>;
+interface CharacterDesignViewProps {
+    onGenerateCharacterConcepts: IllustrationViewProps['onGenerateCharacterConcepts'];
+    isGeneratingConcepts: boolean;
+    characterConcepts: CharacterConcept[];
+    onSetReferenceImage: IllustrationViewProps['onSetReferenceImage'];
+    seedName?: string;
+    seedDescription?: string;
+}
 
 const IllustrationLoadingSpinner: React.FC<{text: string}> = ({ text }) => (
     <div className="flex flex-col items-center justify-center h-full text-center">
@@ -124,8 +139,12 @@ const MoodboardView: React.FC<MoodboardViewProps> =
 ({ onGenerateMoodboard, moodboardImages, isLoading, initialText }) => {
     const [text, setText] = useState(initialText);
 
+    useEffect(() => {
+        setText(initialText);
+    }, [initialText]);
+
     return (
-        <div className="flex-grow grid grid-cols-12 gap-6 overflow-hidden">
+        <div className="h-full grid grid-cols-12 gap-6">
             <div className="col-span-4 flex flex-col gap-4">
                 <div className="p-4 bg-brand-surface rounded-lg border border-brand-border flex-grow flex flex-col">
                     <h2 className="text-xl font-semibold mb-2">1. Story Visualization</h2>
@@ -159,9 +178,21 @@ const MoodboardView: React.FC<MoodboardViewProps> =
 };
 
 const CharacterDesignView: React.FC<CharacterDesignViewProps> = 
-({ onGenerateCharacterConcepts, isGeneratingConcepts, characterConcepts, onSetReferenceImage }) => {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
+({ onGenerateCharacterConcepts, isGeneratingConcepts, characterConcepts, onSetReferenceImage, seedName, seedDescription }) => {
+    const [name, setName] = useState(seedName || '');
+    const [description, setDescription] = useState(seedDescription || '');
+
+    useEffect(() => {
+        if (seedName !== undefined) {
+            setName(seedName);
+        }
+    }, [seedName]);
+
+    useEffect(() => {
+        if (seedDescription !== undefined) {
+            setDescription(seedDescription);
+        }
+    }, [seedDescription]);
     const latestConcept = characterConcepts.length > 0 ? characterConcepts[characterConcepts.length - 1] : null;
 
     const handleGenerate = () => {
@@ -171,7 +202,7 @@ const CharacterDesignView: React.FC<CharacterDesignViewProps> =
     };
     
     return (
-        <div className="flex-grow grid grid-cols-12 gap-6 overflow-hidden">
+        <div className="h-full grid grid-cols-12 gap-6">
             <div className="col-span-4 flex flex-col gap-4">
                 <div className="p-4 bg-brand-surface rounded-lg border border-brand-border flex flex-col">
                     <h2 className="text-xl font-semibold mb-2">1. Character Details</h2>
@@ -233,6 +264,52 @@ const CharacterDesignView: React.FC<CharacterDesignViewProps> =
 export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
     type TabId = 'concept' | 'moodboard' | 'character' | 'characterSheets' | 'scenes' | 'panels' | 'styleLock' | 'worldbuilding' | 'covers' | 'production' | 'revisions';
     const [activeTab, setActiveTab] = useState<TabId>('concept');
+    const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
+    const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+    // Save all illustration data to localStorage
+    const handleSave = useCallback(() => {
+        setSaveStatus('saving');
+        try {
+            const illustrationData = {
+                moodboardImages: props.moodboardImages,
+                characterConcepts: props.characterConcepts,
+                scenes: props.scenes,
+                panels: props.panels,
+                colorPalettes: props.colorPalettes,
+                styleGuide: props.styleGuide,
+                environments: props.environments,
+                props: props.props,
+                maps: props.maps,
+                symbols: props.symbols,
+                covers: props.covers,
+                printSpecs: props.printSpecs,
+                revisions: props.revisions,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem('illustration-studio-data', JSON.stringify(illustrationData));
+            setSaveStatus('saved');
+            setLastSavedAt(new Date());
+        } catch (error) {
+            console.error('Failed to save illustration data:', error);
+            alert('Failed to save your work. Please try again.');
+            setSaveStatus('unsaved');
+        }
+    }, [props]);
+
+    // Mark as unsaved when data changes
+    useEffect(() => {
+        if (lastSavedAt) {
+            setSaveStatus('unsaved');
+        }
+    }, [
+        props.moodboardImages.length,
+        props.characterConcepts.length,
+        props.scenes.length,
+        props.panels.length,
+        props.colorPalettes.length,
+        props.covers.length
+    ]);
 
     const tabs = [
         { id: 'concept' as const, label: 'Concept', Icon: LightbulbIcon },
@@ -250,12 +327,77 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
 
     return (
         <div className="flex-grow flex flex-col p-6 bg-brand-bg overflow-hidden gap-6">
-            <div className="flex-shrink-0">
-                <h1 className="text-3xl font-bold text-brand-text flex items-center gap-3">
-                    <ImageIcon className="w-8 h-8 text-brand-primary" />
-                    Illustration Studio
-                </h1>
-                <p className="text-lg text-brand-text-secondary mt-1">Complete illustration workflow from concept to final production.</p>
+            <div className="flex-shrink-0 flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-brand-text flex items-center gap-3">
+                        <ImageIcon className="w-8 h-8 text-brand-primary" />
+                        Illustration Studio
+                    </h1>
+                    <p className="text-lg text-brand-text-secondary mt-1">Complete illustration workflow from concept to final production.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    {lastSavedAt && (
+                        <span className="text-xs text-brand-text-muted">
+                            Last saved: {lastSavedAt.toLocaleTimeString()}
+                        </span>
+                    )}
+                    <button
+                        onClick={handleSave}
+                        disabled={saveStatus === 'saving'}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                            saveStatus === 'saved'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : saveStatus === 'unsaved'
+                                ? 'bg-brand-primary text-white hover:bg-brand-primary-hover'
+                                : 'bg-brand-surface text-brand-text-secondary border border-brand-border'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                        {saveStatus === 'saving' ? (
+                            <>
+                                <Loader2Icon className="w-4 h-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : saveStatus === 'saved' ? (
+                            <>
+                                <CheckIcon className="w-4 h-4" />
+                                Saved
+                            </>
+                        ) : (
+                            <>
+                                <SaveIcon className="w-4 h-4" />
+                                Save Work
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+            <div className="flex-shrink-0 bg-brand-surface border border-brand-border rounded-xl p-4 flex flex-wrap gap-4 items-center shadow-sm">
+                <div className="flex-1 min-w-[220px]">
+                    <p className="text-sm font-semibold text-brand-text">Manuscript Push</p>
+                    <p className="text-xs text-brand-text-secondary mt-1">Let the AI seed mood boards, character concepts, and key scenes directly from your current manuscript.</p>
+                    {props.populateContextSnippet && props.populateContextSnippet.trim().length > 0 && (
+                        <p className="text-xs text-brand-text-muted mt-2 border-l-2 border-brand-border pl-3 italic">
+                            “{props.populateContextSnippet}…”
+                        </p>
+                    )}
+                </div>
+                <button
+                    onClick={props.onPopulateFromManuscript}
+                    disabled={props.isPopulatingFromManuscript}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-brand-primary text-white hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {props.isPopulatingFromManuscript ? (
+                        <>
+                            <Loader2Icon className="w-4 h-4 animate-spin" />
+                            Populating
+                        </>
+                    ) : (
+                        <>
+                            <SparklesIcon className="w-4 h-4" />
+                            Populate from Manuscript
+                        </>
+                    )}
+                </button>
             </div>
             
             <div className="flex-shrink-0 border-b border-brand-border overflow-x-auto">
@@ -273,7 +415,8 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
             </div>
 
             <div className="flex-1 overflow-hidden">
-                {activeTab === 'concept' && (
+                <div className="h-full overflow-y-auto">
+                    {activeTab === 'concept' && (
                     <ConceptPreProductionView
                         moodBoards={[]}
                         referenceCollections={[]}
@@ -289,8 +432,24 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
                         onDeleteNote={async () => {}}
                     />
                 )}
-                {activeTab === 'moodboard' && <MoodboardView {...props} />}
-                {activeTab === 'character' && <CharacterDesignView {...props} />}
+                {activeTab === 'moodboard' && (
+                    <MoodboardView
+                        onGenerateMoodboard={props.onGenerateMoodboard}
+                        moodboardImages={props.moodboardImages}
+                        isLoading={props.isLoading}
+                        initialText={props.initialText}
+                    />
+                )}
+                {activeTab === 'character' && (
+                    <CharacterDesignView
+                        onGenerateCharacterConcepts={props.onGenerateCharacterConcepts}
+                        isGeneratingConcepts={props.isGeneratingConcepts}
+                        characterConcepts={props.characterConcepts}
+                        onSetReferenceImage={props.onSetReferenceImage}
+                        seedName={props.seeds?.characterName}
+                        seedDescription={props.seeds?.characterDescription}
+                    />
+                )}
                 {activeTab === 'characterSheets' && (
                     <CharacterSheetView
                         characters={props.characterConcepts}
@@ -308,6 +467,10 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
                         onGenerateScene={props.onGenerateScene}
                         onDeleteScene={props.onDeleteScene}
                         isGenerating={props.isGeneratingIllustration}
+                        seedSceneTitle={props.seeds?.sceneTitle}
+                        seedSceneDescription={props.seeds?.sceneDescription}
+                        seedPaletteId={props.seeds?.paletteId}
+                        seedSceneType={props.seeds?.sceneType}
                     />
                 )}
                 {activeTab === 'panels' && (
@@ -319,6 +482,10 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
                         onAddSoundEffect={props.onAddSoundEffect}
                         onDeleteLayout={props.onDeleteLayout}
                         isGenerating={props.isGeneratingIllustration}
+                        seedLayoutTitle={props.seeds?.layoutTitle}
+                        seedLayoutDescription={props.seeds?.layoutDescription}
+                        seedPanelPrompt={props.seeds?.panelPrompt}
+                        seedLayoutType={props.seeds?.layoutType}
                     />
                 )}
                 {activeTab === 'styleLock' && (
@@ -399,7 +566,8 @@ export const IllustrationView: React.FC<IllustrationViewProps> = (props) => {
                         onAddResponse={props.onAddRevisionResponse}
                         onDeleteRevision={props.onDeleteRevision}
                     />
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

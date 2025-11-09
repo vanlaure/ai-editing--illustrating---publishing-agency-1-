@@ -135,7 +135,7 @@ export const NavigationPane: React.FC<NavigationPaneProps> = ({ isOpen, outline,
         </div>
         <div className="border-t border-brand-border/70 px-4 pt-4 pb-3 space-y-2">
           <div className="flex items-center justify-between">
-            <div>
+            <div title="Automatically indexes your manuscript into searchable segments to power AI chat and provide contextual answers">
               <p className="text-sm font-semibold text-brand-text">Knowledge Index</p>
               <p className="text-[11px] text-brand-text-muted">
                 {manuscriptIndex.length} segments synced
@@ -166,7 +166,7 @@ export const NavigationPane: React.FC<NavigationPaneProps> = ({ isOpen, outline,
         </div>
         <div className="border-t border-brand-border/70 px-4 pt-4 pb-3 space-y-2">
           <div className="flex items-center justify-between">
-            <div>
+            <div title="Analyzes the emotional intensity and pacing of your story across narrative beats to help maintain reader engagement">
               <p className="text-sm font-semibold text-brand-text">Story Pacing</p>
               <p className="text-[11px] text-brand-text-muted">Map intensity across beats</p>
             </div>
@@ -184,7 +184,7 @@ export const NavigationPane: React.FC<NavigationPaneProps> = ({ isOpen, outline,
         </div>
         <div className="border-t border-brand-border/70 px-4 pt-4 pb-3 space-y-2">
           <div className="flex items-center justify-between">
-            <div>
+            <div title="Tracks events chronologically and identifies potential continuity errors or inconsistencies in your story">
               <p className="text-sm font-semibold text-brand-text">Continuity Timeline</p>
               <p className="text-[11px] text-brand-text-muted">Track chronology + risks</p>
             </div>

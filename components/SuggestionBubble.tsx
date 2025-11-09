@@ -1,16 +1,17 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { EditorView } from '@tiptap/pm/view';
-import { GrammarIssue } from '../types';
+import { ManuscriptSuggestion } from '../types';
 import { CheckCircleIcon } from './icons/IconDefs';
 
 interface SuggestionBubbleProps {
-  issue: GrammarIssue;
+  issue: ManuscriptSuggestion;
   onAccept: () => void;
-  onDismiss: () => void;
+  onReject: () => void;
+  onClose: () => void;
   editorView: EditorView;
 }
 
-export const SuggestionBubble: React.FC<SuggestionBubbleProps> = ({ issue, onAccept, onDismiss, editorView }) => {
+export const SuggestionBubble: React.FC<SuggestionBubbleProps> = ({ issue, onAccept, onReject, onClose, editorView }) => {
   const [style, setStyle] = useState<React.CSSProperties>({
     opacity: 0,
     position: 'absolute',
@@ -31,11 +32,14 @@ export const SuggestionBubble: React.FC<SuggestionBubbleProps> = ({ issue, onAcc
   }, [issue, editorView]);
 
 
-  const typeColor = {
+  const typeColor = ({
     spelling: 'border-red-500 bg-red-500/10 text-red-400',
     grammar: 'border-blue-500 bg-blue-500/10 text-blue-400',
     style: 'border-green-500 bg-green-500/10 text-green-400',
-  }[issue.type];
+    narrative: 'border-amber-500 bg-amber-500/10 text-amber-400',
+    polish: 'border-purple-500 bg-purple-500/10 text-purple-400',
+    sensitivity: 'border-pink-500 bg-pink-500/10 text-pink-400',
+  } as const)[issue.type] || 'border-brand-border bg-brand-border/10 text-brand-text-secondary';
 
   return (
     <div
@@ -47,7 +51,7 @@ export const SuggestionBubble: React.FC<SuggestionBubbleProps> = ({ issue, onAcc
         <p className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${typeColor}`}>
           {issue.type}
         </p>
-        <button onClick={onDismiss} className="text-brand-text-secondary hover:text-brand-text text-xl leading-none">&times;</button>
+        <button onClick={onClose} className="text-brand-text-secondary hover:text-brand-text text-xl leading-none">&times;</button>
       </div>
       <p className="text-sm text-brand-text-secondary mb-2">{issue.explanation}</p>
       
@@ -56,13 +60,21 @@ export const SuggestionBubble: React.FC<SuggestionBubbleProps> = ({ issue, onAcc
         <p className="text-sm text-brand-text font-semibold">{issue.suggestion}</p>
       </div>
 
-      <button
-        onClick={onAccept}
-        className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-1.5 font-semibold bg-brand-primary text-white rounded-md hover:bg-brand-primary-hover transition-colors text-sm"
-      >
-        <CheckCircleIcon className="w-4 h-4" />
-        Accept Suggestion
-      </button>
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={onReject}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 font-semibold border border-brand-border rounded-md hover:bg-brand-border/60 transition-colors text-sm"
+        >
+          Reject
+        </button>
+        <button
+          onClick={onAccept}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 font-semibold bg-brand-primary text-white rounded-md hover:bg-brand-primary-hover transition-colors text-sm"
+        >
+          <CheckCircleIcon className="w-4 h-4" />
+          Accept
+        </button>
+      </div>
     </div>
   );
 };

@@ -33,7 +33,7 @@ import { SearchExtension } from './utils/searchExtension';
 import { SuggestionBubble } from './components/SuggestionBubble';
 import { generateImages, generateMoodboardPrompts, runGrammarCheckAgent, runConsistencyAgent, runAiCommand, generateSpeech, generateCoverPrompt, runExpertAgent, generateKeywords, runMarketingCampaignAgent, editImage, runShowVsTellAgent, generateVideo, getVideoOperationStatus, generateVideoPrompt, runFactCheckAgent, createChatSession, sendChatMessage, runCleanupAgent, runDialogueAnalysisAgent, runProsePolishAgent, runSensitivityAgent, runStructuralAnalysisAgent, generateAudiobook, runOutlinePacingAgent, generateContinuityTimeline, generateLocalizationPack, translateMetadata } from './services/geminiService';
 import { backendClient } from './services/backendClient';
-import { AiCommand, GrammarIssue, HistoryItem, Retailer, AI_COMMAND_OPTIONS, ConsistencyIssue, MarketingCampaign, WorldBible, ShowVsTellIssue, FactCheckIssue, Source, ChatMessage, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, NarrationStyle, OutlineItem, AppView, MoodboardImage, CharacterConcept, SceneIllustration, PanelLayout, Panel, ColorPalette, PaletteColor, StyleGuide, EnvironmentDesign, PropDesign, MapDesign, SymbolDesign, CoverDesign, PrintSpecs, CharacterExpression, CharacterPose, CharacterVariation, CharacterTurnaround, TypographyDesign, RevisionFeedback, RevisionResponse, Collaborator, PacingBeat, ContinuityEvent, LocalizationPack, LocalizedMetadata, AssetRightsRecord, AssetRightsStatus, LaunchScenario, ManuscriptSegment, ManuscriptSearchResult, ComplianceIssue, CostPlan } from './types';
+import { AiCommand, GrammarIssue, HistoryItem, Retailer, AI_COMMAND_OPTIONS, ConsistencyIssue, MarketingCampaign, WorldBible, ShowVsTellIssue, FactCheckIssue, Source, ChatMessage, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, NarrationStyle, OutlineItem, AppView, MoodboardImage, CharacterConcept, SceneIllustration, PanelLayout, Panel, ColorPalette, PaletteColor, StyleGuide, EnvironmentDesign, PropDesign, MapDesign, SymbolDesign, CoverDesign, PrintSpecs, CharacterExpression, CharacterPose, CharacterVariation, CharacterTurnaround, TypographyDesign, RevisionFeedback, RevisionResponse, Collaborator, PacingBeat, ContinuityEvent, LocalizationPack, LocalizedMetadata, AssetRightsRecord, AssetRightsStatus, LaunchScenario, ManuscriptSegment, ManuscriptSearchResult, ComplianceIssue, CostPlan, ManuscriptSuggestion, IllustrationSeeds } from './types';
 import { createWavBlobFromBase64 } from './utils/audioUtils';
 import ReactToPrint from 'react-to-print';
 import { v4 as uuidv4 } from 'uuid';
@@ -166,6 +166,69 @@ export const App: React.FC = () => {
   const [isGeneratingCostPlan, setIsGeneratingCostPlan] = useState(false);
   const [isWorldBibleModalOpen, setIsWorldBibleModalOpen] = useState(false);
   const [worldBible, setWorldBible] = useState<WorldBible>({ characters: [], settings: [], items: [], seriesContext: '' });
+  const [isExtractingWorldBible, setIsExtractingWorldBible] = useState(false);
+  const [worldBibleExtractionStatus, setWorldBibleExtractionStatus] = useState<'idle' | 'extracting' | 'success' | 'error'>('idle');
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  const handleExtractWorldBible = useCallback(async () => {
+    if (!worldBible.seriesContext?.trim()) {
+      alert('Please provide series context before extracting.');
+      return;
+    }
+    
+    setIsExtractingWorldBible(true);
+    setWorldBibleExtractionStatus('extracting');
+    showNotification('Extracting World Bible data...', 'success');
+    
+    try {
+      const extracted = await backendClient.extractWorldBible(worldBible.seriesContext);
+      
+      const newCharacters = (extracted.characters || []).map(char => ({
+        id: uuidv4(),
+        name: char.name || 'Unnamed Character',
+        role: char.role || '',
+        description: char.description || '',
+        traits: char.traits || [],
+        relationships: char.relationships || []
+      }));
+      
+      const newSettings = (extracted.settings || []).map(setting => ({
+        id: uuidv4(),
+        name: setting.name || 'Unnamed Location',
+        type: setting.type || 'location',
+        description: setting.description || '',
+        significance: setting.significance || ''
+      }));
+      
+      const newItems = (extracted.items || []).map(item => ({
+        id: uuidv4(),
+        name: item.name || 'Unnamed Item',
+        type: item.type || 'object',
+        description: item.description || '',
+        significance: item.significance || ''
+      }));
+      
+      setWorldBible(prev => ({
+        ...prev,
+        characters: [...prev.characters, ...newCharacters],
+        settings: [...prev.settings, ...newSettings],
+        items: [...prev.items, ...newItems]
+      }));
+      
+      const totalCount = newCharacters.length + newSettings.length + newItems.length;
+      setWorldBibleExtractionStatus('success');
+      showNotification(`Successfully extracted ${totalCount} entries (${newCharacters.length} characters, ${newSettings.length} settings, ${newItems.length} items)`, 'success');
+      
+    } catch (error) {
+      console.error('Extraction failed:', error);
+      setWorldBibleExtractionStatus('error');
+      showNotification('Failed to extract World Bible data. Please try again.', 'error');
+    } finally {
+      setIsExtractingWorldBible(false);
+      setTimeout(() => setWorldBibleExtractionStatus('idle'), 6000);
+    }
+  }, [worldBible.seriesContext]);
+  
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
   const [imageToEdit, setImageToEdit] = useState<string | null>(null);
@@ -198,8 +261,9 @@ export const App: React.FC = () => {
   const [isAnalyzingSensitivity, setIsAnalyzingSensitivity] = useState(false);
   const [structuralIssues, setStructuralIssues] = useState<StructuralIssue[]>([]);
   const [isAnalyzingStructure, setIsAnalyzingStructure] = useState(false);
+  const [workflowProgress, setWorkflowProgress] = useState<{ assistant: boolean; editor: boolean; expert: boolean }>({ assistant: false, editor: false, expert: false });
 
-  const [activeSuggestion, setActiveSuggestion] = useState<{ issue: GrammarIssue, from: number, to: number } | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState<{ issue: ManuscriptSuggestion, from: number, to: number } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'dirty' | 'saving'>('saved');
   const [isCleaningUp, setIsCleaningUp] = useState(false);
 
@@ -238,6 +302,9 @@ export const App: React.FC = () => {
   const [printSpecs, setPrintSpecs] = useState<PrintSpecs | null>(null);
   const [revisions, setRevisions] = useState<RevisionFeedback[]>([]);
   const [isGeneratingIllustration, setIsGeneratingIllustration] = useState(false);
+  const [isPopulatingIllustrationFromManuscript, setIsPopulatingIllustrationFromManuscript] = useState(false);
+  const [autoIllustrationContext, setAutoIllustrationContext] = useState<string | null>(null);
+  const [illustrationSeeds, setIllustrationSeeds] = useState<IllustrationSeeds | null>(null);
 
   const [telemetry, setTelemetry] = useState<TelemetrySnapshot>(() => loadTelemetry());
 
@@ -278,6 +345,21 @@ export const App: React.FC = () => {
     [updateTelemetrySnapshot]
   );
 
+  const markWorkflowStep = useCallback((step: 'assistant' | 'editor' | 'expert') => {
+    setWorkflowProgress(prev => (prev[step] ? prev : { ...prev, [step]: true }));
+  }, []);
+
+  const showNotification = useCallback((message: string, type: 'success' | 'error', duration = 5000) => {
+    setNotification({ message, type });
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotification(null);
+      notificationTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
   const {
     projects: opsProjects,
     createProject: createOpsProject,
@@ -302,11 +384,15 @@ export const App: React.FC = () => {
     [commentThreads],
   );
 
+  const editorOutstanding = grammarIssues.length + showVsTellIssues.length + prosePolishIssues.length;
+  const expertOutstanding = factCheckIssues.length + sensitivityIssues.length + complianceIssues.length;
+
   const printRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TtsStatus>('idle');
   const previousWordCountRef = useRef(0);
   const telemetrySyncTimeout = useRef<number | null>(null);
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -345,12 +431,12 @@ export const App: React.FC = () => {
       }
       previousWordCountRef.current = totalWords;
 
-      if (isLiveAnalysisEnabled) {
+      if (isLiveAnalysisEnabled && !isCheckingGrammar) {
         if (liveCheckTimeout) {
             window.clearTimeout(liveCheckTimeout);
         }
         // @ts-ignore
-        setLiveCheckTimeout(setTimeout(() => handleRunGrammarCheck(true), 1500));
+        setLiveCheckTimeout(setTimeout(() => handleRunGrammarCheck(true), 5000));
       }
 
       // Update Outline
@@ -545,6 +631,99 @@ export const App: React.FC = () => {
     }
   }, [editor]);
 
+  // Load saved illustration data from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const savedIllustrationData = localStorage.getItem('illustration-studio-data');
+      if (savedIllustrationData) {
+        const data = JSON.parse(savedIllustrationData);
+        if (data.moodboardImages) setMoodboardImages(data.moodboardImages);
+        if (data.characterConcepts) setCharacterConcepts(data.characterConcepts);
+        if (data.scenes) setScenes(data.scenes);
+        if (data.panels) setPanels(data.panels);
+        if (data.colorPalettes) setColorPalettes(data.colorPalettes);
+        if (data.styleGuide) setStyleGuide(data.styleGuide);
+        if (data.environments) setEnvironments(data.environments);
+        if (data.props) setProps(data.props);
+        if (data.maps) setMaps(data.maps);
+        if (data.symbols) setSymbols(data.symbols);
+        if (data.covers) setCovers(data.covers);
+        if (data.printSpecs) setPrintSpecs(data.printSpecs);
+        if (data.revisions) setRevisions(data.revisions);
+        console.log('Illustration data loaded from localStorage:', {
+          moodboards: data.moodboardImages?.length || 0,
+          characters: data.characterConcepts?.length || 0,
+          scenes: data.scenes?.length || 0,
+          maps: data.maps?.length || 0,
+          savedAt: data.savedAt
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load illustration data from localStorage:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleImageFallback = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string; type?: 'info' | 'error' }>).detail;
+      // Only show notification if it's an actual error (placeholder insertion)
+      if (detail?.type === 'error') {
+        showNotification(detail.message || 'Image generation is unavailable. Placeholder artwork has been inserted.', 'error', 6000);
+      }
+    };
+    window.addEventListener('gemini-image-fallback', handleImageFallback);
+    return () => {
+      window.removeEventListener('gemini-image-fallback', handleImageFallback);
+    };
+  }, [showNotification]);
+
+  const suggestionHighlights = useMemo<ManuscriptSuggestion[]>(() => {
+    const grammarHighlights: ManuscriptSuggestion[] = grammarIssues.map(issue => ({
+      id: issue.id,
+      type: issue.type,
+      original: issue.original,
+      suggestion: issue.suggestion,
+      explanation: issue.explanation,
+      source: 'grammar',
+    }));
+
+    const showVsTellHighlights: ManuscriptSuggestion[] = showVsTellIssues.map(issue => ({
+      id: issue.id,
+      type: 'narrative',
+      original: issue.quote,
+      suggestion: issue.suggestion,
+      explanation: issue.explanation,
+      source: 'showVsTell',
+    }));
+
+    const proseHighlights: ManuscriptSuggestion[] = prosePolishIssues.map(issue => ({
+      id: issue.id,
+      type: 'polish',
+      original: issue.original,
+      suggestion: issue.suggestion,
+      explanation: issue.explanation,
+      source: 'prosePolish',
+    }));
+
+    const sensitivityHighlights: ManuscriptSuggestion[] = sensitivityIssues.map(issue => ({
+      id: issue.id,
+      type: 'sensitivity',
+      original: issue.quote,
+      suggestion: issue.suggestion,
+      explanation: `${issue.issue}: ${issue.explanation}`,
+      source: 'sensitivity',
+    }));
+
+    return [...grammarHighlights, ...showVsTellHighlights, ...proseHighlights, ...sensitivityHighlights];
+  }, [grammarIssues, showVsTellIssues, prosePolishIssues, sensitivityIssues]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr.setMeta(grammarPluginKey, { issues: suggestionHighlights }));
+  }, [editor, suggestionHighlights]);
+
   const handleSave = useCallback(() => {
     if (editor) {
         setSaveStatus('saving');
@@ -570,8 +749,27 @@ export const App: React.FC = () => {
     }
   }, [saveStatus, handleSave]);
 
+  const removeSuggestionIssue = useCallback((issue: ManuscriptSuggestion) => {
+    switch (issue.source) {
+      case 'grammar':
+        setGrammarIssues(prev => prev.filter(i => i.id !== issue.id));
+        break;
+      case 'showVsTell':
+        setShowVsTellIssues(prev => prev.filter(i => i.id !== issue.id));
+        break;
+      case 'prosePolish':
+        setProsePolishIssues(prev => prev.filter(i => i.id !== issue.id));
+        break;
+      case 'sensitivity':
+        setSensitivityIssues(prev => prev.filter(i => i.id !== issue.id));
+        break;
+      default:
+        break;
+    }
+  }, []);
+
   const handleSuggestionClick = useCallback((event: Event) => {
-    const { issue, from, to } = (event as CustomEvent).detail;
+    const { issue, from, to } = (event as CustomEvent<{ issue: ManuscriptSuggestion; from: number; to: number }>).detail;
     setActiveSuggestion({ issue, from, to });
   }, []);
 
@@ -588,17 +786,22 @@ export const App: React.FC = () => {
         const { from, to, issue } = activeSuggestion;
         editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, issue.suggestion).run();
         setActiveSuggestion(null);
-        // Remove the accepted issue from the list
-        setGrammarIssues(prev => prev.filter(i => i.id !== issue.id));
+        removeSuggestionIssue(issue);
     }
-  }, [activeSuggestion, editor]);
+  }, [activeSuggestion, editor, removeSuggestionIssue]);
 
-  const handleDismissSuggestion = useCallback(() => {
-    if(activeSuggestion && editor) {
-        setGrammarIssues(prev => prev.filter(i => i.id !== activeSuggestion.issue.id));
+  const handleRejectSuggestion = useCallback(() => {
+    if(activeSuggestion) {
+        removeSuggestionIssue(activeSuggestion.issue);
         setActiveSuggestion(null);
     }
-  }, [activeSuggestion, editor]);
+  }, [activeSuggestion, removeSuggestionIssue]);
+
+  const handleCloseSuggestion = useCallback(() => {
+    if (activeSuggestion) {
+      setActiveSuggestion(null);
+    }
+  }, [activeSuggestion]);
 
   const handleImportBook = (data: { content: string; blurb?: string; coverPrompt?: string; }) => {
     if (editor) {
@@ -614,6 +817,41 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleFileUploadChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!editor) {
+      alert('Editor is still loading. Please try again in a moment.');
+      event.target.value = '';
+      return;
+    }
+
+    const inputEl = event.target;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const isHtml = file.type === 'text/html' || extension === 'html' || extension === 'htm';
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = typeof reader.result === 'string' ? reader.result : '';
+        const htmlContent = isHtml ? raw : processTextToHtml(raw);
+        editor.commands.setContent(htmlContent || '<p></p>');
+        handleSave();
+      } catch (error) {
+        console.error('Failed to import manuscript', error);
+        alert('Unable to import that manuscript. Please upload a TXT, Markdown, or HTML file.');
+      } finally {
+        inputEl.value = '';
+      }
+    };
+    reader.onerror = () => {
+      console.error('Failed to read manuscript file', reader.error);
+      alert('We could not read that file. Please try again.');
+      inputEl.value = '';
+    };
+    reader.readAsText(file);
+  }, [editor, handleSave]);
+
   const addToHistory = (prompt: string, content: string, type: 'user' | 'agent' = 'agent') => {
     const newItem: HistoryItem = { id: uuidv4(), type, prompt, content };
     setHistory(prev => [newItem, ...prev]);
@@ -621,6 +859,7 @@ export const App: React.FC = () => {
   
   const handleRunCommand = async (command: AiCommand, customPrompt: string) => {
     if (!editor) return;
+    markWorkflowStep('assistant');
 
     const selection = editor.state.selection;
     const context = editor.state.doc.textBetween(selection.from, selection.to) || editor.getText();
@@ -651,20 +890,24 @@ export const App: React.FC = () => {
   };
 
   const handleRunGrammarCheck = async (isLive = false) => {
-    if (!editor) return;
+    if (!editor || isCheckingGrammar) return;
     setIsCheckingGrammar(true);
     try {
         const fullText = editor.getText();
         const issues = await runGrammarCheckAgent(fullText);
         setGrammarIssues(issues);
-        editor.view.dispatch(editor.state.tr.setMeta(grammarPluginKey, { issues }));
+        markWorkflowStep('editor');
         if (!isLive) {
           trackTelemetry('editing', 'grammarChecks', 1, `${issues.length} issues flagged`);
         }
-    } catch (error) {
-        // Silently fail for live analysis, otherwise alert
-        if (!isLive) {
+    } catch (error: any) {
+        const is429 = error?.message?.includes('429') || error?.status === 429;
+        // Silently fail for live analysis or rate limits, otherwise alert
+        if (!isLive && !is429) {
             alert("Failed to run grammar check.");
+        }
+        if (is429 && !isLive) {
+            console.warn('Grammar check rate limited. Try again in a moment.');
         }
     } finally {
         setIsCheckingGrammar(false);
@@ -673,6 +916,7 @@ export const App: React.FC = () => {
 
   const handleRunConsistencyCheck = async () => {
     if (!editor) return;
+    markWorkflowStep('editor');
     setIsCheckingConsistency(true);
     try {
         const fullText = editor.getText();
@@ -690,6 +934,7 @@ export const App: React.FC = () => {
 
   const handleRunShowVsTell = async () => {
     if (!editor) return;
+    markWorkflowStep('editor');
     setIsAnalyzingShowVsTell(true);
     try {
         const fullText = editor.getText();
@@ -710,7 +955,7 @@ export const App: React.FC = () => {
     // Basic check to see if selection matches the quote
     if (textToReplace.trim() === issue.quote.trim()) {
         editor.chain().focus().deleteSelection().insertContent(issue.suggestion).run();
-        setShowVsTellIssues(prev => prev.filter(i => i !== issue));
+        setShowVsTellIssues(prev => prev.filter(i => i.id !== issue.id));
     } else {
         alert("Please select the exact text of the 'telling' quote to apply the suggestion.");
     }
@@ -718,6 +963,7 @@ export const App: React.FC = () => {
   
   const handleRunFactCheck = async () => {
     if (!editor) return;
+    markWorkflowStep('expert');
     setIsCheckingFacts(true);
     try {
         const fullText = editor.getText();
@@ -734,6 +980,7 @@ export const App: React.FC = () => {
   
   const handleRunDialogueAnalysis = async () => {
     if (!editor) return;
+    markWorkflowStep('editor');
     setIsAnalyzingDialogue(true);
     try {
         const fullText = editor.getText();
@@ -749,6 +996,7 @@ export const App: React.FC = () => {
 
   const handleRunProsePolish = async () => {
     if (!editor) return;
+    markWorkflowStep('editor');
     setIsPolishingProse(true);
     try {
         const fullText = editor.getText();
@@ -768,7 +1016,7 @@ export const App: React.FC = () => {
     const textToReplace = editor.state.doc.textBetween(from, to);
     if (textToReplace.trim() === issue.original.trim()) {
         editor.chain().focus().deleteSelection().insertContent(issue.suggestion).run();
-        setProsePolishIssues(prev => prev.filter(i => i !== issue));
+        setProsePolishIssues(prev => prev.filter(i => i.id !== issue.id));
     } else {
         alert("Please select the exact paragraph to apply the suggestion.");
     }
@@ -776,6 +1024,7 @@ export const App: React.FC = () => {
 
   const handleRunSensitivityCheck = async () => {
     if (!editor) return;
+    markWorkflowStep('expert');
     setIsAnalyzingSensitivity(true);
     try {
         const fullText = editor.getText();
@@ -795,7 +1044,7 @@ export const App: React.FC = () => {
     const textToReplace = editor.state.doc.textBetween(from, to);
     if (textToReplace.trim() === issue.quote.trim()) {
         editor.chain().focus().deleteSelection().insertContent(issue.suggestion).run();
-        setSensitivityIssues(prev => prev.filter(i => i !== issue));
+        setSensitivityIssues(prev => prev.filter(i => i.id !== issue.id));
     } else {
         alert("Please select the exact text of the quote to apply the suggestion.");
     }
@@ -1006,6 +1255,7 @@ ${editor.getText().substring(0, 5000)}...
 
   const handleRunComplianceScan = useCallback(async () => {
     if (!editor) return;
+    markWorkflowStep('expert');
     setIsRunningCompliance(true);
     try {
       const response = await backendClient.runComplianceScan(editor.getText());
@@ -1016,7 +1266,7 @@ ${editor.getText().substring(0, 5000)}...
     } finally {
       setIsRunningCompliance(false);
     }
-  }, [editor]);
+  }, [editor, markWorkflowStep]);
 
   const handleGenerateCostPlan = useCallback(
     async (tier: 'starter' | 'professional' | 'cinematic'): Promise<CostPlan | null> => {
@@ -1173,7 +1423,12 @@ ${editor.getText().substring(0, 5000)}...
   const handleGenerateCharacterConcepts = async (name: string, description: string) => {
     setIsGeneratingConcepts(true);
     try {
-        const prompt = `Full body character concept sheet for "${name}", a character who is ${description}. Style: digital painting, high detail, centered character, plain background.`;
+        // Extract key descriptive elements from the description
+        const cleanDesc = description.length > 400
+          ? description.substring(0, 400) + '...'
+          : description;
+        
+        const prompt = `Full body character concept art: ${name}. Character details: ${cleanDesc}. Professional book illustration style, detailed character design, centered pose, neutral background, high quality digital art.`;
         const images = await generateImages(prompt, 4, '3:4');
         const newConcept: CharacterConcept = {
             id: uuidv4(),
@@ -1300,7 +1555,16 @@ ${editor.getText().substring(0, 5000)}...
   const handleGenerateScene = async (sceneType: SceneIllustration['sceneType'], title: string, description: string, paletteId?: string) => {
     setIsGeneratingIllustration(true);
     try {
-      const prompt = `${description}. Style: ${sceneType} scene illustration, cinematic composition, detailed environment.`;
+      const cleanDesc = description.length > 500
+        ? description.substring(0, 500) + '...'
+        : description;
+      
+      const palette = paletteId ? colorPalettes.find(p => p.id === paletteId) : null;
+      const colorHints = palette
+        ? `Color palette: ${palette.colors.map(c => c.name).join(', ')}. `
+        : '';
+      
+      const prompt = `Book illustration scene: ${title}. ${cleanDesc} ${colorHints}Professional ${sceneType} scene artwork, cinematic composition, detailed environment, atmospheric lighting, high quality illustration.`;
       const images = await generateImages(prompt, 1, '16:9');
       const newScene: SceneIllustration = {
         id: uuidv4(),
@@ -1308,7 +1572,7 @@ ${editor.getText().substring(0, 5000)}...
         description,
         imageUrl: `data:image/png;base64,${images[0]}`,
         sceneType,
-        notes: paletteId ? `Using palette: ${colorPalettes.find(p => p.id === paletteId)?.name}` : undefined
+        notes: palette ? `Using palette: ${palette.name}` : undefined
       };
       setScenes(prev => [...prev, newScene]);
       trackTelemetry('illustration', 'scenes', 1, `${sceneType} · ${title}`);
@@ -1324,7 +1588,7 @@ ${editor.getText().substring(0, 5000)}...
   };
 
   // Panel Layout Handlers
-  const handleCreateLayout = async (layoutType: PanelLayout['layoutType'], title: string, description: string) => {
+  const handleCreateLayout = async (layoutType: PanelLayout['layoutType'], title: string, description: string): Promise<PanelLayout> => {
     const newLayout: PanelLayout = {
       id: uuidv4(),
       title,
@@ -1335,6 +1599,7 @@ ${editor.getText().substring(0, 5000)}...
     };
     setPanels(prev => [...prev, newLayout]);
     trackTelemetry('illustration', 'layouts', 1, `${layoutType} · ${title}`);
+    return newLayout;
   };
 
   const handleGeneratePanel = async (layoutId: string, panelDescription: string, cameraAngle: Panel['cameraAngle']) => {
@@ -1424,7 +1689,7 @@ ${editor.getText().substring(0, 5000)}...
     });
   };
 
-  const handleCreatePalette = async (name: string, colors: PaletteColor[], purpose: ColorPalette['purpose'], notes: string) => {
+  const handleCreatePalette = async (name: string, colors: PaletteColor[], purpose: ColorPalette['purpose'], notes: string): Promise<void> => {
     const newPalette: ColorPalette = {
       id: uuidv4(),
       name,
@@ -1438,6 +1703,172 @@ ${editor.getText().substring(0, 5000)}...
 
   const handleDeletePalette = (paletteId: string) => {
     setColorPalettes(prev => prev.filter(p => p.id !== paletteId));
+  };
+
+  const handlePopulateIllustrationFromManuscript = async () => {
+    if (!editor) {
+      alert('The editor is still loading. Try again in a moment.');
+      return;
+    }
+    const manuscript = editor.getText();
+    if (!manuscript.trim()) {
+      alert('Add some manuscript text before auto-populating the illustration suite.');
+      return;
+    }
+
+    setIsPopulatingIllustrationFromManuscript(true);
+
+    try {
+      // Use AI to extract ALL main characters, not just one
+      const characterExtractionPrompt = `Analyze this manuscript and identify ALL main characters (2-5 main characters). For each character, provide their name and a brief physical description based on details in the text.
+
+Manuscript excerpt:
+${manuscript.substring(0, 6000)}
+
+Return ONLY a JSON array like: [{"name": "Character Name", "description": "Physical description"}]`;
+
+      const charactersResponse = await runAiCommand(characterExtractionPrompt, '');
+      let characters: Array<{name: string, description: string}> = [];
+      
+      try {
+        const jsonMatch = charactersResponse.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          characters = JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        console.warn('Failed to parse character extraction, using fallback');
+      }
+
+      // Fallback: Find multiple characters using frequency analysis
+      if (characters.length === 0) {
+        const paragraphs = manuscript.split(/\n\n+/).filter(p => p.trim().length > 50);
+        const properNouns = manuscript.match(/\b[A-Z][a-z]{2,}\b/g) || [];
+        const nounFreq: Record<string, number> = {};
+        properNouns.forEach(noun => {
+          nounFreq[noun] = (nounFreq[noun] || 0) + 1;
+        });
+        
+        const commonWords = new Set(['The', 'And', 'But', 'For', 'Not', 'Chapter', 'Book', 'Part', 'When', 'Then', 'That', 'This', 'There', 'Where', 'What', 'Which', 'Who']);
+        const topCharacters = Object.entries(nounFreq)
+          .filter(([word]) => !commonWords.has(word) && word.length > 2)
+          .sort((a, b) => (b[1] as number) - (a[1] as number))
+          .slice(0, 5)
+          .map(([name], idx) => ({
+            name,
+            description: `${name} from the story. ${paragraphs[idx]?.substring(0, 300) || paragraphs[0]?.substring(0, 300) || 'Main character'}`
+          }));
+        
+        characters = topCharacters.length > 0 ? topCharacters : [{
+          name: 'Protagonist',
+          description: manuscript.substring(0, 400)
+        }];
+      }
+
+      // Extract scene and worldbuilding context
+      const paragraphs = manuscript.split(/\n\n+/).filter(p => p.trim().length > 50);
+      const moodboardContext = paragraphs.slice(0, 3).join('\n\n').substring(0, 2000);
+      const excerpt = moodboardContext;
+      
+      const sceneTitle = outline.find(item => item.level === 2)?.text || `Key scene`;
+      const sceneDescription = `Scene from the story: ${paragraphs[1]?.substring(0, 400) || manuscript.substring(500, 900)}. Setting and atmosphere: ${manuscript.substring(1000, 1400)}`;
+
+      // Generate worldbuilding/map description using AI
+      const worldbuildingPrompt = `Based on this manuscript, describe the world's geography and key locations for map generation:
+
+${manuscript.substring(0, 6000)}
+
+Return ONLY a JSON object: {"mapDescription": "detailed map description", "mapName": "World name"}`;
+
+      const worldbuildingResponse = await runAiCommand(worldbuildingPrompt, '');
+      let worldbuilding: {mapDescription: string, mapName: string} = {
+        mapDescription: `Fantasy world map showing locations from the story: ${manuscript.substring(0, 300)}`,
+        mapName: 'Story World'
+      };
+      
+      try {
+        const jsonMatch = worldbuildingResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.mapDescription) {
+            worldbuilding = parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse worldbuilding, using fallback');
+      }
+
+      // Use first character for primary seeds
+      const heroName = characters[0].name;
+      const heroDescription = characters[0].description;
+
+      const defaultPalette: PaletteColor[] = [
+        { name: 'Nightfall Blue', hex: '#0F172A', usage: 'Shadow base' },
+        { name: 'Aurora Amber', hex: '#FBBF24', usage: 'Emotional highlights' },
+        { name: 'Verdant Glow', hex: '#34D399', usage: 'Hopeful accents' },
+        { name: 'Ember Scarlet', hex: '#EF4444', usage: 'Conflict beats' },
+        { name: 'Star Mist', hex: '#E0E7FF', usage: 'Atmospheric fill' },
+      ];
+
+      setAutoIllustrationContext(excerpt);
+      let paletteId = colorPalettes[0]?.id;
+      if (!paletteId) {
+        await handleCreatePalette('Story Core Palette', defaultPalette, 'global', 'Generated automatically from the manuscript push workflow.');
+        // Get the newly created palette ID after state update
+        paletteId = 'temp-palette-id'; // Will use the first palette in the array after creation
+      }
+
+      const seeds: IllustrationSeeds = {
+        moodboardExcerpt: excerpt,
+        characterName: heroName,
+        characterDescription: heroDescription,
+        sceneTitle,
+        sceneDescription,
+        sceneType: 'key-moment',
+        layoutTitle: `${sceneTitle} Layout`,
+        layoutDescription: 'Storyboard derived from the latest manuscript push. Tweak panel flow as needed before generating art.',
+        layoutType: 'graphic-novel',
+        panelPrompt: sceneDescription,
+        paletteId,
+      };
+      setIllustrationSeeds(seeds);
+
+      if (!styleGuide) {
+        await handleCreateStyleGuide('graphic-novel', 'film', 'variable', 'Auto-created from the manuscript push workflow.');
+      }
+      trackTelemetry('illustration', 'autoPopulate', 1, 'Manuscript pushed to Illustration Studio');
+      
+      // Generate moodboard
+      await handleGenerateMoodboard(seeds.moodboardExcerpt);
+      
+      // Generate ALL characters found in the manuscript
+      for (const character of characters) {
+        await handleGenerateCharacterConcepts(character.name, character.description);
+      }
+      
+      // Generate the main scene
+      await handleGenerateScene(seeds.sceneType, seeds.sceneTitle, seeds.sceneDescription, seeds.paletteId);
+
+      // Generate panel layout
+      let targetLayout = panels.find(p => p.title === seeds.layoutTitle);
+      if (!targetLayout) {
+        targetLayout = await handleCreateLayout(seeds.layoutType, seeds.layoutTitle, seeds.layoutDescription);
+      }
+      if (targetLayout && seeds.panelPrompt) {
+        await handleGeneratePanel(targetLayout.id, seeds.panelPrompt, 'medium');
+      }
+
+      showNotification(`Illustration suite populated with ${characters.length} characters and key scenes! Generating world map...`, 'success');
+      
+      // Generate world map from the manuscript (after notification to avoid blocking)
+      handleGenerateMap(worldbuilding.mapName, worldbuilding.mapDescription, 'world').catch(err => {
+        console.error('Map generation failed:', err);
+      });
+    } catch (error) {
+      console.error('Failed to auto-populate illustration workspace:', error);
+      alert('Illustration auto-populate failed. Please try again after a moment.');
+    } finally {
+      setIsPopulatingIllustrationFromManuscript(false);
+    }
   };
 
   // Worldbuilding Handlers
@@ -2369,6 +2800,27 @@ ${editor.getText().substring(0, 5000)}...
 
   return (
     <div className={`h-screen w-screen flex flex-col font-sans ${focusMode ? 'focus-mode' : ''}`}>
+        {/* Notification Toast */}
+        {notification && (
+          <div className={`fixed top-4 right-4 z-[100] px-6 py-4 rounded-lg shadow-xl border-2 animate-fade-in ${
+            notification.type === 'success'
+              ? 'bg-green-500/90 border-green-400 text-white'
+              : 'bg-red-500/90 border-red-400 text-white'
+          }`}>
+            <div className="flex items-center gap-3">
+              {notification.type === 'success' ? (
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              <p className="font-semibold">{notification.message}</p>
+            </div>
+          </div>
+        )}
         <Navbar activeView={activeView} setActiveView={setActiveView} />
         
         <div className="flex-grow flex overflow-hidden">
@@ -2407,7 +2859,12 @@ ${editor.getText().substring(0, 5000)}...
               lastIndexedAt={lastIndexedAt}
             />
             <main className="flex-grow flex flex-col overflow-hidden relative">
-                <Toolbar editor={editor} toggleFocusMode={() => setFocusMode(!focusMode)} saveStatus={saveStatus} onSave={handleSave} />
+                <Toolbar
+                    editor={editor}
+                    toggleFocusMode={() => setFocusMode(!focusMode)}
+                    saveStatus={saveStatus}
+                    onSave={handleSave}
+                />
                 <div className="flex-grow overflow-y-auto">
                 <Editor editor={editor} ref={printRef} />
                 </div>
@@ -2427,7 +2884,8 @@ ${editor.getText().substring(0, 5000)}...
                     issue={activeSuggestion.issue}
                     editorView={editor.view}
                     onAccept={handleAcceptSuggestion}
-                    onDismiss={handleDismissSuggestion}
+                    onReject={handleRejectSuggestion}
+                    onClose={handleCloseSuggestion}
                 />
                 )}
             </main>
@@ -2471,6 +2929,9 @@ ${editor.getText().substring(0, 5000)}...
               onRunComplianceScan={handleRunComplianceScan}
               isRunningCompliance={isRunningCompliance}
               complianceIssues={complianceIssues}
+              workflowProgress={workflowProgress}
+              editorOutstanding={editorOutstanding}
+              expertOutstanding={expertOutstanding}
             />
             <CommentsPanel
               isOpen={isCommentsPanelOpen}
@@ -2536,11 +2997,15 @@ ${editor.getText().substring(0, 5000)}...
                 onGenerateMoodboard={handleGenerateMoodboard}
                 moodboardImages={moodboardImages}
                 isLoading={isGeneratingMoodboard}
-                initialText={editor?.getText().substring(0, 4000) || ''}
+                initialText={illustrationSeeds?.moodboardExcerpt || editor?.getText().substring(0, 4000) || ''}
+                seeds={illustrationSeeds}
                 onGenerateCharacterConcepts={handleGenerateCharacterConcepts}
                 isGeneratingConcepts={isGeneratingConcepts}
                 characterConcepts={characterConcepts}
                 onSetReferenceImage={handleSetCharacterReferenceImage}
+                onPopulateFromManuscript={handlePopulateIllustrationFromManuscript}
+                isPopulatingFromManuscript={isPopulatingIllustrationFromManuscript}
+                populateContextSnippet={autoIllustrationContext || ((editor?.getText() || '').trim().slice(0, 200))}
                 onGenerateExpression={handleGenerateExpression}
                 onGeneratePose={handleGeneratePose}
                 onGenerateVariation={handleGenerateVariation}
@@ -2621,7 +3086,15 @@ ${editor.getText().substring(0, 5000)}...
         <VersionHistoryModal isOpen={isVersionHistoryModalOpen} onClose={() => setIsVersionHistoryModalOpen(false)} snapshots={snapshots} onSaveSnapshot={(name) => {}} onRestoreSnapshot={(content) => {}} />
         <PublishingModal isOpen={isPublishingModalOpen} onClose={() => setIsPublishingModalOpen(false)} manuscript={editor?.getText() || ''} coverArt={coverArt} onGenerateBlurb={handleGenerateBlurb} onGenerateCoverArt={handleGenerateCoverArt} onGenerateKeywords={handleGenerateKeywords} onOpenImageEditor={handleOpenImageEditor} />
         <MarketingModal isOpen={isMarketingModalOpen} onClose={() => setIsMarketingModalOpen(false)} onGenerateCampaign={handleGenerateMarketingCampaign} campaign={marketingCampaign} isLoading={isGeneratingCampaign} onOpenVideoTrailer={() => setIsVideoTrailerModalOpen(true)}/>
-        <WorldBibleModal isOpen={isWorldBibleModalOpen} onClose={() => setIsWorldBibleModalOpen(false)} worldBible={worldBible} onUpdate={setWorldBible} />
+        <WorldBibleModal
+          isOpen={isWorldBibleModalOpen}
+          onClose={() => setIsWorldBibleModalOpen(false)}
+          worldBible={worldBible}
+          onUpdate={setWorldBible}
+          isExtracting={isExtractingWorldBible}
+          extractionStatus={worldBibleExtractionStatus}
+          onExtractFromDocuments={handleExtractWorldBible}
+        />
         <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} onExport={handleExport} onPrint={() => {}} onCleanup={handleRunCleanup} isCleaningUp={isCleaningUp}/>
         <ImageEditorModal isOpen={isImageEditorOpen} onClose={() => setIsImageEditorOpen(false)} baseImage={imageToEdit} onSave={handleSaveEditedImage} onEditImage={editImage} />
         <VideoTrailerModal isOpen={isVideoTrailerModalOpen} onClose={() => setIsVideoTrailerModalOpen(false)} manuscript={editor?.getText() || ''} onGenerateVideo={generateVideo} onGetVideoStatus={getVideoOperationStatus} onGeneratePrompt={generateVideoPrompt} />
@@ -2644,7 +3117,13 @@ ${editor.getText().substring(0, 5000)}...
                 content={() => printRef.current}
             />
         </div>
-        <input type="file" id="file-upload" className="hidden" accept=".txt,.html,.md" />
+        <input
+          type="file"
+          id="file-upload"
+          className="hidden"
+          accept=".txt,.html,.md"
+          onChange={handleFileUploadChange}
+        />
     </div>
   );
 };

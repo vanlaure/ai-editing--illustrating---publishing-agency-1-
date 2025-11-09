@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MapDesign, SymbolDesign, EnvironmentDesign, PropDesign } from '../types';
 
-type WorldbuildingTab = 'maps' | 'symbols' | 'environments' | 'props';
+type WorldbuildingTab = 'maps' | 'symbols' | 'environments' | 'props' | 'knowledge';
 
 type MapType = 'world' | 'region' | 'city' | 'dungeon' | 'battle';
 type EnvironmentType = 'architectural' | 'natural' | 'urban' | 'fantasy' | 'scifi' | 'cultural';
@@ -20,6 +20,17 @@ interface WorldbuildingViewProps {
   onDeleteSymbol: (id: string) => void;
   onDeleteEnvironment: (id: string) => void;
   onDeleteProp: (id: string) => void;
+  // Knowledge/Context Bible handlers
+  onUploadKnowledgeSource?: (params: {
+    bibleType: 'series' | 'research' | 'styleTone' | 'canon' | 'licensingIP' | 'custom';
+    label: string;
+    seriesId?: string;
+    bookId?: string;
+    projectId?: string;
+    text?: string;
+    files?: FileList;
+  }) => Promise<void>;
+  isProcessingKnowledge?: boolean;
 }
 
 export const WorldbuildingView: React.FC<WorldbuildingViewProps> = ({
@@ -184,6 +195,16 @@ export const WorldbuildingView: React.FC<WorldbuildingViewProps> = ({
             }`}
           >
             ⚔️ Props & Vehicles
+          </button>
+          <button
+            onClick={() => setActiveTab('knowledge')}
+            className={`px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'knowledge'
+                ? 'border-b-2 border-brand-primary text-brand-primary'
+                : 'text-brand-text-secondary hover:text-brand-text-primary'
+            }`}
+          >
+            📚 Knowledge Bibles
           </button>
         </div>
       </div>
@@ -684,6 +705,134 @@ export const WorldbuildingView: React.FC<WorldbuildingViewProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Knowledge/Context Bibles Tab */}
+        {activeTab === 'knowledge' && (
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="bg-brand-surface rounded-lg border border-brand-border p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-brand-text-primary">
+                Unified Knowledge / Context Bibles
+              </h3>
+              <p className="text-sm text-brand-text-secondary">
+                Upload manuscripts, research, style guides, licensing docs, or lore once. The Knowledge Agent will
+                auto-extract structured bibles (series canon, research facts, tone rules, IP constraints, etc.) used
+                across editing, worldbuilding, QC, and compliance.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* Bible Type */}
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Bible Type
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-sm text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                    defaultValue="series"
+                  >
+                    <option value="series">Series / Story Canon</option>
+                    <option value="research">Research / Reference</option>
+                    <option value="styleTone">Style / Tone Guide</option>
+                    <option value="canon">Universe Canon / Franchise Bible</option>
+                    <option value="licensingIP">Licensing / IP Rules</option>
+                    <option value="custom">Custom Knowledge Set</option>
+                  </select>
+                </div>
+
+                {/* Label */}
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Bible Label
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 'Saga of Aetheria Series Bible' or 'Sci-Fi Weapons Research'"
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-sm text-brand-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Series ID (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Link to a series/project key if applicable"
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-xs text-brand-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Book ID (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Use for book-specific intake (e.g., Book 1)"
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-xs text-brand-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Project / Brand ID (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="For brand-wide style or IP guides"
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-xs text-brand-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Upload + Paste */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Upload Source Files
+                  </label>
+                  <div className="border-2 border-dashed border-brand-border rounded-md p-3 text-xs text-brand-text-secondary bg-brand-bg">
+                    <p className="mb-2">
+                      Drop PDFs/DOCX/TXT/MD here or click to browse. These will be ingested by the Knowledge Agent
+                      to build or update the selected bible.
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      className="w-full text-xs text-brand-text-secondary"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-brand-text-secondary mb-1">
+                    Or Paste Raw Text / Excerpts
+                  </label>
+                  <textarea
+                    rows={6}
+                    placeholder="Paste chapters, notes, style rules, contracts, or reference passages here..."
+                    className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded text-xs text-brand-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary resize-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isGenerating || !onUploadKnowledgeSource}
+                className="w-full md:w-auto px-5 py-2 bg-brand-primary text-white text-sm font-semibold rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isGenerating
+                  ? 'Processing with Knowledge Agent...'
+                  : 'Create / Update Knowledge Bible with AI Agent'}
+              </button>
+
+              {!onUploadKnowledgeSource && (
+                <p className="text-[10px] text-red-400 mt-2">
+                  Note for developers: wire onUploadKnowledgeSource to backend extraction endpoint
+                  (e.g., POST /knowledge-bibles/extract) so this intake triggers structured bible creation.
+                </p>
+              )}
             </div>
           </div>
         )}

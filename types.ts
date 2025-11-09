@@ -89,6 +89,7 @@ export interface ConsistencyIssue {
 }
 
 export interface ShowVsTellIssue {
+    id: string;
     quote: string;
     explanation: string;
     suggestion: string;
@@ -108,16 +109,31 @@ export interface DialogueIssue {
 }
 
 export interface ProsePolishIssue {
+    id: string;
     original: string;
     suggestion: string;
     explanation: string;
 }
 
 export interface SensitivityIssue {
+    id: string;
     quote: string;
     issue: string;
     explanation: string;
     suggestion: string;
+}
+
+export type ManuscriptSuggestionType = 'spelling' | 'grammar' | 'style' | 'narrative' | 'polish' | 'sensitivity';
+
+export type ManuscriptSuggestionSource = 'grammar' | 'showVsTell' | 'prosePolish' | 'sensitivity';
+
+export interface ManuscriptSuggestion {
+    id: string;
+    type: ManuscriptSuggestionType;
+    original: string;
+    suggestion: string;
+    explanation: string;
+    source: ManuscriptSuggestionSource;
 }
 
 export interface StructuralIssue {
@@ -254,6 +270,108 @@ export interface Item {
   description: string;
 }
 
+export type KnowledgeBibleType = 'series' | 'research' | 'styleTone' | 'canon' | 'licensingIP' | 'custom';
+
+export interface KnowledgeBibleSource {
+  id: string;
+  name: string;
+  sourceType: 'manuscript' | 'notes' | 'lore' | 'referenceBook' | 'article' | 'contract' | 'styleGuide' | 'other';
+  storageRef: string;
+  bookId?: string;
+  seriesId?: string;
+  projectId?: string;
+}
+
+export interface SeriesWorldRule {
+  id: string;
+  category: string;
+  description: string;
+  sourceIds: string[];
+}
+
+export interface Faction {
+  id: string;
+  name: string;
+  description: string;
+  relationships?: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  label: string;
+  description: string;
+  bookId?: string;
+  sequence?: number;
+  impacts?: string[];
+}
+
+export interface StyleToneGuideline {
+  id: string;
+  scope: 'series' | 'book' | 'brand' | 'global';
+  notes: string;
+  examples?: string[];
+  bannedPatterns?: string[];
+}
+
+export interface ResearchFact {
+  id: string;
+  claim: string;
+  citation?: string;
+  sourceId?: string;
+  reliability?: 'low' | 'medium' | 'high';
+  topicTags?: string[];
+}
+
+export interface LicensingRule {
+  id: string;
+  description: string;
+  category: 'allowedUse' | 'prohibitedUse' | 'attribution' | 'territory' | 'term' | 'other';
+  sourceId?: string;
+}
+
+export interface CustomKnowledgeSection {
+  id: string;
+  title: string;
+  content: string;
+}
+
+export interface KnowledgeBible {
+  id: string;
+  label: string;
+  type: KnowledgeBibleType;
+  scope?: {
+    seriesId?: string;
+    bookId?: string;
+    projectId?: string;
+    global?: boolean;
+  };
+  sources: KnowledgeBibleSource[];
+  seriesData?: {
+    worldRules?: SeriesWorldRule[];
+    characters?: Character[];
+    factions?: Faction[];
+    locations?: Setting[];
+    itemsArtifacts?: Item[];
+    timelineEvents?: TimelineEvent[];
+    styleToneGuidelines?: StyleToneGuideline[];
+  };
+  researchData?: {
+    facts: ResearchFact[];
+  };
+  styleToneData?: {
+    guidelines: StyleToneGuideline[];
+  };
+  licensingData?: {
+    rules: LicensingRule[];
+  };
+  customData?: {
+    sections: CustomKnowledgeSection[];
+  };
+}
+
+/**
+ * Deprecated: use KnowledgeBible with type: 'series' instead.
+ */
 export interface WorldBible {
   characters: Character[];
   settings: Setting[];
@@ -487,6 +605,20 @@ export interface PropDesign {
   scale?: string;
   materials?: string;
   loreNotes?: string;
+}
+
+export interface IllustrationSeeds {
+  moodboardExcerpt: string;
+  characterName: string;
+  characterDescription: string;
+  sceneTitle: string;
+  sceneDescription: string;
+  sceneType: SceneIllustration['sceneType'];
+  layoutTitle: string;
+  layoutDescription: string;
+  layoutType: PanelLayout['layoutType'];
+  panelPrompt?: string;
+  paletteId?: string;
 }
 
 export interface MapDesign {
