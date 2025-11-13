@@ -1,12 +1,67 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { v4 as uuidv4 } from 'uuid';
-import { GrammarIssue, ConsistencyIssue, PublishingOpportunity, MarketingCampaign, ShowVsTellIssue, FactCheckIssue, Source, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, PacingBeat, ContinuityEvent, OutlineItem, LocalizationPack, LocalizedMetadata } from "../types";
+import { GrammarIssue, ConsistencyIssue, PublishingOpportunity, MarketingCampaign, ShowVsTellIssue, FactCheckIssue, Source, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, PacingBeat, ContinuityEvent, OutlineItem, LocalizationPack, LocalizedMetadata, AppSettings } from "../types";
+import { IAiProvider, ProviderFactory, ProviderConfig } from "./aiProviders";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
+const SETTINGS_KEY = 'appSettings';
 
-// This function creates a new AI instance. It should be called right before making a Veo API call
-// to ensure it uses the most up-to-date API key from the selection dialog.
-const getVeoAiInstance = () => new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
+const DEFAULT_MODELS = {
+    textGeneration: 'gemini-2.5-pro',
+    textGenerationFast: 'gemini-2.5-flash',
+    imageGeneration: 'imagen-4.0-generate-001',
+    audioGeneration: 'gemini-2.5-flash-preview-tts',
+    imageEditing: 'gemini-2.5-flash-image',
+    embedding: 'text-embedding-004'
+};
+
+const loadSettings = (): AppSettings | null => {
+    try {
+        const stored = localStorage.getItem(SETTINGS_KEY);
+        if (!stored) return null;
+        return JSON.parse(stored);
+    } catch (error) {
+        console.warn('Failed to load AI settings from localStorage:', error);
+        return null;
+    }
+};
+
+let currentSettings = loadSettings();
+let ai = new GoogleGenAI({ apiKey: currentSettings?.aiProvider.apiKey || import.meta.env.VITE_GEMINI_API_KEY! });
+
+const refreshAiInstance = () => {
+    currentSettings = loadSettings();
+    ai = new GoogleGenAI({ apiKey: currentSettings?.aiProvider.apiKey || import.meta.env.VITE_GEMINI_API_KEY! });
+};
+
+const getVeoAiInstance = () => {
+    const settings = loadSettings();
+    return new GoogleGenAI({ apiKey: settings?.aiProvider.apiKey || import.meta.env.VITE_GEMINI_API_KEY! });
+};
+
+const getModel = (type: 'textGeneration' | 'textGenerationFast' | 'imageGeneration' | 'audioGeneration' | 'imageEditing' | 'embedding'): string => {
+    const settings = loadSettings();
+    return settings?.aiProvider.models[type] || DEFAULT_MODELS[type];
+};
+
+const getProviderInstance = async (): Promise<IAiProvider> => {
+    const settings = loadSettings();
+    if (!settings) {
+        throw new Error('No AI provider settings found. Please configure settings first.');
+    }
+    
+    const config: ProviderConfig = {
+        type: settings.aiProvider.provider,
+        apiKey: settings.aiProvider.apiKey,
+        endpoint: settings.aiProvider.endpoint,
+        models: settings.aiProvider.models
+    };
+    
+    return ProviderFactory.createProvider(config);
+};
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('settingsUpdated', refreshAiInstance);
+}
 
 const PLACEHOLDER_IMAGE_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAJUlEQVR4nO3BMQEAAADCoPdPbQ43oAAAAAAAAAAAAAAA4D8GdgAAAZLvt2kAAAAASUVORK5CYII=';
 const USE_POLLINATIONS_ONLY = (import.meta.env.VITE_IMAGE_BACKEND || '').toLowerCase() === 'pollinations';
@@ -128,7 +183,7 @@ Manuscript: "${manuscript.substring(0, 3000)}..."
 Prompt:`;
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: getModel('textGenerationFast'),
             contents: fullPrompt,
         });
         return response.text;
@@ -151,7 +206,7 @@ export const editImage = async (base64Image: string, prompt: string): Promise<st
             text: prompt,
         };
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: getModel('imageEditing'),
             contents: { parts: [imagePart, textPart] },
             config: {
                 responseModalities: [Modality.IMAGE],
@@ -172,10 +227,56 @@ export const editImage = async (base64Image: string, prompt: string): Promise<st
     }
 };
 
+export const generateImageFromImageFastSDCPU = async (base64Image: string, prompt: string, aspectRatio: ImageAspectRatio = '1:1'): Promise<string> => {
+    const settings = loadSettings();
+    const endpoint = settings?.fastsdcpuEndpoint || 'http://localhost:8000';
+
+    const [width, height] = aspectRatio === '16:9'
+        ? [1024, 576]
+        : aspectRatio === '1:1'
+        ? [1024, 1024]
+        : [768, 1024];
+
+    try {
+        const response = await fetch(`${endpoint}/img2img`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                negative_prompt: 'text, watermark, low quality, blurry, distorted',
+                init_images: [base64Image],
+                width: width,
+                height: height,
+                steps: 20,
+                cfg_scale: 7,
+                denoising_strength: 0.75,
+                seed: Math.floor(Math.random() * 1000000000)
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`FastSD CPU img2img request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.image) {
+            return data.image;
+        } else if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+            return data.images[0];
+        } else {
+            throw new Error('No image data returned from FastSD CPU img2img');
+        }
+    } catch (error) {
+        console.error('FastSD CPU img2img generation failed:', error);
+        throw new Error('Failed to generate image with FastSD CPU img2img.');
+    }
+};
+
 export const generateSpeech = async (text: string): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
+            model: getModel('audioGeneration'),
             contents: [{ parts: [{ text: text }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
@@ -202,7 +303,7 @@ export const generateAudiobook = async (text: string, stylePrompt: string): Prom
         const fullPrompt = `${stylePrompt}: ${text}`;
         
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
+            model: getModel('audioGeneration'),
             contents: [{ parts: [{ text: fullPrompt }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
@@ -224,7 +325,199 @@ export const generateAudiobook = async (text: string, stylePrompt: string): Prom
     }
 };
 
+const generateImagesViaComfyUI = async (prompt: string, numberOfImages: number, aspectRatio: ImageAspectRatio): Promise<string[]> => {
+    const settings = loadSettings();
+    const endpoint = settings?.comfyUIEndpoint || 'http://localhost:8188';
+
+    const workflow = {
+        "3": {
+            "inputs": {
+                "seed": Math.floor(Math.random() * 1000000000),
+                "steps": 20,
+                "cfg": 7,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": 1,
+                "model": ["4", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["5", 0]
+            },
+            "class_type": "KSampler"
+        },
+        "4": {
+            "inputs": {
+                "ckpt_name": "sd_xl_base_1.0.safetensors"
+            },
+            "class_type": "CheckpointLoaderSimple"
+        },
+        "5": {
+            "inputs": {
+                "width": aspectRatio === '16:9' ? 1024 : aspectRatio === '1:1' ? 1024 : 768,
+                "height": aspectRatio === '16:9' ? 576 : aspectRatio === '1:1' ? 1024 : 1024,
+                "batch_size": numberOfImages
+            },
+            "class_type": "EmptyLatentImage"
+        },
+        "6": {
+            "inputs": {
+                "text": prompt,
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "7": {
+            "inputs": {
+                "text": "text, watermark, low quality, blurry",
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "8": {
+            "inputs": {
+                "samples": ["3", 0],
+                "vae": ["4", 2]
+            },
+            "class_type": "VAEDecode"
+        },
+        "9": {
+            "inputs": {
+                "filename_prefix": "ComfyUI",
+                "images": ["8", 0]
+            },
+            "class_type": "SaveImage"
+        }
+    };
+
+    try {
+        const queueResponse = await fetch(`${endpoint}/prompt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: workflow })
+        });
+
+        if (!queueResponse.ok) {
+            throw new Error(`ComfyUI queue request failed with status ${queueResponse.status}`);
+        }
+
+        const queueData = await queueResponse.json();
+        const promptId = queueData.prompt_id;
+
+        let completed = false;
+        let historyData: any = null;
+        
+        for (let i = 0; i < 60; i++) {
+            await sleep(1000);
+            
+            const historyResponse = await fetch(`${endpoint}/history/${promptId}`);
+            if (!historyResponse.ok) continue;
+            
+            const history = await historyResponse.json();
+            if (history[promptId] && history[promptId].status?.completed) {
+                historyData = history[promptId];
+                completed = true;
+                break;
+            }
+        }
+
+        if (!completed || !historyData) {
+            throw new Error('ComfyUI generation timed out');
+        }
+
+        const outputs = historyData.outputs;
+        const images: string[] = [];
+
+        for (const nodeId in outputs) {
+            const nodeOutput = outputs[nodeId];
+            if (nodeOutput.images) {
+                for (const img of nodeOutput.images) {
+                    const imageUrl = `${endpoint}/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || '')}&type=${encodeURIComponent(img.type || 'output')}`;
+                    const imageResponse = await fetch(imageUrl);
+                    if (imageResponse.ok) {
+                        const blob = await imageResponse.blob();
+                        const base64 = await new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const result = reader.result as string;
+                                resolve(result.split(',')[1]);
+                            };
+                            reader.readAsDataURL(blob);
+                        });
+                        images.push(base64);
+                    }
+                }
+            }
+        }
+
+        if (images.length === 0) {
+            throw new Error('No images returned from ComfyUI');
+        }
+
+        return images;
+    } catch (error) {
+        console.error('ComfyUI generation failed:', error);
+        throw error;
+    }
+};
+
+const generateImagesViaFastSDCPU = async (prompt: string, numberOfImages: number, aspectRatio: ImageAspectRatio): Promise<string[]> => {
+    const settings = loadSettings();
+    const endpoint = settings?.fastsdcpuEndpoint || 'http://localhost:8000';
+
+    const [width, height] = aspectRatio === '16:9'
+        ? [1024, 576]
+        : aspectRatio === '1:1'
+        ? [1024, 1024]
+        : [768, 1024];
+
+    try {
+        const images: string[] = [];
+        
+        for (let i = 0; i < numberOfImages; i++) {
+            const response = await fetch(`${endpoint}/txt2img`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    negative_prompt: 'text, watermark, low quality, blurry, distorted',
+                    width: width,
+                    height: height,
+                    steps: 20,
+                    cfg_scale: 7,
+                    seed: Math.floor(Math.random() * 1000000000)
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`FastSD CPU request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.image) {
+                images.push(data.image);
+            } else if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+                images.push(data.images[0]);
+            } else {
+                throw new Error('No image data returned from FastSD CPU');
+            }
+        }
+
+        if (images.length === 0) {
+            throw new Error('No images returned from FastSD CPU');
+        }
+
+        return images;
+    } catch (error) {
+        console.error('FastSD CPU generation failed:', error);
+        throw error;
+    }
+};
+
 export const generateImages = async (prompt: string, numberOfImages: number = 1, aspectRatio: ImageAspectRatio = '3:4'): Promise<string[]> => {
+    const settings = loadSettings();
+    const selectedBackend = settings?.imageBackend || 'gemini';
+
     const useProxy = async () => {
         try {
             return await requestImagesFromProxy(prompt, numberOfImages, aspectRatio);
@@ -235,13 +528,33 @@ export const generateImages = async (prompt: string, numberOfImages: number = 1,
         }
     };
 
-    if (USE_POLLINATIONS_ONLY) {
+    if (USE_POLLINATIONS_ONLY || selectedBackend === 'pollinations') {
         return useProxy();
+    }
+
+    if (selectedBackend === 'comfyui') {
+        try {
+            return await generateImagesViaComfyUI(prompt, numberOfImages, aspectRatio);
+        } catch (error) {
+            console.error('ComfyUI generation failed, falling back to proxy:', error);
+            notifyImageFallback('ComfyUI is unavailable. Using Pollinations fallback.', 'info');
+            return useProxy();
+        }
+    }
+
+    if (selectedBackend === 'fastsdcpu') {
+        try {
+            return await generateImagesViaFastSDCPU(prompt, numberOfImages, aspectRatio);
+        } catch (error) {
+            console.error('FastSD CPU generation failed, falling back to proxy:', error);
+            notifyImageFallback('FastSD CPU is unavailable. Using Pollinations fallback.', 'info');
+            return useProxy();
+        }
     }
 
     try {
         const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
+            model: getModel('imageGeneration'),
             prompt: prompt,
             config: {
               numberOfImages: numberOfImages,
@@ -291,7 +604,7 @@ Return a valid JSON array of strings, where each string is a detailed, book-spec
 
     try {
         const response = await withGeminiRetry('generateMoodboardPrompts', () => ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: getModel('textGeneration'),
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -323,7 +636,7 @@ Blurb: "${blurb}"
 Prompt:`;
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: getModel('textGenerationFast'),
             contents: fullPrompt,
         });
         return response.text;
@@ -350,7 +663,7 @@ export const runResearchAgent = async (prompt: string, manuscriptContext: string
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: getModel('textGenerationFast'),
       contents: fullPrompt,
     });
     return response.text;
@@ -381,7 +694,7 @@ export const runMarketSurveyorAgent = async (genre: string): Promise<PublishingO
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: getModel('textGeneration'),
       contents: prompt,
       // FIX: The `googleSearch` tool does not support `responseMimeType` or `responseSchema`.
       // The prompt is updated to request JSON output directly.
@@ -440,7 +753,7 @@ export const runGrammarCheckAgent = async (text: string): Promise<GrammarIssue[]
     }
     try {
         const response = await withGeminiRetry('runGrammarCheckAgent', () => ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: getModel('textGeneration'),
             contents: `
                 Analyze the following text for spelling, grammar, and style errors.
                 For each error found, provide the original text snippet, a suggested correction, a brief explanation, the type of error (spelling, grammar, or style), and the full sentence containing the error for context.
@@ -485,42 +798,38 @@ export const runGrammarCheckAgent = async (text: string): Promise<GrammarIssue[]
 };
 
 export const runConsistencyAgent = async (text: string): Promise<ConsistencyIssue[]> => {
-    if (text.trim().length < 200) { // Don't run on very short texts
+    if (text.trim().length < 200) {
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as a professional continuity editor. Analyze the following manuscript for inconsistencies in plot, character traits, timeline, and setting.
-                For each inconsistency found, provide a description of the issue, the type of inconsistency (Character, Plot, Timeline, or Setting), and a direct quote from the text that highlights the problem.
-                If no inconsistencies are found, return an empty array.
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runConsistencyAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as a professional continuity editor. Analyze the following manuscript for inconsistencies in plot, character traits, timeline, and setting.
+                    For each inconsistency found, provide a description of the issue, the type of inconsistency (Character, Plot, Timeline, or Setting), and a direct quote from the text that highlights the problem.
+                    If no inconsistencies are found, return an empty array.
 
-                Manuscript to analyze:
-                ---
-                ${text}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            type: { type: Type.STRING, description: 'The type of inconsistency (Character, Plot, Timeline, or Setting).' },
-                            description: { type: Type.STRING, description: 'A clear and concise explanation of the inconsistency.' },
-                            quote: { type: Type.STRING, description: 'A direct quote from the text that contains the inconsistency.' },
-                        },
-                        required: ['type', 'description', 'quote']
-                    },
-                },
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr) as ConsistencyIssue[];
+                    Return a JSON array with the following structure:
+                    [
+                        {
+                            "type": "string (Character, Plot, Timeline, or Setting)",
+                            "description": "string (clear explanation of the inconsistency)",
+                            "quote": "string (direct quote containing the inconsistency)"
+                        }
+                    ]
 
+                    Manuscript to analyze:
+                    ---
+                    ${text}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        return JSON.parse(jsonStr.trim()) as ConsistencyIssue[];
     } catch (error) {
         console.error("Error in consistency agent:", error);
         return [];
@@ -532,41 +841,38 @@ export const runShowVsTellAgent = async (text: string): Promise<ShowVsTellIssue[
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as a creative writing coach. Analyze the following manuscript text for instances of "telling" instead of "showing".
-                For each instance you find, provide the following:
-                1. The exact quote from the text that is "telling".
-                2. A brief explanation of why it is "telling" and how "showing" would be more effective.
-                3. A suggested rewrite of the quote that "shows" the information or emotion instead.
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runShowVsTellAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as a creative writing coach. Analyze the following manuscript text for instances of "telling" instead of "showing".
+                    For each instance you find, provide the following:
+                    1. The exact quote from the text that is "telling".
+                    2. A brief explanation of why it is "telling" and how "showing" would be more effective.
+                    3. A suggested rewrite of the quote that "shows" the information or emotion instead.
 
-                If no instances are found, return an empty array.
+                    If no instances are found, return an empty array.
 
-                Manuscript to analyze:
-                ---
-                ${text}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            quote: { type: Type.STRING, description: 'The exact quote from the text that is "telling".' },
-                            explanation: { type: Type.STRING, description: 'An explanation of why this is "telling".' },
-                            suggestion: { type: Type.STRING, description: 'A suggested rewrite that "shows" instead of "tells".' },
-                        },
-                        required: ['quote', 'explanation', 'suggestion']
-                    },
-                },
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        const parsed: Omit<SensitivityIssue, 'id'>[] = JSON.parse(jsonStr);
+                    Return a JSON array with this structure:
+                    [
+                        {
+                            "quote": "string (exact quote from text)",
+                            "explanation": "string (why this is telling)",
+                            "suggestion": "string (suggested rewrite that shows)"
+                        }
+                    ]
+
+                    Manuscript to analyze:
+                    ---
+                    ${text}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        const parsed: Omit<ShowVsTellIssue, 'id'>[] = JSON.parse(jsonStr.trim());
         return parsed.map(issue => ({ ...issue, id: uuidv4() }));
 
     } catch (error) {
@@ -597,7 +903,7 @@ export const runFactCheckAgent = async (text: string): Promise<{ issues: FactChe
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: getModel('textGeneration'),
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
@@ -635,48 +941,45 @@ export const runDialogueAnalysisAgent = async (text: string): Promise<DialogueIs
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as a dialogue coach. Analyze the dialogue in the following manuscript.
-                Identify up to 5 key areas for improvement. Focus on issues such as:
-                - Repetitive or bland dialogue tags (e.g., overusing "said").
-                - Dialogue that is too "on-the-nose" and lacks subtext.
-                - Unnatural or stilted phrasing.
-                - Lack of variety in sentence structure within the dialogue.
-                - Missed opportunities to use action beats instead of tags.
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runDialogueAnalysisAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as a dialogue coach. Analyze the dialogue in the following manuscript.
+                    Identify up to 5 key areas for improvement. Focus on issues such as:
+                    - Repetitive or bland dialogue tags (e.g., overusing "said").
+                    - Dialogue that is too "on-the-nose" and lacks subtext.
+                    - Unnatural or stilted phrasing.
+                    - Lack of variety in sentence structure within the dialogue.
+                    - Missed opportunities to use action beats instead of tags.
 
-                For each issue found, provide:
-                1. The exact quote containing the dialogue issue.
-                2. A concise name for the issue (e.g., "Repetitive Tags," "Lacks Subtext").
-                3. A constructive suggestion for how to improve it.
+                    For each issue found, provide:
+                    1. The exact quote containing the dialogue issue.
+                    2. A concise name for the issue (e.g., "Repetitive Tags," "Lacks Subtext").
+                    3. A constructive suggestion for how to improve it.
 
-                If no significant issues are found, return an empty array.
+                    If no significant issues are found, return an empty array.
 
-                Manuscript to analyze:
-                ---
-                ${text}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            quote: { type: Type.STRING, description: 'The exact quote with the dialogue issue.' },
-                            issue: { type: Type.STRING, description: 'A short description of the issue (e.g., "Repetitive Tags").' },
-                            suggestion: { type: Type.STRING, description: 'A constructive suggestion for improvement.' },
-                        },
-                        required: ['quote', 'issue', 'suggestion']
-                    },
-                },
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+                    Return a JSON array with this structure:
+                    [
+                        {
+                            "quote": "string (exact quote with dialogue issue)",
+                            "issue": "string (short description like 'Repetitive Tags')",
+                            "suggestion": "string (constructive improvement suggestion)"
+                        }
+                    ]
+
+                    Manuscript to analyze:
+                    ---
+                    ${text}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        return JSON.parse(jsonStr.trim());
 
     } catch (error) {
         console.error("Error in Dialogue Analysis agent:", error);
@@ -689,44 +992,41 @@ export const runProsePolishAgent = async (text: string): Promise<ProsePolishIssu
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as an expert line editor. Analyze the following manuscript text, which is provided in paragraphs.
-                For each paragraph that could be stylistically improved, provide a polished rewrite.
-                Focus on improving flow and rhythm, eliminating clichés and filler words, strengthening verbs, reducing passive voice, and enhancing clarity and conciseness.
-                
-                For each identified paragraph, provide:
-                1. The 'original' full paragraph.
-                2. A 'suggestion' with your rewritten, polished version of the paragraph.
-                3. A brief 'explanation' of the key changes you made (e.g., "Improved flow and removed passive voice.").
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runProsePolishAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as an expert line editor. Analyze the following manuscript text, which is provided in paragraphs.
+                    For each paragraph that could be stylistically improved, provide a polished rewrite.
+                    Focus on improving flow and rhythm, eliminating clichés and filler words, strengthening verbs, reducing passive voice, and enhancing clarity and conciseness.
+                    
+                    For each identified paragraph, provide:
+                    1. The 'original' full paragraph.
+                    2. A 'suggestion' with your rewritten, polished version of the paragraph.
+                    3. A brief 'explanation' of the key changes you made (e.g., "Improved flow and removed passive voice.").
 
-                Analyze up to 5 paragraphs from the text that would benefit most from a polish. If no improvements are needed, return an empty array.
+                    Analyze up to 5 paragraphs from the text that would benefit most from a polish. If no improvements are needed, return an empty array.
 
-                Manuscript Text (paragraphs separated by newlines):
-                ---
-                ${text.split('\n\n').join('\n---\n')}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            original: { type: Type.STRING, description: 'The full original paragraph.' },
-                            suggestion: { type: Type.STRING, description: 'The polished, rewritten paragraph.' },
-                            explanation: { type: Type.STRING, description: 'A brief explanation of the stylistic changes.' },
-                        },
-                        required: ['original', 'suggestion', 'explanation']
-                    },
-                },
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+                    Return a JSON array with this structure:
+                    [
+                        {
+                            "original": "string (full original paragraph)",
+                            "suggestion": "string (polished, rewritten paragraph)",
+                            "explanation": "string (brief explanation of stylistic changes)"
+                        }
+                    ]
+
+                    Manuscript Text (paragraphs separated by newlines):
+                    ---
+                    ${text.split('\n\n').join('\n---\n')}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        return JSON.parse(jsonStr.trim());
 
     } catch (error) {
         console.error("Error in Prose Polish agent:", error);
@@ -739,45 +1039,42 @@ export const runSensitivityAgent = async (text: string): Promise<SensitivityIssu
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as a professional sensitivity and inclusivity reader. Analyze the following manuscript text.
-                Your goal is to identify language that may be unintentionally biased, outdated, non-inclusive, or rely on harmful stereotypes.
-                
-                For each potential issue you find, provide the following:
-                1. 'quote': The exact text snippet containing the issue.
-                2. 'issue': A brief, neutral description of the potential issue (e.g., "Outdated Term," "Potential Gender Bias," "Ableist Language").
-                3. 'explanation': A constructive explanation of why the term or phrase might be problematic and the context.
-                4. 'suggestion': A respectful and inclusive alternative phrasing.
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runSensitivityAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as a professional sensitivity and inclusivity reader. Analyze the following manuscript text.
+                    Your goal is to identify language that may be unintentionally biased, outdated, non-inclusive, or rely on harmful stereotypes.
+                    
+                    For each potential issue you find, provide the following:
+                    1. 'quote': The exact text snippet containing the issue.
+                    2. 'issue': A brief, neutral description of the potential issue (e.g., "Outdated Term," "Potential Gender Bias," "Ableist Language").
+                    3. 'explanation': A constructive explanation of why the term or phrase might be problematic and the context.
+                    4. 'suggestion': A respectful and inclusive alternative phrasing.
 
-                Focus on providing helpful, educational feedback to the author. If no issues are found, return an empty array.
+                    Focus on providing helpful, educational feedback to the author. If no issues are found, return an empty array.
 
-                Manuscript to analyze:
-                ---
-                ${text}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            quote: { type: Type.STRING },
-                            issue: { type: Type.STRING },
-                            explanation: { type: Type.STRING },
-                            suggestion: { type: Type.STRING },
-                        },
-                        required: ['quote', 'issue', 'explanation', 'suggestion']
-                    },
-                },
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+                    Return a JSON array with this structure:
+                    [
+                        {
+                            "quote": "string (exact text snippet with issue)",
+                            "issue": "string (brief neutral description)",
+                            "explanation": "string (constructive explanation)",
+                            "suggestion": "string (respectful inclusive alternative)"
+                        }
+                    ]
+
+                    Manuscript to analyze:
+                    ---
+                    ${text}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        return JSON.parse(jsonStr.trim());
 
     } catch (error) {
         console.error("Error in Sensitivity agent:", error);
@@ -790,48 +1087,45 @@ export const runStructuralAnalysisAgent = async (text: string): Promise<Structur
         return [];
     }
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `
-                Act as a senior developmental editor. Analyze the entire manuscript provided below for high-level structural issues.
-                Focus on the following areas:
-                - **Pacing**: Identify sections that feel rushed or drag on too long.
-                - **Plot Holes**: Find logical inconsistencies or unresolved plot threads.
-                - **Character Arcs**: Assess if the main characters undergo meaningful development.
-                - **Structural Suggestions**: Provide recommendations for improving the overall narrative structure, such as reordering chapters or strengthening the story's midpoint.
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runStructuralAnalysisAgent', () =>
+            provider.generateStructuredText({
+                prompt: `
+                    Act as a senior developmental editor. Analyze the entire manuscript provided below for high-level structural issues.
+                    Focus on the following areas:
+                    - **Pacing**: Identify sections that feel rushed or drag on too long.
+                    - **Plot Holes**: Find logical inconsistencies or unresolved plot threads.
+                    - **Character Arcs**: Assess if the main characters undergo meaningful development.
+                    - **Structural Suggestions**: Provide recommendations for improving the overall narrative structure, such as reordering chapters or strengthening the story's midpoint.
 
-                For each of the most significant issues you find (up to 5), provide:
-                1. 'type': The category of the issue ('Pacing', 'Plot Hole', 'Character Arc', 'Structural Suggestion').
-                2. 'description': A detailed but clear explanation of the structural problem.
-                3. 'suggestion': A concrete, actionable suggestion for how the author could address the issue.
+                    For each of the most significant issues you find (up to 5), provide:
+                    1. 'type': The category of the issue ('Pacing', 'Plot Hole', 'Character Arc', 'Structural Suggestion').
+                    2. 'description': A detailed but clear explanation of the structural problem.
+                    3. 'suggestion': A concrete, actionable suggestion for how the author could address the issue.
 
-                Do not comment on grammar, spelling, or sentence-level style. Focus only on the macro-structure of the story. If no major structural issues are found, return an empty array.
+                    Do not comment on grammar, spelling, or sentence-level style. Focus only on the macro-structure of the story. If no major structural issues are found, return an empty array.
 
-                MANUSCRIPT:
-                ---
-                ${text}
-                ---
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            type: { type: Type.STRING },
-                            description: { type: Type.STRING },
-                            suggestion: { type: Type.STRING },
-                        },
-                        required: ['type', 'description', 'suggestion']
-                    },
-                },
-                thinkingConfig: { thinkingBudget: 32768 } // Use max budget for this complex task
-            },
-        });
-        
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+                    Return a JSON array with this structure:
+                    [
+                        {
+                            "type": "string (category: Pacing, Plot Hole, Character Arc, or Structural Suggestion)",
+                            "description": "string (detailed explanation of structural problem)",
+                            "suggestion": "string (concrete actionable suggestion)"
+                        }
+                    ]
+
+                    MANUSCRIPT:
+                    ---
+                    ${text}
+                    ---
+                `,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration'),
+                thinkingBudget: 32768
+            })
+        );
+        return JSON.parse(jsonStr.trim());
 
     } catch (error) {
         console.error("Error in Structural Analysis agent:", error);
@@ -856,32 +1150,31 @@ Return a JSON array of 6-12 beats. Each beat must include:
 - "beatType": short label (e.g., Setup, Inciting, Midpoint, Climax, Resolution)
 - "intensity": number between 0 and 100
 - "notes": pacing insight (max 160 chars)
+
+Example structure:
+[
+    {
+        "id": "beat_1",
+        "outlineId": "outline_1",
+        "heading": "Opening Scene",
+        "beatType": "Setup",
+        "intensity": 45,
+        "notes": "Establishes setting and introduces protagonist"
+    }
+]
 `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            id: { type: Type.STRING },
-                            outlineId: { type: Type.STRING },
-                            heading: { type: Type.STRING },
-                            beatType: { type: Type.STRING },
-                            intensity: { type: Type.NUMBER },
-                            notes: { type: Type.STRING },
-                        },
-                        required: ['id', 'heading', 'beatType', 'intensity', 'notes']
-                    }
-                }
-            }
-        });
-        const payload = response.text.trim();
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runOutlinePacingAgent', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        const payload = jsonStr.trim();
         if (!payload) return [];
         return JSON.parse(payload) as PacingBeat[];
     } catch (error) {
@@ -907,32 +1200,31 @@ Return a JSON array of timeline events. Each event must include:
 - "summary": 1-2 sentence description
 - "risk": one of "low", "medium", "high"
 - "recommendation": concrete action to fix the risk
+
+Example structure:
+[
+    {
+        "id": "event_1",
+        "outlineId": "outline_1",
+        "label": "Character Introduction",
+        "summary": "Protagonist meets mentor figure.",
+        "risk": "low",
+        "recommendation": "None"
+    }
+]
 `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            id: { type: Type.STRING },
-                            outlineId: { type: Type.STRING },
-                            label: { type: Type.STRING },
-                            summary: { type: Type.STRING },
-                            risk: { type: Type.STRING },
-                            recommendation: { type: Type.STRING },
-                        },
-                        required: ['id', 'label', 'summary', 'risk', 'recommendation']
-                    }
-                }
-            }
-        });
-        const payload = response.text.trim();
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('generateContinuityTimeline', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        const payload = jsonStr.trim();
         if (!payload) return [];
         return JSON.parse(payload) as ContinuityEvent[];
     } catch (error) {
@@ -945,7 +1237,7 @@ export const runAiCommand = async (prompt: string, context: string): Promise<str
     const fullPrompt = `${prompt}\n\nHere is the text to work on:\n---\n${context}\n---`;
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: getModel('textGenerationFast'),
             contents: fullPrompt,
         });
         return response.text;
@@ -957,7 +1249,7 @@ export const runAiCommand = async (prompt: string, context: string): Promise<str
 
 export const runCleanupAgent = async (text: string): Promise<string> => {
     const prompt = `Act as a meticulous copyeditor preparing a manuscript for submission. Perform the following cleanup tasks on the text below:
-1.  **Smart Typography:** Convert all straight quotes (" and ') to their curly typographic equivalents (e.g., “ ”, ‘ ’). Convert hyphens used as dashes to proper em dashes (—) or en dashes (–) where appropriate.
+1.  **Smart Typography:** Convert all straight quotes (" and ') to their curly typographic equivalents (e.g., " ", ' '). Convert hyphens used as dashes to proper em dashes (—) or en dashes (–) where appropriate.
 2.  **Spacing Hygiene:** Ensure there is only a single space after periods. Remove any instances of multiple spaces between words. Replace three consecutive periods with a proper ellipsis character (…).
 3.  **Paragraph and Scene Breaks:** Remove multiple consecutive empty lines, ensuring there's only one empty line between paragraphs. Standardize all scene breaks to be a single line containing only three asterisks surrounded by a single space on each side (' *** ').
 
@@ -968,16 +1260,13 @@ MANUSCRIPT:
 ${text}
 ---
 `;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error running Cleanup agent:", error);
-        throw new Error("The AI failed to process the cleanup request.");
-    }
+    const provider = await getProviderInstance();
+    return await withGeminiRetry('runCleanupAgent', () =>
+        provider.generateText({
+            prompt,
+            model: getModel('textGeneration')
+        })
+    );
 };
 
 export const runExpertAgent = async (prompt: string, manuscript: string, context: string): Promise<string> => {
@@ -1000,16 +1289,13 @@ ${context}
 
 Your Answer:`;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro', // Using pro for better reasoning
-            contents: fullPrompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error running Expert AI agent:", error);
-        throw new Error("The Expert AI failed to process the request.");
-    }
+    const provider = await getProviderInstance();
+    return await withGeminiRetry('runExpertAgent', () =>
+        provider.generateText({
+            prompt: fullPrompt,
+            model: getModel('textGeneration')
+        })
+    );
 };
 
 export const generateKeywords = async (manuscript: string): Promise<string[]> => {
@@ -1023,21 +1309,16 @@ ${manuscript.substring(0, 5000)}...
 Return the keywords as a valid JSON array of strings, like ["keyword phrase 1", "keyword phrase 2"]. Do not include any other text or markdown.`;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.STRING
-                    }
-                }
-            }
-        });
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('generateKeywords', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGenerationFast')
+            })
+        );
+        return JSON.parse(jsonStr.trim());
     } catch (error) {
         console.error("Error generating keywords:", error);
         throw new Error("Failed to generate KDP keywords.");
@@ -1045,82 +1326,59 @@ Return the keywords as a valid JSON array of strings, like ["keyword phrase 1", 
 };
 
 export const runMarketingCampaignAgent = async (manuscript: string): Promise<MarketingCampaign[]> => {
-    const prompt = `
-    Act as a social media marketing expert for an author. Your task is to generate a 3-day launch campaign for the book based on the provided manuscript.
+    const prompt = `Act as a social media marketing expert for an author. Your task is to generate a 3-day launch campaign for the book based on the provided manuscript.
 
-    For each of the 3 days, create a unique theme and generate one post for each of these platforms: X (formerly Twitter), Facebook, and Instagram.
+For each of the 3 days, create a unique theme and generate one post for each of these platforms: X (formerly Twitter), Facebook, and Instagram.
 
-    Each post must be tailored to its platform:
-    - **X:** Short, punchy, and engaging (max 280 characters).
-    - **Facebook:** More detailed, can include a question to spark discussion.
-    - **Instagram:** Visually focused. The content should be a caption for an image. Also, provide a descriptive prompt for an AI image generator to create the accompanying visual.
+Each post must be tailored to its platform:
+- **X:** Short, punchy, and engaging (max 280 characters).
+- **Facebook:** More detailed, can include a question to spark discussion.
+- **Instagram:** Visually focused. The content should be a caption for an image. Also, provide a descriptive prompt for an AI image generator to create the accompanying visual.
 
-    The final output must be a valid JSON array of objects. Each object represents a day and must have the following structure:
-    {
-      "day": <number>,
-      "theme": "<string>",
-      "posts": [
-        {
-          "platform": "X",
-          "postContent": "<string>",
-          "hashtags": ["<string>", "<string>"],
-          "visualPrompt": ""
-        },
-        {
-          "platform": "Facebook",
-          "postContent": "<string>",
-          "hashtags": ["<string>", "<string>"],
-          "visualPrompt": ""
-        },
-        {
-          "platform": "Instagram",
-          "postContent": "<string>",
-          "hashtags": ["<string>", "<string>"],
-          "visualPrompt": "<string>"
-        }
-      ]
-    }
+Return a valid JSON array with this structure:
+[
+  {
+    "day": 1,
+    "theme": "Book Launch Announcement",
+    "posts": [
+      {
+        "platform": "X",
+        "postContent": "Excited to announce my new book!",
+        "hashtags": ["#BookLaunch", "#NewRelease"],
+        "visualPrompt": ""
+      },
+      {
+        "platform": "Facebook",
+        "postContent": "I'm thrilled to share my latest work with you all. What themes resonate with you?",
+        "hashtags": ["#BookLaunch", "#NewBook"],
+        "visualPrompt": ""
+      },
+      {
+        "platform": "Instagram",
+        "postContent": "Today's the day! My new book is here ✨",
+        "hashtags": ["#BookLaunch", "#AuthorLife"],
+        "visualPrompt": "A stack of books with soft lighting and coffee"
+      }
+    ]
+  }
+]
 
-    Manuscript context (first 5000 characters):
-    ---
-    ${manuscript.substring(0, 5000)}...
-    ---
-    `;
+Manuscript context (first 5000 characters):
+---
+${manuscript.substring(0, 5000)}...
+---`;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            day: { type: Type.INTEGER },
-                            theme: { type: Type.STRING },
-                            posts: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        platform: { type: Type.STRING },
-                                        postContent: { type: Type.STRING },
-                                        hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                        visualPrompt: { type: Type.STRING }
-                                    },
-                                    required: ['platform', 'postContent', 'hashtags', 'visualPrompt']
-                                }
-                            }
-                        },
-                        required: ['day', 'theme', 'posts']
-                    }
-                }
-            }
-        });
-        const jsonStr = response.text.trim();
-        return JSON.parse(jsonStr);
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('runMarketingCampaignAgent', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        return JSON.parse(jsonStr.trim());
     } catch (error) {
         console.error("Error generating marketing campaign:", error);
         throw new Error("Failed to generate the marketing campaign.");
@@ -1136,31 +1394,28 @@ Locales: ${requestedLocales.join(', ')}
 Manuscript excerpt (first 4500 chars):
 ${manuscript.substring(0, 4500)}
 
-Return a JSON array.`;
+Return a JSON array with this structure:
+[
+  {
+    "locale": "es-ES",
+    "localizedTitle": "El Título Localizado",
+    "hook": "Una línea de enganche convincente",
+    "blurb": "Una descripción atractiva de 120 palabras o menos que captura la esencia de la historia...",
+    "toneNotes": "Considerations for Spanish market: use formal register, avoid regionalisms..."
+  }
+]`;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            locale: { type: Type.STRING },
-                            localizedTitle: { type: Type.STRING },
-                            hook: { type: Type.STRING },
-                            blurb: { type: Type.STRING },
-                            toneNotes: { type: Type.STRING },
-                        },
-                        required: ['locale', 'localizedTitle', 'hook', 'blurb', 'toneNotes']
-                    }
-                }
-            }
-        });
-        const payload = response.text.trim();
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('generateLocalizationPack', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        const payload = jsonStr.trim();
         if (!payload) return [];
         return JSON.parse(payload) as LocalizationPack[];
     } catch (error) {
@@ -1178,36 +1433,27 @@ Locales: ${requestedLocales.join(', ')}
 Manuscript excerpt (first 4500 chars):
 ${manuscript.substring(0, 4500)}
 
-Return a JSON array.`;
+Return a JSON array with this structure:
+[
+  {
+    "locale": "es-ES",
+    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5", "keyword6", "keyword7", "keyword8"],
+    "categories": ["FICTION / Fantasy / General", "FICTION / Action & Adventure"],
+    "audienceNotes": "Target audience positioning notes for this locale, including cultural considerations and market preferences..."
+  }
+]`;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            locale: { type: Type.STRING },
-                            keywords: {
-                                type: Type.ARRAY,
-                                items: { type: Type.STRING }
-                            },
-                            categories: {
-                                type: Type.ARRAY,
-                                items: { type: Type.STRING }
-                            },
-                            audienceNotes: { type: Type.STRING },
-                        },
-                        required: ['locale', 'keywords', 'categories', 'audienceNotes']
-                    }
-                }
-            }
-        });
-        const payload = response.text.trim();
+        const provider = await getProviderInstance();
+        const jsonStr = await withGeminiRetry('translateMetadata', () =>
+            provider.generateStructuredText({
+                prompt,
+                responseSchema: {},
+                responseMimeType: 'application/json',
+                model: getModel('textGeneration')
+            })
+        );
+        const payload = jsonStr.trim();
         if (!payload) return [];
         return JSON.parse(payload) as LocalizedMetadata[];
     } catch (error) {
@@ -1219,7 +1465,7 @@ Return a JSON array.`;
 
 export const createChatSession = (history?: { role: 'user' | 'model', parts: { text: string }[] }[]): any => {
     return ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: getModel('textGenerationFast'),
         history: history
     });
 };

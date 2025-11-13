@@ -1,0 +1,328 @@
+{
+  "documentId": "chicago-manual-punctuation",
+  "title": "Chicago Manual of Style - Punctuation Rules",
+  "version": "17th Edition",
+  "category": "style-guide",
+  "chunks": [
+    {
+      "id": "chicago-6.16",
+      "heading": "Serial Comma (Oxford Comma)",
+      "summary": "Use comma before 'and' in series of three or more items",
+      "content": "Chicago style requires a comma before the conjunction in a series of three or more items. This is known as the serial comma or Oxford comma. The serial comma prevents ambiguity and is mandatory in Chicago style. Example: 'red, white, and blue' not 'red, white and blue'.",
+      "ruleNumber": "6.16",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Correct: We need eggs, milk, and bread.",
+        "Correct: The flag is red, white, and blue.",
+        "Incorrect: We need eggs, milk and bread.",
+        "Ambiguous without serial comma: 'I'd like to thank my parents, Oprah and God' vs 'I'd like to thank my parents, Oprah, and God'"
+      ]
+    },
+    {
+      "id": "chicago-6.18",
+      "heading": "Comma with Introductory Elements",
+      "summary": "Use comma after introductory phrase or clause",
+      "content": "A comma should follow an introductory phrase or dependent clause at the beginning of a sentence. This includes participial phrases, infinitive phrases, prepositional phrases (when long or for clarity), and adverbial clauses. Short introductory prepositional phrases may omit the comma if no ambiguity results.",
+      "ruleNumber": "6.18",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Correct: After the storm passed, we ventured outside.",
+        "Correct: Running down the street, she caught the bus.",
+        "Correct: To avoid confusion, read the instructions carefully.",
+        "Acceptable: In 2024 we launched the product.",
+        "Better with comma: In the morning, mist covered the valley."
+      ]
+    },
+    {
+      "id": "chicago-6.8",
+      "heading": "Commas with Coordinate Adjectives",
+      "summary": "Use commas between coordinate adjectives not joined by 'and'",
+      "content": "When two or more adjectives precede a noun and each modifies the noun separately (coordinate adjectives), they should be separated by commas. Test: if 'and' can be inserted between them or their order reversed, use commas. If the adjectives are cumulative (each modifying the group that follows), no comma is used.",
+      "ruleNumber": "6.8",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Correct: a concise, coherent essay",
+        "Correct: an expensive, ill-advised campaign",
+        "Incorrect: a dark, brown coat",
+        "Correct: a dark brown coat (cumulative)",
+        "Test: 'a concise AND coherent essay' works, so comma needed",
+        "Test: 'a dark AND brown coat' sounds wrong, so no comma"
+      ]
+    },
+    {
+      "id": "chicago-6.28",
+      "heading": "Comma Before Coordinating Conjunction",
+      "summary": "Use comma before 'and', 'but', 'or', 'nor', 'for', 'so', 'yet' joining independent clauses",
+      "content": "A comma should precede a coordinating conjunction (and, but, or, nor, for, so, yet) that joins two independent clauses. An independent clause contains a subject and verb and can stand alone as a sentence. If the second clause lacks a subject or is otherwise dependent, no comma is needed before the conjunction.",
+      "ruleNumber": "6.28",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Correct: She finished her work, and he started his.",
+        "Correct: The storm raged, but they remained calm.",
+        "Correct: We can leave now, or we can wait for them.",
+        "Incorrect: She finished her work, and started his.",
+        "Correct: She finished her work and started his. (no comma - shared subject)"
+      ]
+    },
+    {
+      "id": "chicago-6.38",
+      "heading": "Comma to Set Off Nonrestrictive Clauses",
+      "summary": "Use commas around nonrestrictive (nonessential) clauses",
+      "content": "Nonrestrictive clauses or phrases, which add extra information but are not essential to the meaning of the sentence, should be set off by commas. Restrictive clauses, which are essential to identify what is being discussed, take no commas. Use 'which' for nonrestrictive and 'that' for restrictive clauses.",
+      "ruleNumber": "6.38",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Nonrestrictive: My brother, who lives in Boston, is visiting.",
+        "Restrictive: The brother who lives in Boston is visiting. (implies multiple brothers)",
+        "Nonrestrictive: The house, which was built in 1920, needs repairs.",
+        "Restrictive: The house that was built in 1920 needs repairs.",
+        "Rule of thumb: Use 'which' + commas; use 'that' + no commas"
+      ]
+    },
+    {
+      "id": "chicago-6.85",
+      "heading": "Em Dash for Amplifying or Digressive Elements",
+      "summary": "Em dashes set off amplifying, explanatory, or digressive material",
+      "content": "An em dash (—) sets off an amplifying or digressive element more emphatically than commas. Use em dashes sparingly. Do not put spaces around em dashes in American English. For sudden breaks in thought or speech, a single em dash may be used. Em dashes can replace commas, parentheses, or colons depending on emphasis desired.",
+      "ruleNumber": "6.85",
+      "category": "punctuation",
+      "section": "dashes",
+      "examples": [
+        "Correct: The package arrived—finally—after two weeks.",
+        "Correct: She opened the door and—",
+        "Correct: Only one thing mattered—survival.",
+        "Incorrect: The package arrived — finally — after two weeks.",
+        "Emphatic: The answer—if there was one—eluded them.",
+        "Less emphatic (commas): The answer, if there was one, eluded them."
+      ]
+    },
+    {
+      "id": "chicago-6.88",
+      "heading": "En Dash for Ranges and Relationships",
+      "summary": "Use en dash (–) for numerical ranges and compound relationships",
+      "content": "The en dash (–), slightly longer than a hyphen but shorter than an em dash, is used between numbers to signify 'to' or 'through' (pages 5–10, years 2020–2024). Also use for compound adjectives when one element is open compound or already hyphenated (post–World War II era). No spaces around en dashes.",
+      "ruleNumber": "6.88",
+      "category": "punctuation",
+      "section": "dashes",
+      "examples": [
+        "Correct: pages 45–52",
+        "Correct: June–August 2024",
+        "Correct: the New York–London flight",
+        "Correct: post–Civil War era",
+        "Incorrect: pages 45-52 (hyphen wrong)",
+        "Incorrect: June-August 2024 (hyphen wrong)"
+      ]
+    },
+    {
+      "id": "chicago-6.119",
+      "heading": "Apostrophe for Possessives",
+      "summary": "Form possessives with apostrophe + s, with specific rules for plurals and classical names",
+      "content": "For singular nouns, add apostrophe + s (the cat's toy, James's book). For plural nouns ending in s, add only apostrophe (the cats' toys, the Joneses' house). For plural nouns not ending in s, add apostrophe + s (the children's room). Classical names ending in -es or -is take only apostrophe (Euripides' plays, Jesus' teachings). Joint possession uses apostrophe on last noun only; separate possession uses apostrophes on both.",
+      "ruleNumber": "6.119",
+      "category": "punctuation",
+      "section": "apostrophes",
+      "examples": [
+        "Singular: the dog's collar, Charles's car, the boss's office",
+        "Plural ending in s: the dogs' collars, the Smiths' house",
+        "Plural not ending in s: the children's toys, the men's room",
+        "Classical: Achilles' heel, Moses' staff",
+        "Joint possession: Tom and Jerry's apartment (shared)",
+        "Separate possession: Tom's and Jerry's cars (each has own)"
+      ]
+    },
+    {
+      "id": "chicago-6.9",
+      "heading": "Quotation Marks with Commas and Periods",
+      "summary": "Commas and periods go inside closing quotation marks in American English",
+      "content": "In American English (Chicago style), commas and periods always go inside closing quotation marks, regardless of logic. This differs from British style. Question marks and exclamation points go inside if they're part of the quoted matter, outside if they apply to the whole sentence.",
+      "ruleNumber": "6.9",
+      "category": "punctuation",
+      "section": "quotation-marks",
+      "examples": [
+        "Correct: He said, \"I'm leaving.\"",
+        "Correct: She called it \"brilliant,\" though I disagreed.",
+        "Correct: Did she say \"tomorrow\"?",
+        "Correct: She asked, \"Are you coming?\"",
+        "Incorrect: He said, \"I'm leaving\".",
+        "Incorrect: She called it \"brilliant\", though I disagreed."
+      ]
+    },
+    {
+      "id": "chicago-13.7",
+      "heading": "Dialogue Punctuation",
+      "summary": "Dialogue tags use commas; action beats use periods",
+      "content": "When a dialogue tag (he said, she asked) follows or interrupts a quoted sentence, use a comma inside the closing quotation mark. When an action beat (a sentence describing action) follows dialogue, use a period inside the quotation mark and start a new sentence. Dialogue tags are lowercase unless starting a sentence; action beats are capitalized.",
+      "ruleNumber": "13.7",
+      "category": "punctuation",
+      "section": "dialogue",
+      "examples": [
+        "Dialogue tag: \"I'm tired,\" she said.",
+        "Dialogue tag: She said, \"I'm tired.\"",
+        "Interrupted tag: \"I'm tired,\" she said, \"and I need rest.\"",
+        "Action beat: \"I'm tired.\" She collapsed on the sofa.",
+        "Incorrect: \"I'm tired.\" she said.",
+        "Incorrect: \"I'm tired,\" She collapsed on the sofa."
+      ]
+    },
+    {
+      "id": "chicago-6.63",
+      "heading": "Semicolon Between Independent Clauses",
+      "summary": "Use semicolon to join closely related independent clauses without conjunction",
+      "content": "A semicolon joins two independent clauses that are closely related in thought but not connected by a coordinating conjunction. The clauses should be of equal grammatical rank. Semicolons create a stronger connection than a period but less than a conjunction. They're particularly useful when clauses are long or contain internal commas.",
+      "ruleNumber": "6.63",
+      "category": "punctuation",
+      "section": "semicolons",
+      "examples": [
+        "Correct: The sun set; darkness fell.",
+        "Correct: She loved the city; he preferred the countryside.",
+        "Correct: Some write for fame; others write for truth.",
+        "Avoid overuse: \"The sun set; the sky turned orange; stars appeared.\" (consider revision)",
+        "With internal commas: We visited Paris, France; Rome, Italy; and Berlin, Germany."
+      ]
+    },
+    {
+      "id": "chicago-6.64",
+      "heading": "Semicolon with Conjunctive Adverbs",
+      "summary": "Use semicolon before conjunctive adverbs joining independent clauses",
+      "content": "When conjunctive adverbs (however, therefore, moreover, consequently, nevertheless, furthermore, etc.) join independent clauses, use a semicolon before the adverb and a comma after. These adverbs create logical transitions between ideas. Do not use comma alone before these words when joining independent clauses (creates comma splice).",
+      "ruleNumber": "6.64",
+      "category": "punctuation",
+      "section": "semicolons",
+      "examples": [
+        "Correct: I wanted to attend; however, I had prior commitments.",
+        "Correct: The project failed; therefore, we revised our approach.",
+        "Correct: She studied hard; consequently, she passed the exam.",
+        "Incorrect: I wanted to attend, however, I had prior commitments.",
+        "Incorrect: The project failed, therefore, we revised our approach."
+      ]
+    },
+    {
+      "id": "chicago-6.56",
+      "heading": "Colon to Introduce Lists or Explanations",
+      "summary": "Use colon after independent clause to introduce list, explanation, or elaboration",
+      "content": "A colon introduces material that explains, illustrates, or amplifies what precedes it. The clause before the colon must be grammatically complete (independent clause). The material after can be a list, a quotation, an example, or an explanation. The first word after a colon is lowercase unless it's a proper noun or begins a complete sentence that's a formal statement or question.",
+      "ruleNumber": "6.56",
+      "category": "punctuation",
+      "section": "colons",
+      "examples": [
+        "Correct: We need three items: eggs, milk, and bread.",
+        "Correct: The answer is simple: hard work pays off.",
+        "Correct: She had one goal: To win the championship.",
+        "Incorrect: We need: eggs, milk, and bread. (incomplete before colon)",
+        "Correct incomplete clause alternative: We need eggs, milk, and bread."
+      ]
+    },
+    {
+      "id": "chicago-7.81",
+      "heading": "Hyphen in Compound Modifiers",
+      "summary": "Hyphenate compound modifiers before nouns; usually not after",
+      "content": "When two or more words work together as a single adjective before a noun, hyphenate them (compound modifier or phrasal adjective). Do not hyphenate if the first word is an adverb ending in -ly. Compound modifiers after the noun or following a linking verb are usually not hyphenated unless they remain ambiguous or are permanent compounds.",
+      "ruleNumber": "7.81",
+      "category": "punctuation",
+      "section": "hyphens",
+      "examples": [
+        "Before noun: a well-known author, a state-of-the-art facility",
+        "After noun: The author is well known. The facility is state of the art.",
+        "No hyphen with -ly adverb: a highly praised book (not highly-praised)",
+        "Permanent compounds: up-to-date (always hyphenated)",
+        "Clarity: small-business owner vs. small business owner"
+      ]
+    },
+    {
+      "id": "chicago-6.122",
+      "heading": "Quotation Marks for Dialogue",
+      "summary": "Use double quotation marks for dialogue; single for quotes within quotes",
+      "content": "In American English, dialogue is enclosed in double quotation marks. When a character quotes someone within dialogue, use single quotation marks for the inner quotation. New speakers get new paragraphs. Long uninterrupted monologues can keep opening quotation marks on each paragraph but closing marks only on the final paragraph.",
+      "ruleNumber": "6.122",
+      "category": "punctuation",
+      "section": "quotation-marks",
+      "examples": [
+        "Standard: \"Hello,\" she said.",
+        "Quote within quote: \"He told me, 'Don't worry about it,' and left.\"",
+        "New speaker: \"I'm ready.\" \"So am I,\" he replied.",
+        "Monologue: \"First paragraph... \"Second paragraph... \"Final paragraph.\""
+      ]
+    },
+    {
+      "id": "chicago-6.43",
+      "heading": "Comma with Appositives",
+      "summary": "Use commas around nonrestrictive appositives; no commas for restrictive",
+      "content": "An appositive is a noun or noun phrase that renames another noun beside it. Nonrestrictive appositives (providing extra information) take commas. Restrictive appositives (essential to identify which person or thing) take no commas. Test: if you can remove the appositive without losing essential meaning, use commas.",
+      "ruleNumber": "6.43",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Nonrestrictive: My brother, a doctor, lives in Boston.",
+        "Restrictive: My brother John lives in Boston. (implies other brothers)",
+        "Nonrestrictive: The author, Jane Austen, wrote Pride and Prejudice.",
+        "Restrictive: The author Jane Austen wrote Pride and Prejudice. (distinguishing from other authors)"
+      ]
+    },
+    {
+      "id": "chicago-6.49",
+      "heading": "Comma with Direct Address",
+      "summary": "Use commas to set off names or titles in direct address",
+      "content": "When directly addressing someone by name or title, set off the name with commas. This applies whether the name appears at the beginning, middle, or end of the sentence. Direct address can also include terms of endearment or vocatives.",
+      "ruleNumber": "6.49",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Beginning: Sarah, please close the door.",
+        "Middle: Please, Sarah, close the door.",
+        "End: Please close the door, Sarah.",
+        "Term of endearment: Listen, darling, we need to talk.",
+        "Title: Mr. President, what is your position?"
+      ]
+    },
+    {
+      "id": "chicago-6.52",
+      "heading": "Comma with Contrasting Elements",
+      "summary": "Use comma before contrasting phrases introduced by 'not', 'but'",
+      "content": "When a contrasting phrase is introduced by words like 'not', 'but', 'rather than', or 'instead of', precede it with a comma. These phrases create a contrast with what came before and deserve the slight pause and emphasis a comma provides.",
+      "ruleNumber": "6.52",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Correct: She wanted peace, not war.",
+        "Correct: He chose wisdom, rather than wealth.",
+        "Correct: They left early, not late.",
+        "Correct: I prefer coffee, but tea is acceptable."
+      ]
+    },
+    {
+      "id": "chicago-6.53",
+      "heading": "Comma with Absolute Phrases",
+      "summary": "Use commas to set off absolute phrases",
+      "content": "An absolute phrase modifies the entire sentence rather than a specific word. It typically consists of a noun plus a participle or participial phrase. Absolute phrases add descriptive detail and are always set off by commas, regardless of their position in the sentence.",
+      "ruleNumber": "6.53",
+      "category": "punctuation",
+      "section": "commas",
+      "examples": [
+        "Beginning: The storm having passed, we ventured outside.",
+        "End: She stood frozen, her heart pounding.",
+        "Middle: The audience, their attention rapt, watched the performance.",
+        "Classic structure: His voice trembling, he delivered the news."
+      ]
+    },
+    {
+      "id": "chicago-6.96",
+      "heading": "Ellipsis Points for Omissions",
+      "summary": "Use three spaced periods (. . .) to indicate omitted text in quotations",
+      "content": "Ellipsis points indicate omission of material from a quoted passage. Use three spaced periods (. . .) for omissions within a sentence. If omission occurs after a complete sentence, use four periods (sentence period + three ellipsis points). No ellipsis needed at the beginning or end of a quotation unless needed for clarity. Chicago prefers spaces between ellipsis points.",
+      "ruleNumber": "6.96",
+      "category": "punctuation",
+      "section": "ellipses",
+      "examples": [
+        "Within sentence: \"We hold . . . that all men are created equal.\"",
+        "After sentence: \"We hold these truths to be self-evident. . . . All men are created equal.\"",
+        "Correct spacing: word . . . word",
+        "Incorrect: word...word"
+      ]
+    }
+  ]
+}

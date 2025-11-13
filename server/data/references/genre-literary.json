@@ -1,0 +1,538 @@
+{
+  "documentId": "genre-literary",
+  "metadata": {
+    "title": "Literary Fiction Writing Conventions",
+    "description": "Comprehensive guide to literary fiction craft, style, and thematic conventions",
+    "version": "1.0.0",
+    "category": "genre-guide",
+    "genre": "literary",
+    "lastUpdated": "2025-01-13"
+  },
+  "chunks": [
+    {
+      "id": "literary-devices-techniques",
+      "heading": "Literary Devices and Techniques",
+      "summary": "Literary fiction employs sophisticated literary devices (metaphor, symbolism, imagery, motif, allusion) to create layered meaning beyond surface narrative. These devices should feel organic to the story, not decorative.",
+      "content": "Literary fiction distinguishes itself through deliberate, skillful use of literary devices that create resonance and multiple levels of meaning. Effective use means devices emerge naturally from character, setting, and theme rather than being imposed for effect. Metaphors should illuminate rather than obscure. Symbols should accumulate meaning through repetition and context. Imagery should appeal to multiple senses and create emotional resonance. Motifs should thread through the narrative, creating unity and deepening themes. The goal is enrichment of meaning, not display of cleverness.",
+      "ruleNumber": "1",
+      "category": "craft",
+      "section": "literary-techniques",
+      "examples": [
+        {
+          "label": "✓ GOOD: Organic metaphor",
+          "code": "The subway car swayed like a cradle, and she thought of her daughter's empty crib, the mobile still turning in the dark. Every commute now a lullaby for the child she'd lost."
+        },
+        {
+          "label": "✗ AVOID: Forced/mixed metaphor",
+          "code": "Her grief was a tsunami that burned like fire, freezing her heart into stone while simultaneously making it soar like a bird breaking free from chains."
+        },
+        {
+          "label": "✓ GOOD: Accumulating symbol",
+          "code": "The watch appeared first in chapter one (her father's death), again when she interviewed for his old job, and finally when she gave it to her son—each time the ticking louder, time's weight heavier."
+        },
+        {
+          "label": "✗ AVOID: Heavy-handed symbol",
+          "code": "The broken mirror represented her shattered identity, the fractured pieces symbolizing her fragmented self, literally reflecting her broken soul."
+        },
+        {
+          "label": "✓ GOOD: Sensory imagery creating mood",
+          "code": "The hospital corridor smelled of lemon disinfectant and something underneath—rust, maybe, or old blood. The fluorescents hummed. Her shoes squeaked against linoleum with each reluctant step toward room 217."
+        },
+        {
+          "label": "✗ AVOID: Decorative imagery without purpose",
+          "code": "The sunset painted the sky in shades of crimson and gold and amber and violet and orange, creating a beautiful tapestry of colors that dazzled the eye."
+        }
+      ]
+    },
+    {
+      "id": "literary-thematic-depth",
+      "heading": "Thematic Depth and Complexity",
+      "summary": "Literary fiction explores universal human themes (identity, mortality, meaning, love, loss, power, morality) with nuance and complexity. Themes emerge through story rather than being stated explicitly.",
+      "content": "Literary fiction engages with profound questions about human existence, not to provide answers but to explore complexity. Strong thematic work weaves theme into character action, setting details, dialogue subtext, and structural choices. Multiple themes can intersect and complicate each other. Avoid reducing themes to simple messages or moral lessons. Trust readers to perceive thematic resonance without explanation. Themes should deepen on rereading as readers notice patterns and connections. The goal is to make readers think and feel, not to preach or provide neat resolutions to complex questions.",
+      "ruleNumber": "2",
+      "category": "theme",
+      "section": "literary-depth",
+      "examples": [
+        {
+          "label": "✓ GOOD: Theme emerging through action",
+          "code": "Marco declined the promotion that required relocating. His daughter's last year of high school, his mother's dementia worsening. Later, watching his colleague celebrate, he wondered if love was supposed to feel like sacrifice or if sacrifice meant you'd chosen wrong."
+        },
+        {
+          "label": "✗ AVOID: Theme stated explicitly",
+          "code": "Marco realized that family was more important than career advancement. This experience taught him that true success means being there for the people you love, not climbing the corporate ladder."
+        },
+        {
+          "label": "✓ GOOD: Intersecting themes creating complexity",
+          "code": "The affair began as escape from grief, became its own kind of mourning—for the life she'd had, the person she'd been before loss taught her that fidelity was just another thing death could take."
+        },
+        {
+          "label": "✗ AVOID: Single-note theme",
+          "code": "The novel's message is clear: infidelity destroys marriages. Every character who has an affair suffers consequences, while faithful spouses find happiness."
+        },
+        {
+          "label": "✓ GOOD: Universal theme through specific detail",
+          "code": "Her grandmother's hands—veined, spotted, still quick with needle and thread—finishing the quilt they'd started together. 'We don't get to choose what we leave behind,' she said, tying off the final knot."
+        },
+        {
+          "label": "✗ AVOID: Abstract theme without grounding",
+          "code": "The novel explores the nature of legacy and how we are all part of the eternal cycle of life and death, our contributions rippling through time in ways we cannot comprehend."
+        }
+      ]
+    },
+    {
+      "id": "literary-character-interiority",
+      "heading": "Character Interiority and Psychology",
+      "summary": "Literary fiction prioritizes deep character psychology, internal conflict, and emotional truth. Use close third-person or first-person POV to access complex thought processes, contradictions, and psychological realism.",
+      "content": "Literary fiction lives in characters' minds—their perceptions, rationalizations, contradictions, and evolving self-awareness. Show how characters think, not just what they do. Reveal the gap between what characters tell themselves and what's true. Use free indirect discourse to blend narrator and character voice. Interior monologue should feel authentic to the character's education, personality, and emotional state. Psychological complexity means characters can hold contradictory feelings simultaneously, make choices they don't fully understand, and slowly change in subtle ways. Avoid explaining psychology explicitly; let readers infer from thought patterns, associations, and reactions.",
+      "ruleNumber": "3",
+      "category": "character",
+      "section": "psychology",
+      "examples": [
+        {
+          "label": "✓ GOOD: Complex, contradictory interiority",
+          "code": "She loved her sister. Of course she did. But watching Elena accept the award—their mother's proud face in the front row—she felt something else, too. Not jealousy. Something older, from before words, from when they'd shared a crib and she'd learned that crying louder got you picked up first."
+        },
+        {
+          "label": "✗ AVOID: Simple, explained psychology",
+          "code": "She felt jealous of her sister's success because she had always been the less accomplished sibling. This made her resentful and caused her to behave badly at family gatherings."
+        },
+        {
+          "label": "✓ GOOD: Free indirect discourse",
+          "code": "He should call. That was the decent thing, the adult thing. Tomorrow, probably. Or next week. There wasn't any rush, was there? People took time. Everyone understood. And what would he even say?"
+        },
+        {
+          "label": "✗ AVOID: Detached narration",
+          "code": "He thought about calling but decided against it because he didn't know what to say and felt that taking time was acceptable in these situations."
+        },
+        {
+          "label": "✓ GOOD: Authentic thought patterns",
+          "code": "The lawyer used words like 'dissolution' and 'asset distribution.' Tania watched his mouth move. She'd bought Daniel that tie for their anniversary—the blue one with the thin stripe. Seven years ago? Eight?"
+        },
+        {
+          "label": "✗ AVOID: Overly articulate thoughts",
+          "code": "Tania contemplated the profound irony that the legal terminology used to describe the end of a marriage felt so clinical and devoid of the emotional devastation she was experiencing in this moment of existential crisis."
+        }
+      ]
+    },
+    {
+      "id": "literary-symbolic-imagery",
+      "heading": "Symbolic Imagery and Metaphor",
+      "summary": "Literary fiction uses imagery and metaphor to create layered meaning, emotional resonance, and thematic depth. Symbols should accumulate meaning through context and repetition rather than being explained.",
+      "content": "Effective symbolic imagery works on multiple levels—literal and metaphorical, conscious and subconscious. Images should be specific and sensory while also carrying emotional and thematic weight. Recurring images (motifs) create unity and allow meaning to deepen across the narrative. Avoid explaining symbols; trust readers to perceive connections. The most powerful symbols are those that feel inevitable in context—emerging from setting, character background, or plot naturally. Metaphors should illuminate character perception and emotional state. Use extended metaphors sparingly and only when they genuinely enrich understanding. Cultural and personal associations should feel authentic to viewpoint character.",
+      "ruleNumber": "4",
+      "category": "craft",
+      "section": "imagery-symbolism",
+      "examples": [
+        {
+          "label": "✓ GOOD: Image as objective correlative",
+          "code": "The willow in their yard had split in the storm—half still standing, half sprawled across the fence. For months they didn't discuss removing it. He mowed around it. She hung laundry on the fallen branches."
+        },
+        {
+          "label": "✗ AVOID: Explained symbolism",
+          "code": "The split tree symbolized their broken marriage. The fact that it was half-standing represented how their relationship was partially destroyed but not completely over."
+        },
+        {
+          "label": "✓ GOOD: Metaphor revealing character perception",
+          "code": "The faculty meeting stretched like taffy—Dr. Norton's voice pulling thinner and thinner until the words lost shape entirely. Rachel pressed her thumbnail into her palm, counting breaths. Seventeen years until retirement. Six thousand three hundred and twenty days."
+        },
+        {
+          "label": "✗ AVOID: Generic/clichéd metaphor",
+          "code": "Time crawled by like a snail. The meeting was boring as watching paint dry. She felt like a prisoner counting down her sentence."
+        },
+        {
+          "label": "✓ GOOD: Recurring motif building meaning",
+          "code": "Water appeared throughout: the baptism (chapter 2), the broken pipe flooding the basement (chapter 8), her daughter learning to swim (chapter 15), and finally the hospice bath (chapter 23)—each time suggesting different aspects of cleansing, drowning, rebirth."
+        },
+        {
+          "label": "✗ AVOID: Heavy-handed motif",
+          "code": "Every chapter included a reference to water to symbolize purification and the flow of life. This recurring water imagery represented the protagonist's journey toward spiritual cleansing."
+        }
+      ]
+    },
+    {
+      "id": "literary-experimental-structure",
+      "heading": "Experimental Narrative Structures",
+      "summary": "Literary fiction often employs non-linear, fragmented, or unconventional narrative structures to enhance meaning. Experimentation should serve the story's themes and emotional truth, not obscure them.",
+      "content": "Structural innovation in literary fiction can include non-chronological timelines, multiple perspectives, unreliable narrators, second-person POV, epistolary formats, or metafictional elements. Experimental structures should emerge from the story's needs—fractured narrative for fractured psychology, multiple timelines for memory-centered story, epistolary for distance/intimacy themes. Ensure readers can follow the story even as structure challenges them. Provide enough orientation (dates, headers, perspective shifts) without being heavy-handed. Unconventional structures require even tighter control of other elements; readers tolerate less confusion in language and characterization when structure is complex. The experiment should illuminate the story's core, not substitute for it.",
+      "ruleNumber": "5",
+      "category": "structure",
+      "section": "narrative-innovation",
+      "examples": [
+        {
+          "label": "✓ GOOD: Structure reflecting theme",
+          "code": "Each chapter moved backward in time—from her father's funeral to her childhood—revealing how present grief reshaped memory. The reverse chronology made readers experience her fragmenting sense of narrative coherence."
+        },
+        {
+          "label": "✗ AVOID: Gimmicky structure",
+          "code": "Chapters alternated between past and present randomly to seem experimental and literary. The non-linear timeline created confusion without serving any thematic purpose."
+        },
+        {
+          "label": "✓ GOOD: Unreliable narrator with purpose",
+          "code": "Marcus insisted throughout that he'd been framed, providing convincing alternative explanations. Only in the final pages did readers realize his own words had been revealing guilt all along—truth hiding in plain sight."
+        },
+        {
+          "label": "✗ AVOID: Unmotivated unreliability",
+          "code": "The narrator lied about various things for no apparent reason. At the end, it was revealed that everything told before was false, making the entire book pointless."
+        },
+        {
+          "label": "✓ GOOD: Multiple perspectives revealing blind spots",
+          "code": "Four siblings remembered their mother's death. Each perspective contradicted the others in subtle ways—same events, radically different meanings. Truth emerged from the gaps between versions."
+        },
+        {
+          "label": "✗ AVOID: Redundant perspectives",
+          "code": "Five different characters narrated the same events saying essentially the same things from slightly different angles. The multiple POVs added length without adding insight."
+        }
+      ]
+    },
+    {
+      "id": "literary-prose-style",
+      "heading": "Prose Style Elevation and Voice",
+      "summary": "Literary fiction demands distinctive, carefully crafted prose. Sentence rhythm, word choice, and syntax should create voice while serving clarity. Style should feel inevitable, not decorative.",
+      "content": "Literary prose style goes beyond grammatical correctness to achieve rhythmic beauty, precision, and distinctiveness. Pay attention to sentence variety—length, structure, emphasis. Choose words for both meaning and sound. Use syntax to control pacing and emphasis. Voice should feel consistent and authentic to the work's tone and viewpoint. Avoid 'purple prose' (excessive ornamentation) while still achieving elevation. Read sentences aloud; they should have musicality without sacrificing sense. Vary rhythm: long, flowing sentences for contemplation; short, jagged ones for urgency. Trust strong nouns and verbs over adjectives and adverbs. Style should enhance meaning, not obscure it. Develop a distinctive style fingerprint—the way readers could identify your writing blind.",
+      "ruleNumber": "6",
+      "category": "craft",
+      "section": "prose-style",
+      "examples": [
+        {
+          "label": "✓ GOOD: Rhythmic, varied sentence structure",
+          "code": "The house had belonged to her grandmother. Then her mother. Now, nominally, her. But really it belonged to the past—to Sunday dinners and piano lessons and the afternoon light that still, after all these years, fell across the same spot on the kitchen floor."
+        },
+        {
+          "label": "✗ AVOID: Purple prose",
+          "code": "The magnificently resplendent domicile, erstwhile dwelling of her dearly departed maternal grandmother and subsequently her cherished mother, now luxuriously belonged to her own humble personage, though truly it belonged to bygone eras."
+        },
+        {
+          "label": "✓ GOOD: Strong verbs and precise nouns",
+          "code": "Rain needled the windshield. The wipers shrieked. She hunched over the wheel, searching for the turnoff she'd taken a thousand times before the stroke stole her mother's words."
+        },
+        {
+          "label": "✗ AVOID: Weak verbs with adverbs",
+          "code": "Rain came down heavily on the windshield. The wipers moved loudly. She sat uncomfortably close to the wheel, looking carefully for the turn that she had driven to many times."
+        },
+        {
+          "label": "✓ GOOD: Syntax controlling emphasis",
+          "code": "She wanted to leave. Had wanted to for years. But there was her mother's garden, and her father's workshop, and the pencil marks on the doorframe measuring a child who'd stopped growing."
+        },
+        {
+          "label": "✗ AVOID: Flat, uniform sentences",
+          "code": "She wanted to leave and had wanted to for years. Her mother's garden was there and her father's workshop was there. The doorframe had pencil marks that measured a child who'd stopped growing."
+        }
+      ]
+    },
+    {
+      "id": "literary-ambiguity-interpretation",
+      "heading": "Ambiguity and Open Interpretation",
+      "summary": "Literary fiction often embraces ambiguity, allowing multiple valid interpretations. Endings may be open rather than resolved. Trust readers to sit with uncertainty and draw their own conclusions.",
+      "content": "Literary fiction resists tidy answers to complex questions. Ambiguity should be earned through careful setup—multiple valid interpretations supported by the text. This differs from confusion (readers can't understand) or cop-out (author avoids commitment). Open endings should feel complete even while unresolved—emotional arc finished even if plot questions remain. Ambiguity works best with concrete details; vague writing is not the same as meaningful ambiguity. Characters can end in states of uncertainty or ongoing struggle. Readers should feel the ambiguity is intentional and meaningful, not a failure to commit. Trust readers to tolerate not-knowing. Some of the most powerful moments in literary fiction are those where meaning hovers between multiple possibilities.",
+      "ruleNumber": "7",
+      "category": "theme",
+      "section": "ambiguity",
+      "examples": [
+        {
+          "label": "✓ GOOD: Earned ambiguity",
+          "code": "The final chapter: Sarah at the airport, boarding pass in hand. Through security, down the concourse. At the gate, she stops. The attendant calls for final boarding. Sarah's phone buzzes—a text from Michael. The screen goes dark. Cut to black."
+        },
+        {
+          "label": "✗ AVOID: Unearned vagueness",
+          "code": "Everything worked out somehow. Or maybe it didn't. The ending was intentionally unclear because life is uncertain and ambiguous. The reader must decide what really happened."
+        },
+        {
+          "label": "✓ GOOD: Multiple valid interpretations",
+          "code": "The stranger at the funeral knew details only her brother could know. But Paul had died ten years ago. Readers could interpret this as supernatural visitation, shared grief creating coincidence, or unreliable narrator's desire for impossible reunion."
+        },
+        {
+          "label": "✗ AVOID: Contradiction as 'ambiguity'",
+          "code": "The character was simultaneously dead and alive, present and absent, real and imaginary. This contradiction represented deep themes about existence and reality."
+        },
+        {
+          "label": "✓ GOOD: Concrete details supporting open ending",
+          "code": "She packed the blue suitcase—the one from their honeymoon. Left it by the door. Made coffee. Burned the toast. At 8:47 AM, she picked up her keys. The suitcase remained. The door remained closed. She remained."
+        },
+        {
+          "label": "✗ AVOID: False ambiguity",
+          "code": "The ending was mysterious and ambiguous, leaving readers to wonder what happened. Did she leave or stay? Live or die? Real or imaginary? The author intentionally refuses to say."
+        }
+      ]
+    },
+    {
+      "id": "literary-social-commentary",
+      "heading": "Social Commentary and Cultural Critique",
+      "summary": "Literary fiction often engages with contemporary social, political, and cultural issues. Commentary should emerge through story and character rather than authorial lecturing. Show systemic issues through individual experience.",
+      "content": "Literary fiction addresses social issues through embodied human experience, not abstract argument. Show how systems (racism, sexism, economic inequality, etc.) affect individual lives through specific, concrete details. Avoid didactic 'issue novels' where characters exist to make points; create fully realized people whose struggles illuminate larger patterns. Multiple perspectives can reveal systemic complexity. Historical novels should avoid anachronistic contemporary attitudes while still allowing critique. Trust readers to perceive social commentary without explicit explanation. The goal is to make readers see and feel injustice, not to preach. Complexity is key—show how good people can be complicit, how systems persist despite individual goodwill, how victims can survive and resist.",
+      "ruleNumber": "8",
+      "category": "theme",
+      "section": "social-issues",
+      "examples": [
+        {
+          "label": "✓ GOOD: Systemic issue through individual experience",
+          "code": "The nurse called her 'Maria' though her badge said 'Dr. Reyes.' Later, a patient asked, 'When will I see the doctor?'—while she stood there with the chart. Small cuts, over and over. She'd learned to bleed quietly."
+        },
+        {
+          "label": "✗ AVOID: Soapbox moment",
+          "code": "Dr. Reyes reflected on how systemic racism in healthcare manifests through microaggressions and implicit bias, creating a hostile environment for doctors of color and perpetuating health disparities in marginalized communities."
+        },
+        {
+          "label": "✓ GOOD: Complexity and complicity",
+          "code": "Marcus hired the legal assistant—bright, qualified. Paid her well. Wrote the recommendation letter. Later heard she'd gone to his rival firm. 'Not a good cultural fit,' he'd told HR. He didn't think of himself as the kind of person who... But."
+        },
+        {
+          "label": "✗ AVOID: Cartoonish villains",
+          "code": "The boss was a racist sexist pig who deliberately sabotaged women and minorities because he was evil and hateful. He represented everything wrong with corporate America."
+        },
+        {
+          "label": "✓ GOOD: Historical critique without anachronism",
+          "code": "1952: Ruth read the want ads. 'Switchboard operator. Must type 60 wpm.' She could type 85. The ad continued: 'Single women only. Will train.' She looked at her wedding ring. At her teaching degree. At the ads under 'Help Wanted—Male.'"
+        },
+        {
+          "label": "✗ AVOID: Anachronistic consciousness",
+          "code": "In 1952, Ruth understood that systemic sexism was limiting her career options in ways that reinforced patriarchal power structures and denied women economic agency and self-determination."
+        }
+      ]
+    },
+    {
+      "id": "literary-narrative-innovation",
+      "heading": "Narrative Innovation and Form-Breaking",
+      "summary": "Literary fiction may challenge conventional narrative forms through metafiction, genre-blending, fragmentation, or formal experimentation. Innovation should enhance meaning, not merely display technique.",
+      "content": "Narrative innovation can include: metafictional awareness (acknowledging the text as text), genre-blending (literary/mystery, literary/sci-fi), formal experiments (footnotes as narrative, blank pages, typography as meaning), fragmented or mosaic structures, or challenging reader expectations about what a novel can be. All experimentation must serve the story's emotional and thematic core. Readers should understand why the form is what it is. Self-conscious experimentation that draws attention to itself without purpose becomes precious or gimmicky. The most successful innovations feel inevitable—you can't imagine the story told any other way. Balance accessibility with challenge; readers should be intrigued, not alienated.",
+      "ruleNumber": "9",
+      "category": "structure",
+      "section": "innovation",
+      "examples": [
+        {
+          "label": "✓ GOOD: Form enhancing content",
+          "code": "House of Leaves uses footnotes and typography to mirror the protagonist's disintegrating mental state and the house's impossible geometry—form and content inseparable."
+        },
+        {
+          "label": "✗ AVOID: Technique without purpose",
+          "code": "The novel included random footnotes, different fonts, pages printed upside down, and blank pages to be experimental and different from traditional novels."
+        },
+        {
+          "label": "✓ GOOD: Genre-blending serving theme",
+          "code": "The novel combined detective procedural with literary examination of grief—the mystery plot literalizing the protagonist's search for meaning after her daughter's death."
+        },
+        {
+          "label": "✗ AVOID: Genre confusion",
+          "code": "The book couldn't decide if it was a thriller, romance, or literary novel. It shifted between genres randomly, trying to appeal to all audiences but satisfying none."
+        },
+        {
+          "label": "✓ GOOD: Metafiction with emotional truth",
+          "code": "The narrator occasionally addressed readers directly: 'You want to know if this really happened. I want to know that too. Memory and invention blur like watercolors in rain.'"
+        },
+        {
+          "label": "✗ AVOID: Empty meta-commentary",
+          "code": "The author constantly reminded readers they were reading a novel, pointing out narrative choices and admitting the characters weren't real, which destroyed emotional investment."
+        }
+      ]
+    },
+    {
+      "id": "literary-voice-distinctiveness",
+      "heading": "Voice Distinctiveness and Author Signature",
+      "summary": "Literary fiction values a unique, recognizable authorial voice—the distinctive way a writer uses language, structures sentences, and sees the world. Voice should be consistent yet avoid becoming mannered or self-parodic.",
+      "content": "Voice is the sum total of word choice, sentence rhythm, tone, perspective, and sensibility that makes your writing recognizable. It includes what you notice, how you describe it, and the associations you make. Voice develops through practice and reading widely. Strong voice doesn't mean every sentence sounds the same—it means the whole has a consistent intelligence and sensibility behind it. Avoid tics that become mannered (same sentence structure repeatedly, overused pet words, mechanical rhythms). Voice should feel natural, not strained. First-person and close third-person allow voice to shine through character as well. Trust your natural way of seeing and describing; authentic voice trumps borrowed elevation.",
+      "ruleNumber": "10",
+      "category": "craft",
+      "section": "voice",
+      "examples": [
+        {
+          "label": "✓ GOOD: Distinctive, consistent voice",
+          "code": "Joan Didion: 'We tell ourselves stories in order to live.' The economy, the observation of self-deception, the matter-of-fact delivery of devastating insight—unmistakably hers."
+        },
+        {
+          "label": "✗ AVOID: Generic literary voice",
+          "code": "Life is complicated and people tell themselves stories. We all have narratives we use to make sense of our existence. This is part of the human condition."
+        },
+        {
+          "label": "✓ GOOD: Voice through specific observation",
+          "code": "He noticed things: the way airport carpet swallowed sound, how hotels always put the Bible in the same drawer, that wedding rings left tan lines even after divorce."
+        },
+        {
+          "label": "✗ AVOID: Voice-as-quirk",
+          "code": "Every. Single. Sentence. Was. Fragmented. For. Effect. This. Became. Exhausting. And. Felt. Like. A. Gimmick. Rather. Than. Actual. Voice."
+        },
+        {
+          "label": "✓ GOOD: Voice revealing worldview",
+          "code": "She calculated everything in work hours: the shoes cost eighteen, the dinner thirty-two, leaving early for her son's play—forty-five, maybe fifty if you counted the partner's irritation."
+        },
+        {
+          "label": "✗ AVOID: Trying-too-hard voice",
+          "code": "The ineffable quotidian existence of her being was perpetually mired in the quantification of temporal investment, a monetized consciousness that transmuted all experience into capitalistic metrics."
+        }
+      ]
+    },
+    {
+      "id": "literary-philosophical-existential",
+      "heading": "Philosophical and Existential Themes",
+      "summary": "Literary fiction often explores philosophical questions about meaning, identity, morality, free will, and mortality. Avoid didacticism; dramatize questions through character experience rather than philosophical discourse.",
+      "content": "Philosophical themes work best when embodied in concrete situations and character struggles. Questions about meaning arise naturally through loss, choice, or mortality. Identity questions manifest through transformation, conflict, or memory. Moral dilemmas should have genuine complexity—no easy answers. Avoid characters who philosophize at length; instead show philosophical questions through action and consequence. Existential themes (alienation, absurdity, freedom, authenticity) resonate when grounded in specific experience. Questions can remain unresolved; the exploration matters more than answers. Philosophical fiction shouldn't feel like a philosophy paper with character names—let readers discover ideas through story.",
+      "ruleNumber": "11",
+      "category": "theme",
+      "section": "philosophical-themes",
+      "examples": [
+        {
+          "label": "✓ GOOD: Philosophy through situation",
+          "code": "The trolley problem wasn't theoretical. Her daughter in one crosswalk, five strangers in the other, and her car's brakes screaming. Afterward, the therapist asked what she'd chosen. 'I don't know,' she said. 'I can't remember.' Both crosswalks had been empty."
+        },
+        {
+          "label": "✗ AVOID: Philosophical lecture",
+          "code": "The protagonist considered Sartre's concept of radical freedom and concluded that existence precedes essence, meaning we create our own nature through choices, a burden of freedom that creates existential anxiety."
+        },
+        {
+          "label": "✓ GOOD: Identity questions dramatized",
+          "code": "After the transplant, she craved rare steak—had been vegetarian for twenty years. Dreamed in Spanish—didn't speak it. Googled the donor's name obsessively, knowing she shouldn't. If you take someone's heart, whose thoughts beat in your chest?"
+        },
+        {
+          "label": "✗ AVOID: Abstract identity discourse",
+          "code": "She pondered the nature of identity and selfhood, wondering if personal identity was continuous or constructed, whether the self was essential or performed, and what constitutes the boundaries of individual consciousness."
+        },
+        {
+          "label": "✓ GOOD: Mortality through concrete detail",
+          "code": "His father's closet: suits arranged by color, shoes in cedar trees, the blazer with tenure patches. His mother said leave it, she'd deal with it later. Two years later the closet unchanged. Three years. Four. The suits older than their marriage now."
+        },
+        {
+          "label": "✗ AVOID: Mortality stated baldly",
+          "code": "He contemplated mortality and the impermanence of existence. Death awaited everyone, leaving behind only objects that outlasted their owners, material remnants of lives that were ultimately finite and temporary."
+        }
+      ]
+    },
+    {
+      "id": "literary-intertextuality-allusion",
+      "heading": "Intertextuality and Literary Allusion",
+      "summary": "Literary fiction often engages with literary tradition through allusion, epigraphs, retelling, or direct reference. Allusions should enhance meaning for readers who catch them while not alienating those who don't.",
+      "content": "Intertextuality creates dialogue between texts—referencing, retelling, or responding to other works. Allusions should be organic to story and character (educated character might think in literary references). Works best when the story stands alone but deepens with recognition of sources. Avoid showing off erudition for its own sake. Epigraphs can frame themes or create ironic counterpoint. Retellings (myths, fairy tales, classics) should justify the choice—why this story? what new perspective? Metafictional works might reference literary conventions or forms. The goal is resonance and complexity, not puzzle-solving. Obscure allusions should enhance, not require explanation for comprehension.",
+      "ruleNumber": "12",
+      "category": "craft",
+      "section": "intertextuality",
+      "examples": [
+        {
+          "label": "✓ GOOD: Allusion deepening theme",
+          "code": "She'd taught 'Bartleby' for fifteen years, never understanding why he preferred not to. Now, at her own desk, facing early retirement, she got it. The quiet refusal. The power in passivity. 'I would prefer not to,' she told HR."
+        },
+        {
+          "label": "✗ AVOID: Name-dropping classics",
+          "code": "Like Odysseus, like Don Quixote, like Hamlet, like all great literary heroes, he embarked on a journey of self-discovery echoing the archetypal patterns established by Homer, Cervantes, and Shakespeare."
+        },
+        {
+          "label": "✓ GOOD: Retelling justified by perspective",
+          "code": "The novel retold Medea from the nurse's POV—woman who raised Jason's sons, witnessed their mother's unraveling, knew what those children were to her and what that made the choice to kill them."
+        },
+        {
+          "label": "✗ AVOID: Retelling without purpose",
+          "code": "A modern retelling of Pride and Prejudice set in contemporary Los Angeles with the same plot, same character types, but with cell phones and Starbucks instead of letters and tea."
+        },
+        {
+          "label": "✓ GOOD: Epigraph creating resonance",
+          "code": "Novel about inherited trauma opens with Faulkner: 'The past is never dead. It's not even past.' The epigraph frames without limiting interpretation."
+        },
+        {
+          "label": "✗ AVOID: Showing-off allusion",
+          "code": "The text included untranslated quotes from Dante, Rilke, and Baudelaire in their original languages, assuming readers would understand French, German, and Italian to appreciate the literary sophistication."
+        }
+      ]
+    },
+    {
+      "id": "literary-showing-vs-telling",
+      "heading": "Showing Versus Telling Mastery",
+      "summary": "Literary fiction demonstrates sophisticated command of 'show don't tell'—revealing character, emotion, and situation through concrete detail, action, and dialogue rather than exposition. Strategic telling can provide rhythm and efficiency.",
+      "content": "Showing means dramatizing through scene, action, dialogue, and sensory detail rather than summarizing. Literary fiction excels at subtle showing—small gestures revealing large emotions, details suggesting backstory, dialogue subtext. However, strategic telling has purpose: summary for pacing, generalization for pattern, direct statement for impact. The key is conscious choice, not default exposition. Show what's emotionally important; tell what's necessary but secondary. Avoid explaining what you've just shown. Trust readers to infer emotion from behavior. Physical details should do emotional work. Dialogue should reveal character and advance plot simultaneously. When telling, make language itself interesting.",
+      "ruleNumber": "13",
+      "category": "craft",
+      "section": "showing-telling",
+      "examples": [
+        {
+          "label": "✓ GOOD: Showing through detail",
+          "code": "He'd forgotten her birthday. Again. She cut his sandwich corner to corner instead of diagonal, the way he hated. Set the plate down hard. 'Thank you,' he said automatically, not looking up from his phone."
+        },
+        {
+          "label": "✗ AVOID: Telling feelings",
+          "code": "She was angry that he'd forgotten her birthday again. His thoughtlessness hurt her feelings. She passive-aggressively made his sandwich wrong to punish him. He didn't notice because he was distracted."
+        },
+        {
+          "label": "✓ GOOD: Physical detail revealing emotion",
+          "code": "Her mother's hands shook inserting the key. Missed the lock twice. The third time, she steadied her right hand with her left, got it in, but couldn't turn it. 'I can do it,' she said. Neither of them moved."
+        },
+        {
+          "label": "✗ AVOID: Explained significance",
+          "code": "Her mother's trembling hands showed the progression of her disease and symbolized her loss of independence, which made both of them sad and frustrated but unable to discuss their feelings."
+        },
+        {
+          "label": "✓ GOOD: Strategic, elegant telling",
+          "code": "They fought about money, mostly. Sometimes about his mother. Once, memorably, about whether the cat understood irony. The particulars mattered less than the pattern: her cataloging grievances, his strategic silence."
+        },
+        {
+          "label": "✗ AVOID: Mechanical showing",
+          "code": "She said, 'We need to talk about money.' He crossed his arms defensively and looked away. She frowned, indicating frustration. Her voice rose, showing anger. He remained silent, demonstrating avoidance."
+        }
+      ]
+    },
+    {
+      "id": "literary-contemplative-pacing",
+      "heading": "Pacing for Reflection Over Action",
+      "summary": "Literary fiction often prioritizes contemplative moments, internal processing, and thematic exploration over plot momentum. Pacing should allow readers space to think and feel, but avoid losing narrative drive entirely.",
+      "content": "Literary pacing differs from genre fiction—more space for interiority, description, and reflection. Scenes can be meditative rather than action-driven. Quiet moments matter. However, even contemplative novels need forward movement—questions raised, situations evolving, character development. Balance stillness with progression. Use structure to create rhythm: alternate between scene and summary, action and reflection. Vary paragraph and sentence length to control tempo. Readers should feel the deliberate pace is creating depth, not stalling. Contemplative doesn't mean plotless; it means plot serves character and theme rather than vice versa. Give readers time to sit with ideas and emotions.",
+      "ruleNumber": "14",
+      "category": "structure",
+      "section": "pacing",
+      "examples": [
+        {
+          "label": "✓ GOOD: Contemplative scene with progression",
+          "code": "She spent the afternoon sorting his books. Poetry separate from prose. Hardcover from paperback. Then by subject. Then chronologically by when he'd bought them. Each system revealed something different, none of them right. By evening she understood: there was no way to organize a dead man's library that would bring him back."
+        },
+        {
+          "label": "✗ AVOID: Stagnant contemplation",
+          "code": "For ten pages she thought about life and death and meaning and memory. Her thoughts wandered philosophically but nothing happened and no new understanding emerged. The contemplation led nowhere."
+        },
+        {
+          "label": "✓ GOOD: Stillness with emotional stakes",
+          "code": "The oncologist's waiting room. She'd been coming here three years—knew the faded Monet print, the broken magazine rack, which chairs had the least wobble. Today her daughter had come. First time. They sat in silence, not the companionable kind."
+        },
+        {
+          "label": "✗ AVOID: Padding without purpose",
+          "code": "Lengthy descriptions of the waiting room's furniture, paint color, ceiling tiles, and floor pattern filled several pages. These details created atmosphere but didn't advance character development or plot."
+        },
+        {
+          "label": "✓ GOOD: Rhythm through structure variation",
+          "code": "Chapter alternated long contemplative passages (her processing her mother's diagnosis) with short sharp scenes (medical appointments, phone calls, difficult decisions). The rhythm mirrored her emotional state—dread stretching time, crisis compressing it."
+        },
+        {
+          "label": "✗ AVOID: Uniform slow pacing",
+          "code": "Every scene moved at the same contemplative pace regardless of content. Action scenes, emotional confrontations, and quiet moments all had identical rhythm, making the novel feel monotonous."
+        }
+      ]
+    },
+    {
+      "id": "literary-ending-conventions",
+      "heading": "Literary Ending Conventions",
+      "summary": "Literary fiction endings often favor resonance over resolution, ambiguity over closure, earned complexity over neat answers. The ending should feel complete while acknowledging life's ongoing uncertainties.",
+      "content": "Literary endings typically avoid tying up all loose ends. Resolution can be emotional/thematic even when plot questions remain open. The ending should feel inevitable in retrospect but not predictable while reading. Avoid sudden tonal shifts (bleak to happy) unless carefully prepared. Ambiguous endings work when multiple interpretations are supported by the text. Bittersweet is more common than purely happy/tragic. The final image, line, or scene should resonate—creating lasting impact. Circle back to opening images/themes for closure. Character should end in a different place emotionally even if circumstances haven't changed much. Questions raised should feel addressed even if not answered. Readers should close the book thinking, not frustrated.",
+      "ruleNumber": "15",
+      "category": "structure",
+      "section": "endings",
+      "examples": [
+        {
+          "label": "✓ GOOD: Emotionally complete, plot open",
+          "code": "She sold the house. Didn't matter to whom—the lawyer would handle it. Drove past one last time, seeing her daughter's window, the oak they'd planted, the porch where she'd learned to forgive him. Kept driving. The GPS said 'recalculating.' She turned it off."
+        },
+        {
+          "label": "✗ AVOID: Unearned happy ending",
+          "code": "Despite all the grief, loss, and trauma throughout the novel, everything worked out perfectly in the final chapter. She got the job, reconciled with her family, and found true love. All problems solved."
+        },
+        {
+          "label": "✓ GOOD: Resonant final image",
+          "code": "The novel about three generations of women ended with the grandmother's garden—now the granddaughter's. Same perennials, same stubbornness pushing through. She knelt in the dirt, pulled weeds. Somewhere, her daughter was doing the same."
+        },
+        {
+          "label": "✗ AVOID: Trailing off into nothing",
+          "code": "The ending just sort of stopped without resolution, emotional catharsis, or thematic closure. Events happened, then the book ended because it had reached its page count."
+        },
+        {
+          "label": "✓ GOOD: Bittersweet, earned ambiguity",
+          "code": "His father's workshop, tools sorted by size—the Alzheimer's hadn't taken that yet. 'Show me again,' his father said, holding the chisel like a stranger. Outside, the fence they'd built together listed in the wind. He could fix it. They both knew he wouldn't."
+        },
+        {
+          "label": "✗ AVOID: False-profound ending",
+          "code": "Life goes on. We all struggle. In the end, we're all just human beings trying to find meaning in a meaningless universe. The protagonist walked into the sunset, having learned something vague about life."
+        }
+      ]
+    }
+  ]
+}

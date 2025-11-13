@@ -483,7 +483,51 @@ export const NARRATION_STYLE_OPTIONS: NarrationStyle[] = [
     }
 ];
 
-export type AppView = 'editing' | 'illustration' | 'audiobooks' | 'publishing' | 'marketing' | 'statistics';
+export type AppView = 'editing' | 'illustration' | 'audiobooks' | 'publishing' | 'marketing' | 'statistics' | 'settings';
+
+export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq' | 'custom';
+
+export interface AiModelConfig {
+  textGeneration: string;
+  textGenerationFast: string;
+  imageGeneration: string;
+  audioGeneration: string;
+  embedding: string;
+}
+
+export interface AiProviderSettings {
+  provider: AiProvider;
+  apiKey: string;
+  models: AiModelConfig;
+  endpoint?: string;
+}
+
+export type AudioProvider = 'gemini' | 'openai' | 'chatterbox' | 'comfyui' | 'elevenlabs' | 'azure' | 'aws';
+
+export interface AudioProviderConfig {
+  provider: AudioProvider;
+  apiKey?: string;
+  endpoint?: string;
+  chatterboxConfig?: {
+    installPath: string;
+    pythonPath: string;
+    modelsPath: string;
+  };
+  comfyUIConfig?: {
+    endpoint: string;
+    workflowPath?: string;
+  };
+  defaultVoice?: string;
+}
+
+export interface AppSettings {
+  aiProvider: AiProviderSettings;
+  imageBackend: 'gemini' | 'pollinations' | 'comfyui' | 'fastsdcpu';
+  comfyUIEndpoint?: string;
+  fastsdcpuEndpoint?: string;
+  audioProvider?: AudioProviderConfig;
+  lastUpdated: string;
+}
 
 export interface MoodboardImage {
   prompt: string;
@@ -943,6 +987,21 @@ export interface CharacterVoiceAssignment {
   voiceActorId: string;
   voiceSample: string;
   sceneAppearances: string[]; // scene IDs
+  audioProvider?: AudioProvider;
+  voiceConfig?: {
+    voiceId?: string;
+    modelId?: string;
+    style?: string;
+    temperature?: number;
+    speed?: number;
+  };
+  personalityPreset?: {
+    name: string;
+    pitch?: number;
+    speed?: number;
+    reverb?: number;
+    warmth?: number;
+  };
 }
 
 export interface Soundscape {

@@ -1,0 +1,299 @@
+{
+  "metadata": {
+    "title": "Thriller Genre Writing Conventions",
+    "description": "Established conventions for thriller fiction writing, including pacing, suspense, action, and tension",
+    "version": "1.0",
+    "last_updated": "2025-01-13"
+  },
+  "chunks": [
+    {
+      "id": "thriller-pacing-momentum",
+      "heading": "Fast Pacing and Narrative Momentum",
+      "summary": "Thrillers require relentless forward momentum with short scenes, quick transitions, and limited backstory exposition.",
+      "content": "Thriller pacing should create urgency through short chapters (often 3-5 pages), scenes that end on hooks, minimal description, and action-driven plot advancement. Avoid long introspective passages or extensive backstory dumps. Each scene should advance the plot or escalate tension. Use sentence variety with shorter, punchier sentences during action sequences.",
+      "ruleNumber": "thriller-pacing-momentum",
+      "category": "pacing",
+      "section": "narrative-structure",
+      "examples": [
+        "✓ GOOD: 'The door exploded inward. Glass shattered. Sarah ran.' (Short, punchy, urgent)",
+        "✗ AVOID: 'The door, which had been painted blue when Sarah first moved into the apartment three years ago during that particularly harsh winter, suddenly exploded inward.' (Too slow for thriller pacing)",
+        "✓ GOOD: Chapter ends with 'The caller's voice was familiar. Too familiar. It was her sister.' (Hook for next chapter)",
+        "✗ AVOID: Chapter ends with 'She hung up the phone and went to bed, thinking she'd deal with everything in the morning.' (No urgency)",
+        "✓ GOOD: 'He had sixty seconds to choose: the bomb or his partner.' (Immediate stakes)",
+        "✗ AVOID: 'He contemplated his childhood trauma and how it had led him to this moment over the course of several paragraphs.' (Breaks momentum)"
+      ]
+    },
+    {
+      "id": "thriller-tension-escalation",
+      "heading": "Escalating Tension and Rising Stakes",
+      "summary": "Thriller stakes must consistently escalate from personal to catastrophic, with ticking clocks and mounting consequences.",
+      "content": "Begin with moderate stakes and systematically raise them throughout the narrative. Introduce time pressure (ticking clock devices), increase the scope of danger (from one victim to many), add complications that worsen the situation, and ensure each confrontation costs the protagonist something. The threat should expand rather than remain static.",
+      "ruleNumber": "thriller-tension-escalation",
+      "category": "tension",
+      "section": "plot-structure",
+      "examples": [
+        "✓ GOOD: Act 1: Protagonist's colleague disappears. Act 2: Protagonist's family is threatened. Act 3: Entire city in danger. (Clear escalation)",
+        "✗ AVOID: Stakes remain 'solve the mystery' throughout without increasing danger or consequences.",
+        "✓ GOOD: '48 hours to stop the attack' → '24 hours' → '6 hours' → 'Countdown: 60 minutes' (Ticking clock tightens)",
+        "✗ AVOID: Vague timeline with no sense of urgency or deadline.",
+        "✓ GOOD: Protagonist loses trusted ally, then safe house is compromised, then only weapon is destroyed (mounting losses)",
+        "✗ AVOID: Protagonist faces obstacles but never actually loses anything important.",
+        "✓ GOOD: Villain's plan revealed in stages: kidnapping → blackmail → assassination → bio-weapon release (scope expands)",
+        "✗ AVOID: Villain's plan stays at same threat level throughout story."
+      ]
+    },
+    {
+      "id": "thriller-suspense-techniques",
+      "heading": "Suspense Through Information Management",
+      "summary": "Control reader knowledge carefully—reveal some information while withholding key details to create anticipation and dread.",
+      "content": "Effective suspense comes from strategic information control. Use dramatic irony (reader knows danger protagonist doesn't), foreshadowing (hints of coming danger), and selective revelation (parceling out clues gradually). Show the bomb under the table the protagonist hasn't noticed. Let readers fear what's coming while the character remains unaware. Balance withholding with fair play—don't cheat readers.",
+      "ruleNumber": "thriller-suspense-techniques",
+      "category": "suspense",
+      "section": "narrative-technique",
+      "examples": [
+        "✓ GOOD: 'The killer watched from the parking garage as Detective Chen climbed into her car, oblivious.' (Reader knows danger character doesn't)",
+        "✗ AVOID: Both character and reader discover danger at same moment with no build-up.",
+        "✓ GOOD: Chapter 3 mentions 'the smell of gasoline' in seemingly safe location; Chapter 8 reveals it's a trap. (Foreshadowing payoff)",
+        "✗ AVOID: Danger appears with no prior hints or setup.",
+        "✓ GOOD: Reader sees villain planting evidence; protagonist later finds evidence and trusts it. (Dramatic irony creates tension)",
+        "✗ AVOID: Reader and protagonist have identical information throughout.",
+        "✓ GOOD: 'Behind him, the footsteps grew closer. He still hadn't heard them.' (Imminent threat unknown to character)",
+        "✗ AVOID: No use of dramatic irony or reader-character knowledge gap."
+      ]
+    },
+    {
+      "id": "thriller-action-sequences",
+      "heading": "Clear Action Choreography",
+      "summary": "Action scenes require precise choreography, clear spatial awareness, sensory details, and varied sentence rhythm.",
+      "content": "Action sequences must be easy to visualize. Establish clear geography (where characters are positioned), use specific verbs (not vague action), vary sentence length (short for impact, longer for movement), include sensory details (sounds, physical sensations), and maintain point-of-view consistency. Avoid confusing 'camera cuts' or unclear blocking. Reader should always know who is where and doing what.",
+      "ruleNumber": "thriller-action-sequences",
+      "category": "action",
+      "section": "scene-craft",
+      "examples": [
+        "✓ GOOD: 'Marcus dove left. The bullet sparked off the concrete pillar behind him. He rolled, came up running, zigzagged toward the loading dock thirty feet away.' (Clear choreography)",
+        "✗ AVOID: 'There was shooting and running and things happening everywhere.' (Vague, unclear)",
+        "✓ GOOD: 'Her knuckles cracked against his jaw. Pain exploded through her hand. Worth it—he staggered back.' (Sensory consequences)",
+        "✗ AVOID: 'She hit him and he fell down.' (No sensory detail or impact)",
+        "✓ GOOD: Uses mixture of: 'He lunged.' (2 words) + 'The knife slashed past his ribs, close enough to slice fabric.' (12 words)",
+        "✗ AVOID: All sentences same length during action, creating monotonous rhythm.",
+        "✓ GOOD: 'The alley dead-ended at a chain-link fence. Behind her, boot steps echoed. Ahead, the fence. Trapped.' (Clear spatial setup)",
+        "✗ AVOID: Action happens in undefined space with no clear geography."
+      ]
+    },
+    {
+      "id": "thriller-plot-twists",
+      "heading": "Plot Twists and Fair Play",
+      "summary": "Twists must be surprising yet inevitable in retrospect, with all clues planted fairly before the revelation.",
+      "content": "Effective thriller twists require planting clues readers could theoretically notice but likely won't on first read. The revelation should make readers think 'I should have seen that!' rather than 'That came from nowhere.' Avoid cheap tricks, deus ex machina solutions, or information the protagonist possessed but reader didn't. Every major twist should have at least 3-5 subtle hints planted earlier.",
+      "ruleNumber": "thriller-plot-twists",
+      "category": "plot",
+      "section": "structure",
+      "examples": [
+        "✓ GOOD: Trusted mentor revealed as villain—clues planted: unusual knowledge, convenient absences, defensive reactions to specific questions.",
+        "✗ AVOID: Character revealed as villain with no prior hints or justification.",
+        "✓ GOOD: Weapon thought destroyed was actually hidden—earlier scene showed character glancing at vent, seeming distracted.",
+        "✗ AVOID: Weapon magically reappears with no setup or explanation.",
+        "✓ GOOD: '\"I never said the victim was strangled.\" His eyes widened. Too late.' (Trap sprung with earlier setup)",
+        "✗ AVOID: Revelations based on information protagonist knew but reader was never shown.",
+        "✓ GOOD: Red herring suspect has believable motive, means, opportunity—but real killer has better motive discovered late.",
+        "✗ AVOID: Red herrings that make no sense or have no actual evidence against them."
+      ]
+    },
+    {
+      "id": "thriller-pov-style",
+      "heading": "Point of View and Narrative Voice",
+      "summary": "Thrillers typically use tight third-person limited or first-person present tense for immediacy and urgency.",
+      "content": "Most thrillers employ close third-person limited (deep in character's head) or first-person to create identification and limit information. Present tense is increasingly common for immediacy ('He runs' vs 'He ran'). Multiple POV is acceptable but should be limited and clearly separated. Avoid omniscient narration that deflates tension. Reader should experience events through character's limited perspective.",
+      "ruleNumber": "thriller-pov-style",
+      "category": "narrative-voice",
+      "section": "technique",
+      "examples": [
+        "✓ GOOD: 'I reach for the door handle. It's unlocked. Wrong. Everything about this is wrong.' (First-person present, immediate)",
+        "✗ AVOID: Omniscient narration that reveals 'Little did she know, the killer was already in the house.' (Deflates suspense)",
+        "✓ GOOD: 'Sarah couldn't see the basement stairs. Her flashlight had died.' (Limited POV creates tension)",
+        "✗ AVOID: 'Sarah walked forward while the reader knows (but she doesn't) that danger lurks ahead.' (Breaking fourth wall)",
+        "✓ GOOD: Chapter switches clearly marked: 'SARAH—2:47 PM' then 'DETECTIVE MORRIS—3:15 PM' (Clear POV transitions)",
+        "✗ AVOID: Head-hopping within scenes or unclear POV switches.",
+        "✓ GOOD: 'He doesn't trust the message. Doesn't trust anyone anymore.' (Deep third-person with character voice)",
+        "✗ AVOID: Distant third-person that describes character from outside: 'He was a man who had learned not to trust.'"
+      ]
+    },
+    {
+      "id": "thriller-chapter-hooks",
+      "heading": "Chapter-Ending Hooks and Cliffhangers",
+      "summary": "Each chapter should end with a question, revelation, or cliffhanger that compels readers to continue.",
+      "content": "Thriller chapters rarely end on resolution. Instead, use micro-cliffhangers (new danger appears), revelations (shocking information discovered), questions (mysterious development), or decisions (character must choose). The goal is to make putting the book down psychologically difficult. Even quieter chapters should end with enough intrigue to pull readers forward.",
+      "ruleNumber": "thriller-chapter-hooks",
+      "category": "structure",
+      "section": "chapter-craft",
+      "examples": [
+        "✓ GOOD: 'She opened the envelope. Inside was a photo of her daughter. Taken today.' (End chapter—immediate dread)",
+        "✗ AVOID: 'She finished her coffee and went to bed, ready to tackle the problem in the morning.' (No urgency)",
+        "✓ GOOD: 'The fingerprints matched. But the suspect had been dead for three years.' (Impossible revelation)",
+        "✗ AVOID: 'The fingerprints matched the suspect. Case closed.' (Resolves tension)",
+        "✓ GOOD: '\"You have one hour to decide,\" the voice said. \"Save the hostages or catch the bomber. Not both.\"' (Impossible choice)",
+        "✗ AVOID: 'She made her decision and felt good about it.' (No tension)",
+        "✓ GOOD: 'Behind her, the door she'd just locked began to open.' (Immediate danger)",
+        "✗ AVOID: 'She successfully escaped and was now safe.' (Deflates tension)"
+      ]
+    },
+    {
+      "id": "thriller-opening-hook",
+      "heading": "Compelling Opening Hook",
+      "summary": "Thrillers should open with immediate tension, action, or intrigue—not backstory or world-building.",
+      "content": "Start with a dramatic scene in progress, a mysterious discovery, immediate danger, or an impossible situation. The first page should raise questions and create tension. Avoid opening with character waking up, weather descriptions, or extensive backstory. You can always backfill context later once readers are hooked. First 500 words determine if readers continue.",
+      "ruleNumber": "thriller-opening-hook",
+      "category": "structure",
+      "section": "opening",
+      "examples": [
+        "✓ GOOD: 'The bomb timer read 00:04:27 when Sarah realized she'd never defused one before.' (Immediate tension)",
+        "✗ AVOID: 'Sarah had always been interested in explosives, ever since her father showed her fireworks as a child.' (Backstory kills momentum)",
+        "✓ GOOD: 'The body in my trunk wasn't there when I left for work.' (Mystery + danger + voice)",
+        "✗ AVOID: 'It was a cold morning in November. I woke up at 7 AM like usual.' (Slow, mundane)",
+        "✓ GOOD: '\"Don't move,\" the voice whispered. Cold metal pressed against my spine.' (In media res)",
+        "✗ AVOID: 'Let me tell you about the time I almost died. First, some background...' (Delays payoff)",
+        "✓ GOOD: 'They found the senator's daughter in pieces. The ransom note said she was still alive.' (Impossible situation)",
+        "✗ AVOID: 'Senator Harrison was a complex man with a complicated past.' (Character study opening)"
+      ]
+    },
+    {
+      "id": "thriller-antagonist",
+      "heading": "Compelling Antagonist Development",
+      "summary": "Thriller antagonists must be capable, threatening, and possess clear motivation—not cartoonishly evil.",
+      "content": "Effective thriller villains are competent threats who challenge the protagonist meaningfully. They should have understandable (if not sympathetic) motivations, be intelligent enough to stay ahead of the hero, possess resources and skills, and make the protagonist work for every victory. Avoid mustache-twirling evil without motivation. The antagonist's plan should be logical from their perspective.",
+      "ruleNumber": "thriller-antagonist",
+      "category": "character",
+      "section": "antagonist",
+      "examples": [
+        "✓ GOOD: Villain believes they're saving lives through their actions, has detailed plan, stays ahead of investigators for most of story.",
+        "✗ AVOID: Villain is evil because 'they're crazy' with no motivation or coherent plan.",
+        "✓ GOOD: '\"I'm not a monster,\" he said. \"I'm preventing a war.\" He believed it.' (Complex motivation)",
+        "✗ AVOID: 'He cackled evilly and enjoyed causing pain for no reason.' (Cartoonish)",
+        "✓ GOOD: Antagonist anticipates hero's moves, sets traps, has contingency plans.",
+        "✗ AVOID: Villain makes stupid mistakes conveniently allowing hero to win.",
+        "✓ GOOD: Antagonist has resources (money, connections, skills) that make them formidable.",
+        "✗ AVOID: Villain is threatening in description but incompetent in action.",
+        "✓ GOOD: Personal connection between hero and antagonist creates emotional stakes.",
+        "✗ AVOID: Random villain with no connection to protagonist's journey."
+      ]
+    },
+    {
+      "id": "thriller-stakes",
+      "heading": "High-Stakes Consequences",
+      "summary": "Thriller stakes must be significant—life-or-death, catastrophic consequences, or irreversible losses.",
+      "content": "Stakes in thrillers should be visceral and meaningful. Physical danger (death, injury), emotional stakes (loved ones threatened), or catastrophic scope (many lives at risk). Make consequences clear and real—show that failure means actual loss. Avoid vague stakes or situations where failure seems unlikely. The protagonist must have something significant to lose.",
+      "ruleNumber": "thriller-stakes",
+      "category": "plot",
+      "section": "stakes",
+      "examples": [
+        "✓ GOOD: Bomb will kill thousands; protagonist's daughter is in the blast zone. (Life + emotional stakes)",
+        "✗ AVOID: Protagonist might lose their job or face minor embarrassment. (Stakes too low)",
+        "✓ GOOD: Early scene shows villain killing someone to demonstrate they're serious. (Consequences are real)",
+        "✗ AVOID: Villain threatens but never actually harms anyone. (Empty threats)",
+        "✓ GOOD: 'Save the city or save your family. Choose.' (Impossible choice with clear losses)",
+        "✗ AVOID: Protagonist faces challenges but nothing they truly care about is at risk.",
+        "✓ GOOD: Failure means biological weapon released, protagonist infected, city quarantined. (Escalating catastrophe)",
+        "✗ AVOID: Stakes remain abstract: 'bad things will happen' without specifics."
+      ]
+    },
+    {
+      "id": "thriller-atmosphere",
+      "heading": "Dark Atmospheric Tone",
+      "summary": "Thrillers maintain urgent, tense atmosphere through word choice, sentence rhythm, and mood.",
+      "content": "Establish and maintain thriller atmosphere through dark imagery, tension-building language, ominous foreshadowing, and oppressive mood. Use sensory details that suggest danger (shadows, strange sounds, unsettling silences). Maintain consistent tone—avoid undercutting tension with humor or lightness unless strategically deployed. The world should feel dangerous.",
+      "ruleNumber": "thriller-atmosphere",
+      "category": "tone",
+      "section": "atmosphere",
+      "examples": [
+        "✓ GOOD: 'The parking garage lights flickered. Shadows pooled between cars. Her footsteps echoed too loud.' (Ominous atmosphere)",
+        "✗ AVOID: 'The parking garage was well-lit and clean. She felt perfectly safe.' (Wrong tone for thriller)",
+        "✓ GOOD: 'Silence. Not peaceful silence—the waiting kind. The breath-held kind.' (Tension in absence)",
+        "✗ AVOID: Describing peaceful, comfortable settings without underlying menace.",
+        "✓ GOOD: 'The house smelled wrong. Copper and chemicals and something underneath she couldn't name.' (Sensory dread)",
+        "✗ AVOID: Neutral description without atmospheric loading: 'The house had a normal smell.'",
+        "✓ GOOD: Even safe moments have edge: 'The coffee shop felt too normal. Wrong after everything.' (Paranoia)",
+        "✗ AVOID: Undercutting tension with jokes or trivializing danger."
+      ]
+    },
+    {
+      "id": "thriller-dialogue",
+      "heading": "Terse, Purpose-Driven Dialogue",
+      "summary": "Thriller dialogue should be efficient, revealing character while advancing plot or building tension.",
+      "content": "Keep dialogue sharp and functional. Characters should speak with purpose—revealing information, creating conflict, or building suspense. Avoid small talk, long speeches, or conversations that don't advance the story. Use subtext (what's not said). Interrupt exchanges. Create tension through what characters withhold or lie about. Dialogue should never be just filler.",
+      "ruleNumber": "thriller-dialogue",
+      "category": "dialogue",
+      "section": "craft",
+      "examples": [
+        "✓ GOOD: '\"Where is she?\" / \"Safe.\" / \"That's not an answer.\" / \"It's the only one you're getting.\"' (Terse, tense)",
+        "✗ AVOID: Long speeches about feelings or extensive explanation dumps in dialogue.",
+        "✓ GOOD: '\"You know what happens if you're lying?\" He knew. Everyone knew.' (Threat via implication)",
+        "✗ AVOID: 'He explained in detail exactly what would happen, leaving nothing to imagination.' (Over-explaining)",
+        "✓ GOOD: Dialogue reveals lies through contradiction: Character claims alibi; earlier dialogue conflicts.",
+        "✗ AVOID: Characters explain their entire backstory and motivations openly.",
+        "✓ GOOD: '\"I found something.\" / \"Show me.\" / \"You won't like it.\"' (Information parceled out)",
+        "✗ AVOID: '\"I found this thing and here's what it is and what it means and why it matters.\"' (Explaining everything)"
+      ]
+    },
+    {
+      "id": "thriller-description-economy",
+      "heading": "Economical, Essential Description",
+      "summary": "Describe only what matters for atmosphere, plot, or immediate action—avoid lengthy exposition.",
+      "content": "Thriller description should be purposeful and selective. Use vivid details that matter (the gun on the table, the unlocked window) and skip unimportant elements. Create atmosphere efficiently. Avoid paragraphs describing rooms, buildings, or character appearance unless directly relevant to plot or danger. When in doubt, less description maintains faster pacing.",
+      "ruleNumber": "thriller-description-economy",
+      "category": "description",
+      "section": "craft",
+      "examples": [
+        "✓ GOOD: 'The room: one exit, no windows, steel door. Trap.' (Essential details only)",
+        "✗ AVOID: 'The room had beige walls painted in semi-gloss, crown molding installed in 1987, hardwood floors...' (Irrelevant detail)",
+        "✓ GOOD: 'She noticed the coffee cup. Still warm. He'd been here minutes ago.' (Detail matters to plot)",
+        "✗ AVOID: Describing coffee cup brand, design, size when it has no plot relevance.",
+        "✓ GOOD: Character appearance: only mention the scar, military bearing, or detail that matters.",
+        "✗ AVOID: Paragraph describing hair color, eye color, build, clothing when not relevant.",
+        "✓ GOOD: 'Blood on the carpet. Fresh. Still spreading.' (Vivid + essential)",
+        "✗ AVOID: Extensive description of carpet type, room layout when body is the important element."
+      ]
+    },
+    {
+      "id": "thriller-research-accuracy",
+      "heading": "Technical Research and Credibility",
+      "summary": "Technical details (weapons, forensics, procedures) must be accurate enough to maintain credibility with informed readers.",
+      "content": "Research police procedures, weapons, technology, and specialized knowledge your thriller requires. Small inaccuracies can break immersion for knowledgeable readers. When portraying professionals (detectives, soldiers, doctors), show competence through authentic terminology and procedures. However, prioritize story over absolute accuracy—you can take creative license if it serves the narrative.",
+      "ruleNumber": "thriller-research-accuracy",
+      "category": "craft",
+      "section": "research",
+      "examples": [
+        "✓ GOOD: Detective follows actual procedure: securing scene, calling CSI, maintaining chain of evidence.",
+        "✗ AVOID: Detective contaminates crime scene, handles evidence without gloves, ignores all procedure.",
+        "✓ GOOD: Weapon descriptions match real capabilities: magazine capacity, reload time, effective range.",
+        "✗ AVOID: 'He fired 50 rounds from his six-shooter without reloading.' (Impossible)",
+        "✓ GOOD: Hacking shown with some technical basis even if simplified for narrative.",
+        "✗ AVOID: '\"I'm in!\" after two seconds of random typing.' (Hollywood cliché)",
+        "✓ GOOD: Medical descriptions use correct terminology and plausible treatment.",
+        "✗ AVOID: Doctor uses wrong terminology or treatments that would kill patient.",
+        "✓ GOOD: Legal procedures shown accurately: Miranda rights, lawyer consultations, warrant requirements.",
+        "✗ AVOID: Ignoring basic legal rights or procedures without explanation."
+      ]
+    },
+    {
+      "id": "thriller-common-tropes",
+      "heading": "Effective Use of Thriller Tropes",
+      "summary": "Leverage established thriller tropes but avoid clichés through fresh execution or subversion.",
+      "content": "Common thriller tropes include: race against time, conspiracy theories, betrayal by trusted ally, wrongfully accused protagonist, ticking time bomb, cat-and-mouse pursuit, mysterious stranger, dark secret from past, last-minute save. These work because readers expect them—but execution must feel fresh. Acknowledge and subvert where possible while maintaining genre satisfaction.",
+      "ruleNumber": "thriller-common-tropes",
+      "category": "genre",
+      "section": "tropes",
+      "examples": [
+        "✓ GOOD: Race against time where protagonist fails to stop initial attack but prevents worse outcome. (Subverts clean victory)",
+        "✗ AVOID: Race against time where hero arrives with one second to spare every single time. (Predictable)",
+        "✓ GOOD: Betrayal by ally—but clues planted so reveal is satisfying not cheap.",
+        "✗ AVOID: Betrayal with no setup: character is evil because plot requires it.",
+        "✓ GOOD: Conspiracy theory that starts absurd but evidence makes it credible.",
+        "✗ AVOID: Conspiracy too convoluted to be believable or requiring impossible coordination.",
+        "✓ GOOD: Dark secret from past is specific, earned, and has real consequences when revealed.",
+        "✗ AVOID: Vague dark past mentioned but never explored or mattering to plot.",
+        "✓ GOOD: Mysterious stranger's identity revealed through careful clue-planting.",
+        "✗ AVOID: Mysterious stranger appears, helps, leaves without explanation. (Convenient deus ex machina)"
+      ]
+    }
+  ]
+}

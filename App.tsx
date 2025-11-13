@@ -24,15 +24,22 @@ import { AudiobookModal } from './components/AudiobookModal';
 import { NavigationPane } from './components/NavigationPane';
 import { Navbar } from './components/Navbar';
 import { IllustrationView } from './components/IllustrationView';
+import { AnalyticsDashboardView } from './components/dashboard/AnalyticsDashboardView';
+import { backendClient } from './services/backendClient';
+import { EditingAgency, IllustrationAgency, PublishingAgency, MarketingAgency } from './services/agencyClient';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { LoadingSpinner, LoadingOverlay } from './components/LoadingSpinner';
+import { ToastContainer } from './components/Toast';
+import { useToast } from './hooks/useToast';
 import { AudiobookView } from './components/AudiobookView';
+import { SettingsView } from './components/SettingsView';
 import { CommentsPanel } from './components/CommentsPanel';
 import { RightsDrawer } from './components/RightsDrawer';
 import type { AudiobookProject } from './types';
 import { GrammarExtension, grammarPluginKey } from './utils/grammarExtension';
 import { SearchExtension } from './utils/searchExtension';
 import { SuggestionBubble } from './components/SuggestionBubble';
-import { generateImages, generateMoodboardPrompts, runGrammarCheckAgent, runConsistencyAgent, runAiCommand, generateSpeech, generateCoverPrompt, runExpertAgent, generateKeywords, runMarketingCampaignAgent, editImage, runShowVsTellAgent, generateVideo, getVideoOperationStatus, generateVideoPrompt, runFactCheckAgent, createChatSession, sendChatMessage, runCleanupAgent, runDialogueAnalysisAgent, runProsePolishAgent, runSensitivityAgent, runStructuralAnalysisAgent, generateAudiobook, runOutlinePacingAgent, generateContinuityTimeline, generateLocalizationPack, translateMetadata } from './services/geminiService';
-import { backendClient } from './services/backendClient';
+import { runAiCommand, generateSpeech, generateVideo, getVideoOperationStatus, generateVideoPrompt, createChatSession, sendChatMessage, generateAudiobook, runOutlinePacingAgent, generateContinuityTimeline, generateLocalizationPack, translateMetadata, generateImages, generateMoodboardPrompts, runGrammarCheckAgent, runConsistencyAgent, runShowVsTellAgent, runFactCheckAgent, runDialogueAnalysisAgent, runProsePolishAgent, runSensitivityAgent, runStructuralAnalysisAgent, runExpertAgent, generateKeywords, runMarketingCampaignAgent, runCleanupAgent, editImage } from './services/geminiService';
 import { AiCommand, GrammarIssue, HistoryItem, Retailer, AI_COMMAND_OPTIONS, ConsistencyIssue, MarketingCampaign, WorldBible, ShowVsTellIssue, FactCheckIssue, Source, ChatMessage, DialogueIssue, ProsePolishIssue, SensitivityIssue, StructuralIssue, NarrationStyle, OutlineItem, AppView, MoodboardImage, CharacterConcept, SceneIllustration, PanelLayout, Panel, ColorPalette, PaletteColor, StyleGuide, EnvironmentDesign, PropDesign, MapDesign, SymbolDesign, CoverDesign, PrintSpecs, CharacterExpression, CharacterPose, CharacterVariation, CharacterTurnaround, TypographyDesign, RevisionFeedback, RevisionResponse, Collaborator, PacingBeat, ContinuityEvent, LocalizationPack, LocalizedMetadata, AssetRightsRecord, AssetRightsStatus, LaunchScenario, ManuscriptSegment, ManuscriptSearchResult, ComplianceIssue, CostPlan, ManuscriptSuggestion, IllustrationSeeds } from './types';
 import { createWavBlobFromBase64 } from './utils/audioUtils';
 import ReactToPrint from 'react-to-print';
@@ -132,11 +139,16 @@ const PlaceholderView: React.FC<{ view: AppView }> = ({ view }) => {
 };
 
 export const App: React.FC = () => {
+  const { toasts, removeToast, success, error, warning, info } = useToast();
+
   const [activeView, setActiveView] = useState<AppView>('editing');
   const [focusMode, setFocusMode] = useState(false);
   const [wordCount, setWordCount] = useState({ total: 0, selection: 0 });
   const [charCount, setCharCount] = useState({ total: 0, selection: 0 });
   const [writingGoal, setWritingGoal] = useState(1000);
+  const [manuscriptId, setManuscriptId] = useState<string>('draft-primary');
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [illustrationProjectId, setIllustrationProjectId] = useState<string | null>(null);
   
   const [isResearchModalOpen, setIsResearchModalOpen] = useState(false);
   const [isFindReplaceModalOpen, setIsFindReplaceModalOpen] = useState(false);
@@ -178,7 +190,7 @@ export const App: React.FC = () => {
     
     setIsExtractingWorldBible(true);
     setWorldBibleExtractionStatus('extracting');
-    showNotification('Extracting World Bible data...', 'success');
+    info('World Bible Extraction', 'Extracting World Bible data...');
     
     try {
       const extracted = await backendClient.extractWorldBible(worldBible.seriesContext);
@@ -217,12 +229,12 @@ export const App: React.FC = () => {
       
       const totalCount = newCharacters.length + newSettings.length + newItems.length;
       setWorldBibleExtractionStatus('success');
-      showNotification(`Successfully extracted ${totalCount} entries (${newCharacters.length} characters, ${newSettings.length} settings, ${newItems.length} items)`, 'success');
+      success('World Bible Extraction Complete', `Successfully extracted ${totalCount} entries (${newCharacters.length} characters, ${newSettings.length} settings, ${newItems.length} items)`);
       
     } catch (error) {
       console.error('Extraction failed:', error);
       setWorldBibleExtractionStatus('error');
-      showNotification('Failed to extract World Bible data. Please try again.', 'error');
+      error('World Bible Extraction Failed', 'Failed to extract World Bible data. Please try again.');
     } finally {
       setIsExtractingWorldBible(false);
       setTimeout(() => setWorldBibleExtractionStatus('idle'), 6000);
@@ -465,6 +477,10 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const storedProjectId = window.localStorage.getItem('activeProjectId');
+    if (storedProjectId) {
+      setActiveProjectId(storedProjectId);
+    }
     const alreadySeeded = window.localStorage.getItem('ai-agency-demo-seeded');
     if (alreadySeeded || opsProjects.length > 0) return;
     const demoProjects = getDemoProjects();
@@ -1169,10 +1185,48 @@ ${editor.getText().substring(0, 5000)}...
   
   const handleGenerateMarketingCampaign = async () => {
     if (!editor) return;
+    if (!activeProjectId) {
+      alert('Select or create a project first.');
+      return;
+    }
     setIsGeneratingCampaign(true);
     try {
-        const campaign = await runMarketingCampaignAgent(editor.getText());
-        setMarketingCampaign(campaign);
+        await EditingAgency.upsertManuscript(editor.getText(), manuscriptId, activeProjectId);
+        
+        let packageId = 'pkg-default';
+        try {
+          const { packageId: newPackageId } = await PublishingAgency.createPackage({
+            manuscriptId,
+            label: 'Publishing Package',
+          });
+          packageId = newPackageId;
+        } catch (e) {
+          console.warn('Using default package ID');
+        }
+
+        const result = await MarketingAgency.createCampaign({
+          packageId,
+          goal: 'launch',
+          budgetLevel: 'standard',
+        });
+
+        // Map backend campaign strategy into existing MarketingCampaign shape
+        // Map backend campaign strategy into existing MarketingCampaign shape
+        const mapped: MarketingCampaign[] = (result.heroHooks || []).map((hook, index) => ({
+          day: index + 1,
+          theme: result.strategySummary || 'Launch strategy',
+          posts: [
+            {
+              platform: 'X',
+              postContent: hook,
+              cta: result.funnelOutline?.[index] || 'Pre-order now',
+              hashtags: [],
+              visualPrompt: 'Use key art or cover visuals aligned with the campaign.',
+            },
+          ],
+        }));
+
+        setMarketingCampaign(mapped.length ? mapped : null);
         trackTelemetry('marketing', 'campaigns', 1, 'AI campaign strategy generated');
     } catch (e) {
         alert("Failed to generate marketing campaign.");
@@ -1227,7 +1281,19 @@ ${editor.getText().substring(0, 5000)}...
       setScenarioPriority(priority);
       setIsSimulatingLaunch(true);
       try {
-        const response = await backendClient.simulateLaunch(priority, editor.getText());
+        let packageId = 'pkg-default';
+        try {
+          await EditingAgency.upsertManuscript(editor.getText(), manuscriptId);
+          const { packageId: newPackageId } = await PublishingAgency.createPackage({
+            manuscriptId,
+            label: 'Launch Planning Package',
+          });
+          packageId = newPackageId;
+        } catch (e) {
+          console.warn('Using default package for scenarios');
+        }
+
+        const response = await MarketingAgency.generateScenarios({ packageId, priority });
         setScenarioInsights(response.scenarios);
       } catch (error) {
         alert('Unable to simulate launch scenarios right now.');
@@ -1235,7 +1301,7 @@ ${editor.getText().substring(0, 5000)}...
         setIsSimulatingLaunch(false);
       }
     },
-    [editor],
+    [editor, manuscriptId],
   );
 
   const handleBuildManuscriptIndex = useCallback(async () => {
@@ -1258,24 +1324,35 @@ ${editor.getText().substring(0, 5000)}...
     markWorkflowStep('expert');
     setIsRunningCompliance(true);
     try {
-      const response = await backendClient.runComplianceScan(editor.getText());
-      setComplianceIssues(response.issues);
+      await EditingAgency.upsertManuscript(editor.getText(), manuscriptId, activeProjectId || undefined);
+      const issues = await EditingAgency.runCompliance(manuscriptId, activeProjectId || undefined);
+      setComplianceIssues(
+        issues.map((issue) => ({
+          id: issue.id,
+          category: 'style' as const,
+          severity: 'medium' as const,
+          message: issue.explanation || issue.suggestion || 'Style or grammar issue detected',
+          excerpt: issue.original || '',
+          guidance: issue.suggestion || issue.explanation || '',
+        })),
+      );
     } catch (error) {
       console.error(error);
       alert('Compliance scan failed.');
     } finally {
       setIsRunningCompliance(false);
     }
-  }, [editor, markWorkflowStep]);
+  }, [editor, manuscriptId, markWorkflowStep]);
 
   const handleGenerateCostPlan = useCallback(
     async (tier: 'starter' | 'professional' | 'cinematic'): Promise<CostPlan | null> => {
       if (!editor) return null;
       setIsGeneratingCostPlan(true);
       try {
-        const response = await backendClient.generateCostPlan(tier, editor.getText());
-        setCostPlan(response.plan);
-        return response.plan;
+        await EditingAgency.upsertManuscript(editor.getText(), manuscriptId, activeProjectId || undefined);
+        const plan = await EditingAgency.generateCostPlan(manuscriptId, tier, activeProjectId || undefined);
+        setCostPlan(plan);
+        return plan;
       } catch (error) {
         console.error(error);
         alert('Unable to generate cost plan.');
@@ -1284,7 +1361,7 @@ ${editor.getText().substring(0, 5000)}...
         setIsGeneratingCostPlan(false);
       }
     },
-    [editor],
+    [editor, manuscriptId],
   );
 
   const searchManuscriptContext = useCallback(
@@ -1316,8 +1393,9 @@ ${editor.getText().substring(0, 5000)}...
     if (!editor) return;
     setIsCleaningUp(true);
     try {
-        const cleanedText = await runCleanupAgent(editor.getHTML());
-        editor.commands.setContent(cleanedText);
+        await EditingAgency.upsertManuscript(editor.getText(), manuscriptId, activeProjectId || undefined);
+        const { cleanedHtml } = await EditingAgency.cleanupHtml(manuscriptId, editor.getHTML(), activeProjectId || undefined);
+        editor.commands.setContent(cleanedHtml || editor.getHTML());
         trackTelemetry('editing', 'cleanupRuns', 1, 'Formatting sweep complete');
     } catch (e) {
         alert("Failed to run cleanup agent.");
@@ -1402,12 +1480,23 @@ ${editor.getText().substring(0, 5000)}...
     setIsGeneratingMoodboard(true);
     setMoodboardImages([]);
     try {
-        const prompts = await generateMoodboardPrompts(text);
-        const imagePromises = prompts.map(p => generateImages(p, 1, '16:9'));
+        let projectId = illustrationProjectId;
+        if (!projectId) {
+          const { projectId: newProjectId } = await IllustrationAgency.createProject({
+            manuscriptId,
+            label: 'Main Illustration Project',
+          });
+          projectId = newProjectId;
+          setIllustrationProjectId(projectId);
+        }
+
+        const { tiles } = await IllustrationAgency.generateMoodboard({ projectId, text });
+        
+        const imagePromises = tiles.map(t => generateImages(t.prompt, 1, '16:9'));
         const imageResults = await Promise.all(imagePromises);
         
-        const newMoodboardImages: MoodboardImage[] = prompts.map((prompt, index) => ({
-            prompt,
+        const newMoodboardImages: MoodboardImage[] = tiles.map((tile, index) => ({
+            prompt: tile.prompt,
             imageUrl: `data:image/png;base64,${imageResults[index][0]}`,
         }));
         setMoodboardImages(newMoodboardImages);
@@ -1423,19 +1512,27 @@ ${editor.getText().substring(0, 5000)}...
   const handleGenerateCharacterConcepts = async (name: string, description: string) => {
     setIsGeneratingConcepts(true);
     try {
-        // Extract key descriptive elements from the description
-        const cleanDesc = description.length > 400
-          ? description.substring(0, 400) + '...'
-          : description;
+        let projectId = illustrationProjectId;
+        if (!projectId) {
+          const { projectId: newProjectId } = await IllustrationAgency.createProject({
+            manuscriptId,
+            label: 'Main Illustration Project',
+          });
+          projectId = newProjectId;
+          setIllustrationProjectId(projectId);
+        }
+
+        const { concept } = await IllustrationAgency.generateCharacterConcepts({ projectId, name, description });
         
-        const prompt = `Full body character concept art: ${name}. Character details: ${cleanDesc}. Professional book illustration style, detailed character design, centered pose, neutral background, high quality digital art.`;
-        const images = await generateImages(prompt, 4, '3:4');
+        const imagePromises = concept.prompts.map(p => generateImages(p, 1, '3:4'));
+        const imageResults = await Promise.all(imagePromises);
+        
         const newConcept: CharacterConcept = {
-            id: uuidv4(),
-            name,
-            description,
+            id: concept.id,
+            name: concept.name,
+            description: concept.description,
             referenceImageUrl: null,
-            conceptImages: images.map(img => `data:image/png;base64,${img}`)
+            conceptImages: imageResults.map(imgs => `data:image/png;base64,${imgs[0]}`)
         };
         setCharacterConcepts(prev => [...prev, newConcept]);
         trackTelemetry('illustration', 'characterConcepts', 1, name);
@@ -2799,29 +2896,22 @@ Return ONLY a JSON object: {"mapDescription": "detailed map description", "mapNa
   );
 
   return (
-    <div className={`h-screen w-screen flex flex-col font-sans ${focusMode ? 'focus-mode' : ''}`}>
-        {/* Notification Toast */}
-        {notification && (
-          <div className={`fixed top-4 right-4 z-[100] px-6 py-4 rounded-lg shadow-xl border-2 animate-fade-in ${
-            notification.type === 'success'
-              ? 'bg-green-500/90 border-green-400 text-white'
-              : 'bg-red-500/90 border-red-400 text-white'
-          }`}>
-            <div className="flex items-center gap-3">
-              {notification.type === 'success' ? (
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              )}
-              <p className="font-semibold">{notification.message}</p>
-            </div>
-          </div>
-        )}
-        <Navbar activeView={activeView} setActiveView={setActiveView} />
+    <ErrorBoundary>
+      <div className={`h-screen w-screen flex flex-col font-sans ${focusMode ? 'focus-mode' : ''}`}>
+        {/* Toast Notifications moved to end */}
+        <Navbar
+          activeView={activeView}
+          setActiveView={setActiveView}
+          activeProjectId={activeProjectId}
+          onProjectChange={(projectId) => {
+            setActiveProjectId(projectId);
+            if (projectId) {
+              window.localStorage.setItem('activeProjectId', projectId);
+            } else {
+              window.localStorage.removeItem('activeProjectId');
+            }
+          }}
+        />
         
         <div className="flex-grow flex overflow-hidden">
         {activeView === 'editing' ? (
@@ -3064,7 +3154,9 @@ Return ONLY a JSON object: {"mapDescription": "detailed map description", "mapNa
         ) : activeView === 'marketing' ? (
             marketingView
         ) : activeView === 'statistics' ? (
-            statisticsView
+            <AnalyticsDashboardView />
+        ) : activeView === 'settings' ? (
+            <SettingsView />
         ) : (
             <PlaceholderView view={activeView} />
         )}
@@ -3124,6 +3216,10 @@ Return ONLY a JSON object: {"mapDescription": "detailed map description", "mapNa
           accept=".txt,.html,.md"
           onChange={handleFileUploadChange}
         />
-    </div>
+
+        {/* Toast Notifications */}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
+      </div>
+    </ErrorBoundary>
   );
 };

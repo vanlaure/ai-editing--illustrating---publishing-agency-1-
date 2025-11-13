@@ -1,0 +1,264 @@
+{
+  "documentId": "genre-mystery",
+  "title": "Mystery Genre Writing Conventions",
+  "description": "Mystery-specific writing rules covering clue placement, fair play, detective conventions, puzzle construction, and conventions for cozy mysteries, hardboiled detective fiction, police procedurals, and thriller mysteries.",
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-13",
+  "chunks": [
+    {
+      "id": "mystery-fair-play-clues",
+      "heading": "Fair Play and Clue Placement",
+      "summary": "Plant clues fairly throughout the narrative, giving readers the same information as the detective to solve the mystery themselves.",
+      "content": "Mystery readers expect fair play: all information needed to solve the crime should be available to them before the revelation. This doesn't mean making the solution obvious, but ensuring that crucial clues appear in the narrative, even if their significance isn't immediately apparent. Readers who pay attention should be able to theoretically solve the mystery alongside (or slightly after) the detective.\n\nClues should be visible but not glaring. The best clues hide in plain sight: mentioned casually in dialogue, noticed briefly in description, or embedded in seemingly unimportant scenes. Layer clues among red herrings and genuine evidence so readers must sift through information just as the detective does. Obvious clues insult readers; missing clues that appear only in the revelation feel like cheating.\n\nTiming matters in clue placement. Introduce key evidence early enough that readers can process it, but not so early they've forgotten by the revelation. Complex mysteries might require multiple passes over the same clue, each time revealing new significance. The murderer's distinctive watch mentioned in chapter three gains meaning when witnesses describe hearing a specific chime in chapter fifteen.",
+      "ruleNumber": 1,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Mrs. Henderson mentioned her arthritis prevented her from opening tight jars. Later, Detective Cross wondered how she'd managed to strangle a man with her bare hands.'",
+        "✗ AVOID: 'The crucial evidence—a distinctive poison only available in the killer's hometown—was never mentioned until the detective revealed it during the final confrontation, giving readers no chance to solve the mystery.',",
+        "✓ GOOD: 'The photograph showed the victim's office: desk, filing cabinet, and a small cactus on the windowsill. Cross had walked past that window. Cacti don't survive in full shade. Someone had placed it there recently.'",
+        "✗ AVOID: 'In chapter twenty-five, the detective suddenly remembered a crucial conversation from chapter three that was never shown to readers, using this 'memory' to solve the case.'",
+        "✓ GOOD: 'Everyone wore gloves at the garden party—it was February. But the murder weapon showed clear fingerprints. Whoever killed Harrison removed their gloves first. Why?'",
+        "✗ AVOID: 'The detective announced the killer based on evidence readers never saw: 'I found the missing button,' Cross declared. (No button was ever mentioned in the narrative before this moment.)'"
+      ]
+    },
+    {
+      "id": "mystery-red-herrings",
+      "heading": "Effective Red Herring Techniques",
+      "summary": "Use red herrings to misdirect without unfairly misleading readers, creating false suspects and alternative theories that make logical sense.",
+      "content": "Red herrings misdirect reader attention toward wrong suspects or false solutions, creating complexity and surprise. Effective red herrings point toward plausible alternative theories: the evidence genuinely suggests this person could be guilty, even though they're not. Poor red herrings feel random or rely on withholding information rather than clever misdirection.\n\nEvery red herring needs eventual explanation. When readers learn the real solution, they should understand why the false clue existed: the innocent suspect lied about their alibi to hide an affair, the suspicious behavior was actually unrelated crime, the planted evidence came from someone framing an enemy. Unexplained red herrings frustrate readers who feel their time analyzing false clues was wasted.\n\nBalance red herrings with genuine clues. Too many false leads exhaust readers and make the mystery feel arbitrary. Too few make the solution obvious. The sweet spot: multiple plausible suspects with both incriminating and exculpating evidence, forcing readers to weigh competing theories. The best mysteries make readers change their guess several times before the revelation.",
+      "ruleNumber": 2,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Jenkins' fingerprints on the murder weapon looked damning. Then Cross learned Jenkins was the victim's business partner—of course his prints were all over the office. The real question: why was the weapon in the office at all?'",
+        "✗ AVOID: 'The narrative heavily implied the butler was guilty through three chapters of suspicious behavior, then dropped this thread entirely with no explanation. Readers wasted time analyzing a pointless red herring.'",
+        "✓ GOOD: 'Sarah lied about her whereabouts—suspicious. But she was hiding an affair, not a murder. Her lover provided an ironclad alibi, confirmed by hotel security footage. One mystery solved, another remained.'",
+        "✗ AVOID: 'Multiple characters acted suspiciously for no reason other than to be suspicious. When revealed as innocent, they had no logical motivation for their strange behavior. The red herrings existed only to pad the suspect list.'",
+        "✓ GOOD: 'The poison came from the hospital pharmacy. Three people had access: Dr. Walsh (motive), Nurse Chen (opportunity), and Pharmacist Redding (means). Each had one piece of the puzzle. But only one had all three.'",
+        "✗ AVOID: 'The detective suspected the wrong person based on evidence the narrative deliberately misrepresented, making readers feel tricked rather than cleverly misdirected when the truth emerged.'"
+      ]
+    },
+    {
+      "id": "mystery-detective-conventions",
+      "heading": "Detective Character Conventions",
+      "summary": "Develop detective characters with distinctive methods, flaws, and expertise while avoiding stereotype and ensuring they earn their deductions through investigation.",
+      "content": "Detectives need distinctive personality, method, and voice. Whether professional or amateur, your investigator should have a unique approach: methodical vs intuitive, logical vs psychological, by-the-book vs maverick. Readers follow detectives for dozens or hundreds of pages; they need to be compelling characters, not merely logic machines or walking plot devices.\n\nDetective competence requires balance. Too perfect: readers can't relate, tension disappears, and solutions feel predetermined. Too flawed: readers wonder why this person is investigating at all. Give detectives genuine expertise in their area while allowing them to make mistakes, miss clues initially, or struggle with aspects outside their specialization. Let them earn their deductions through work, not sudden brilliant insights that appear from nowhere.\n\nModern mystery readers expect complexity beyond 'eccentric genius detective.' Explore the toll of investigating violence: emotional burnout, ethical dilemmas, personal costs of the job. Let detectives have lives beyond detecting: relationships, hobbies, fears, and growth arcs that develop across cases or series. The amateur detective trope remains popular but needs fresh justification for why this civilian keeps encountering murders.",
+      "ruleNumber": 3,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Cross approached crime scenes like chess problems: methodical, patient, looking three moves ahead. But relationships baffled her completely. She could profile a killer; she couldn't read a text from her ex.'",
+        "✗ AVOID: 'The detective was generically brilliant at everything with no personality, flaws, or character traits beyond being mysteriously good at solving crimes through unexplained deductive leaps.'",
+        "✓ GOOD: 'Rivera had seen thirty-two homicides in fifteen years. Each one left a mark. Some detectives drank to forget. She ran. Ten miles every night, trying to outpace the faces of the dead. It never worked.'",
+        "✗ AVOID: 'The amateur sleuth somehow encountered multiple murders per month, investigating them competently despite zero training, with no psychological impact and no explanation for this statistically impossible murder rate.'",
+        "✓ GOOD: 'Morgan specialized in financial crimes—paper trails, shell companies, forensic accounting. When the case turned violent, she was out of her depth. Time to admit she needed help from homicide division.'",
+        "✗ AVOID: 'The detective solved impossible cases through random flashes of genius that arrived conveniently whenever stuck, with no process, research, or logical development shown.'"
+      ]
+    },
+    {
+      "id": "mystery-puzzle-construction",
+      "heading": "Mystery Puzzle Construction and Logic",
+      "summary": "Build mysteries with internal logic where motive, means, and opportunity align, and the solution answers all key questions raised.",
+      "content": "Mystery puzzles require three elements: motive (why), means (how), and opportunity (when/where possible). The solution must address all three convincingly. Readers will scrutinize your logic; gaps or contradictions break immersion. If the killer needs technical knowledge, establish they have it. If the murder requires privacy, show when that privacy existed. If revenge is motive, demonstrate sufficient provocation.\n\nTimeline consistency is crucial. Track where every character was at key moments. If your killer has an alibi witness, that witness can't also be somewhere else at that time (unless multiple people are lying, which requires its own explanation). Physical evidence must match the timeline: bloodstains dry, bodies cool, rigor mortis follows schedules. Readers notice when forensic details contradict your timeline.\n\nThe solution should feel simultaneously surprising and inevitable. In hindsight, readers should see how clues pointed to this conclusion all along. The best mysteries make readers think, 'I should have seen that!' rather than 'That came from nowhere!' or 'That makes no sense!' Test your solution's logic ruthlessly: ask yourself how each clue, suspect, and piece of evidence fits together, and whether alternative explanations could work.",
+      "ruleNumber": 4,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'The injection site was on Harrison's right arm. Left-handed killer? But the autopsy showed the needle entered at an awkward angle—injected by the victim's own left hand. Forced suicide staged as murder.'",
+        "✗ AVOID: 'The solution required the killer to be in two places simultaneously, with timeline contradictions ignored because the plot demanded it. Readers noticed immediately.'",
+        "✓ GOOD: 'Sarah had motive (revenge), means (access to poison), and opportunity (alone with victim's drink). But Cross found Sarah's fingerprints on the glass's outside only—never touching the rim. Someone else handled the victim's drink after Sarah left.'",
+        "✗ AVOID: 'The detective revealed the killer but failed to explain several crucial clues: why the victim's watch was stopped, where the missing money went, or how the locked room was accessed.'",
+        "✓ GOOD: 'The coroner pinned time of death at midnight. The killer's alibi—dinner party until 11:30, thirty-minute drive home—seemed ironclad. Until Cross checked the coroner's thermometer calibration. The victim died at 11:15.'",
+        "✗ AVOID: 'The solution relied on an incredibly unlikely coincidence (two unrelated people independently decided to kill the victim the same night) that readers found impossible to believe.'"
+      ]
+    },
+    {
+      "id": "mystery-revelation-pacing",
+      "heading": "Revelation Pacing and Structure",
+      "summary": "Pace revelations to maintain tension, avoid info-dumps, and build toward a satisfying climax where mysteries resolve in logical sequence.",
+      "content": "Mystery revelations need careful pacing. Don't save all answers for one massive exposition dump in the final chapter. Solve smaller mysteries along the way: identify the victim's secret, eliminate certain suspects, answer procedural questions. Each revelation should raise new questions or complicate the central mystery, maintaining forward momentum while providing satisfaction.\n\nThe final revelation typically follows a structure: gather suspects (literally or thematically), review evidence, expose inconsistencies in false theories, reveal the truth piece by piece building to the killer's identity. Let the detective work through logic aloud, showing their reasoning rather than simply announcing conclusions. Readers want to follow the deduction, not just hear results.\n\nTiming the reveal is crucial. Too early: the rest of the book has no tension. Too late: readers feel cheated of payoff. The sweet spot: reveal the solution with enough pages remaining to show consequences—the killer's capture, how the revelation affects other characters, loose ends tied up. Don't end the instant the killer is named; provide closure and reflection.",
+      "ruleNumber": 5,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Chapter twelve revealed the victim's blackmail scheme—solving one mystery while opening another. Now Cross had five new suspects with fresh motives. Progress, but complexity increasing.'",
+        "✗ AVOID: 'The entire mystery was solved in a ten-page monologue in the final chapter, with the detective explaining all answers at once in a massive exposition dump that could have been spread throughout the book.'",
+        "✓ GOOD: 'Cross laid out the evidence: the timeline, the fingerprints, the financial motive. 'Only one person fits all three criteria,' she said. The room went silent. 'Dr. Walsh, you killed your partner.''",
+        "✗ AVOID: 'The detective announced the killer's identity with no explanation or evidence, expecting readers to simply accept it. The reasoning appeared two chapters later in flashback—confusing and unsatisfying structure.'",
+        "✓ GOOD: 'The revelation came in chapter twenty-eight of thirty. Two chapters remained to show the arrest, the killer's confession filling in missing details, and the aftermath for the victim's family. Closure, not just solution.'",
+        "✗ AVOID: 'The book ended immediately after naming the killer, with no consequences, arrest, or emotional resolution. Readers were left wondering what happened next.'"
+      ]
+    },
+    {
+      "id": "mystery-procedural-authenticity",
+      "heading": "Investigative Procedure and Authenticity",
+      "summary": "Research and accurately portray investigative procedures, whether police work, private investigation, or amateur sleuthing, while balancing realism with narrative pace.",
+      "content": "Police procedurals, legal thrillers, and detective stories need procedural authenticity. Research actual investigative techniques: how evidence is collected, processed, and analyzed; what legal constraints exist; how departments actually function. Readers—especially those in law enforcement or legal fields—notice errors. That said, perfect realism can bore; balance accuracy with narrative pace. Skip the boring parts while getting the important details right.\n\nDifferent investigator types have different constraints and advantages. Police detectives have legal authority, resources, and forensics but face bureaucracy, jurisdiction limits, and departmental politics. Private investigators have flexibility but limited legal powers and resources. Amateur sleuths have freedom and local knowledge but no authority or training. Use your investigator type's specific strengths and limitations to create authentic challenges.\n\nForensic science in fiction often exaggerates speed and certainty ('CSI effect'). Real DNA analysis takes weeks, not hours. Many forensic techniques are less reliable than TV suggests. You can streamline for pacing, but acknowledge limitations: 'The lab would take weeks' establishes realism while letting you timeskip. Avoid treating forensics as magic that instantly solves everything.",
+      "ruleNumber": 6,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Cross submitted the DNA sample. 'Six weeks minimum,' the lab tech said. 'We're backlogged.' She'd have to solve this the old-fashioned way: interviews, logic, and legwork.'",
+        "✗ AVOID: 'The detective ran fingerprints through a database and got instant results identifying the killer, then DNA analysis came back in an hour confirming everything. (Real forensics takes days or weeks.)'",
+        "✓ GOOD: 'As a civilian, Morgan couldn't demand answers. She had to charm, cajole, and trade information. The local police tolerated her because she'd solved the Brennan case. One mistake and that tolerance would evaporate.'",
+        "✗ AVOID: 'The amateur sleuth had unrestricted access to crime scenes, police databases, and confidential files despite no legal authority or training. Police inexplicably allowed civilian interference.'",
+        "✓ GOOD: 'The warrant covered Thompson's home office, nothing else. Cross wanted to search the basement, but without probable cause for an expanded warrant, any evidence found there would be inadmissible. Procedure limited options.'",
+        "✗ AVOID: 'The detective violated multiple constitutional rights, illegally obtained evidence, and broke chain of custody procedures, but somehow all evidence was still admissible in court.'"
+      ]
+    },
+    {
+      "id": "mystery-twist-execution",
+      "heading": "Plot Twist Execution and Misdirection",
+      "summary": "Execute plot twists that recontextualize earlier information without contradicting established facts, surprising readers while playing fair.",
+      "content": "Effective mystery twists reframe what readers know rather than introducing new information. The victim wasn't who we thought. The murder wasn't the central crime. The detective trusted the wrong person. The best twists make readers mentally replay earlier scenes, seeing them differently: 'Oh, that conversation meant something completely different!'\n\nTwists require groundwork. Plant hints and ambiguities that make sense two ways: innocent interpretation on first read, sinister significance after the reveal. The killer's nervous behavior seemed like grief; retrospectively, it was guilt. The witness's inconsistent story felt like confusion; actually, they were lying. Readers should feel both surprised and like they should have seen it coming.\n\nAvoid twist overkill. One or two major revelations that recontextualize the whole mystery create impact. Six plot twists in a row exhaust readers and make the narrative feel manipulative. Also avoid twists that contradict established facts: if you told readers a character was alone in chapter three, you can't reveal in chapter twenty that someone was hiding in the room. That's not a twist; it's cheating.",
+      "ruleNumber": 7,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Cross had assumed the victim was the target. But when she checked the seating chart, Harrison was sitting in Michaels' usual seat. Michaels switched places at the last minute. The killer had murdered the wrong person.'",
+        "✗ AVOID: 'The shocking twist: the victim was actually alive, faking their own death! (This was never hinted at and contradicted extensive forensic evidence and autopsy results previously described.)'",
+        "✓ GOOD: 'Every conversation with the psychiatrist, Dr. Reeves, took on new meaning when Cross realized Reeves was the victim's daughter using her married name. She hadn't lied—just never mentioned the relationship. Fair play, but devastating.'",
+        "✗ AVOID: 'After five plot twists that each contradicted the previous one (the victim was alive, then dead, then someone else, then twins, then time travel was involved), readers gave up trying to follow the story.'",
+        "✓ GOOD: 'Sarah's grief seemed genuine because it was. She loved her husband. She also killed him—mercy killing for terminal cancer. Love and murder weren't mutually exclusive. Motive recontextualized.'",
+        "✗ AVOID: 'The narrative explicitly stated the detective witnessed the suspect in Chicago at the time of the murder. The twist revealed they were actually in Boston. This directly contradicted what readers were told happened.'"
+      ]
+    },
+    {
+      "id": "mystery-suspect-development",
+      "heading": "Suspect Development and Characterization",
+      "summary": "Develop all major suspects as fully realized characters with clear motives, distinct personalities, and plausible connections to the crime.",
+      "content": "Mystery suspects need depth beyond 'possible killer.' Each major suspect should have personality, history, and authentic motivation for both the crime and their behavior during investigation. Flat, interchangeable suspects make mysteries feel mechanical. Rich characterization makes readers genuinely unsure who did it because multiple characters seem capable.\n\nEvery suspect needs a motive that readers can understand, even if they don't sympathize. Revenge for past wrong, financial desperation, protecting a loved one, jealousy, fear of exposure—human motivations make suspects believable. The eventual killer's motive should be the strongest, though not necessarily the most obvious. Weak motive for the killer ('they were just evil' or 'they needed money for drugs') disappoints readers who invested in the mystery.\n\nSuspect behavior during investigation should feel authentic to their personality and situation. The nervous suspect might be hiding guilt—or hiding something else embarrassing. The cooperative suspect might be innocent—or clever enough to appear helpful while misdirecting. Innocent suspects should act like real people would when suspected of murder: scared, angry, defensive, or calculating their legal position.",
+      "ruleNumber": 8,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Dr. Walsh needed money desperately—medical school debt, failed investments, elderly parents' care. Murdering his partner for the insurance and business payout made terrible sense. But three other suspects had equally compelling financial motives. Money alone didn't solve this.'",
+        "✗ AVOID: 'The five suspects were completely interchangeable: no distinct personalities, identical motivations, and no character development beyond being on the suspect list.'",
+        "✓ GOOD: 'Jenkins lawyered up immediately—suspicious? Or smart? He'd been wrongly accused before; he knew how investigations worked. Refusing to talk could mean guilt or simply protecting himself. Cross couldn't tell.'",
+        "✗ AVOID: 'The killer had no understandable motive. They murdered the victim because the plot required a murderer. When revealed, their reasoning made no psychological or logical sense.'",
+        "✓ GOOD: 'Sarah, Thomas, and Rebecca all had opportunity. All three had secrets. Cross interviewed each one separately, finding the person behind the suspect: Sarah's grief, Thomas's anger, Rebecca's fear. One of them was lying. But which?'",
+        "✗ AVOID: 'Every suspect behaved identically: nervous, evasive, and suspicious. No personality differences made it impossible to distinguish them or predict who might actually be guilty.'"
+      ]
+    },
+    {
+      "id": "mystery-alibi-construction",
+      "heading": "Alibi Construction and Verification",
+      "summary": "Create and test alibis with realistic verification processes, showing how alibis can be confirmed, broken, or misunderstood.",
+      "content": "Alibis are crucial mystery elements requiring careful construction. A convincing alibi needs: specific time accounting, verifiable witnesses or evidence, and logical consistency with other known facts. Weak alibis ('I was home alone') provide no information. Strong alibis ('I was at a restaurant; here's the credit card receipt, plus the waiter remembers me') require work to break.\n\nAlibi-breaking is where detectives prove their skill. Find contradictions in the timeline, expose lying witnesses, discover the alibi witness was an accomplice, or show the alibi doesn't cover the actual time of death. The best alibi-breaking moments reframe readers' understanding: the supposedly ironclad alibi has a flaw readers could have spotted if they'd looked closely enough.\n\nAlibis can be genuinely mistaken without deception. Witnesses misremember times, security camera timestamps are wrong, phones report incorrect locations. An alibi failing doesn't always mean guilt. This ambiguity creates complexity: when is someone lying versus honestly mistaken? Strong mysteries play in this uncertain space.",
+      "ruleNumber": 9,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Thompson's alibi seemed perfect: dinner party, twelve witnesses, Instagram posts timestamped throughout the evening. Then Cross checked the photos' metadata. All posted at 9 PM—hours before they were supposedly taken. Pre-scheduled posts.'",
+        "✗ AVOID: 'Characters had conveniently vague alibis ('I was somewhere') or impossibly perfect alibis that were accepted without any verification or questioning by the detective.'",
+        "✓ GOOD: 'The security guard swore Jenkins left the building at 10:45 PM. The badge swipe confirmed it. But Cross found Jenkins' car still in the garage at midnight. He'd swiped out, then re-entered through the loading dock. The alibi had a hole.'",
+        "✗ AVOID: 'The killer's alibi was broken by the detective suddenly announcing it must be false, with no evidence or investigation shown to readers. The alibi simply stopped being valid because the plot needed it to fail.'",
+        "✓ GOOD: 'Sarah believed her husband was with her all evening. The dementia medication affected her memory; she genuinely didn't remember him leaving for two hours. Honest but unreliable alibi witness.'",
+        "✗ AVOID: 'Every suspect's alibi was either perfectly unbreakable (making them obviously innocent) or laughably weak (making them obviously guilty), with no middle ground or complexity.'"
+      ]
+    },
+    {
+      "id": "mystery-closure-requirements",
+      "heading": "Mystery Closure and Resolution Requirements",
+      "summary": "Provide satisfying closure by answering all significant questions, resolving character arcs, and showing consequences of the solution.",
+      "content": "Mystery readers expect comprehensive closure. All major plot threads need resolution: Who did it? How? Why? What happens to the killer? What about the victim's family? Loose ends frustrate mystery readers more than other genres because the whole point is solving puzzles. Secondary mysteries (character subplots, smaller crimes discovered along the way) also need resolution or acknowledgment.\n\nThe killer's fate matters. Whether arrested, killed, escaped, or faced other consequences, readers need to see justice (or injustice) play out. Don't end at the revelation; show what happens next. How does the killer react when confronted? What evidence secures conviction? How do other characters respond to the truth? These moments provide emotional payoff after intellectual puzzle-solving.\n\nSome mysteries can have ambiguous elements—maybe multiple killers, maybe moral complexity about punishment—but the central question 'whodunit' requires a clear answer. Deliberately ambiguous endings ('maybe it was A, maybe B, we'll never know!') anger mystery readers who invested in solving the puzzle. Save ambiguity for themes and character growth, not the central mystery's solution.",
+      "ruleNumber": 10,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Dr. Walsh confessed when confronted with the financial evidence and timeline contradictions. The arrest was clean. As Cross left the precinct, she thought about Walsh's parents in the hospice he'd been paying for. No amount of motive justified murder, but she understood the desperation.'",
+        "✗ AVOID: 'The detective revealed the killer's identity and the book ended immediately, with no arrest, confession, or consequences shown. Readers were left wondering if anyone faced justice.'",
+        "✓ GOOD: 'The central murder was solved. The secondary mystery—what happened to the missing money—resolved two chapters later: the victim's daughter had taken it to pay medical bills. Cross let it go. Not everything required prosecution.'",
+        "✗ AVOID: 'Multiple significant plot threads (the missing evidence, the second victim's connection to the first, what the cryptic message meant) were never explained or resolved, despite being emphasized throughout the investigation.'",
+        "✓ GOOD: 'Sarah killed her husband. The evidence was definitive. But proving it in court? The lawyer said maybe sixty percent chance of conviction. Sometimes knowing the truth wasn't the same as achieving justice. Cross had to live with that.'",
+        "✗ AVOID: 'After 300 pages of investigation, the detective concluded they'd never know who really did it. The ending was deliberately ambiguous about the killer's identity, leaving the central mystery unsolved.'"
+      ]
+    },
+    {
+      "id": "mystery-pov-constraints",
+      "heading": "Point of View Constraints and Information Management",
+      "summary": "Choose POV carefully to manage information revelation, whether detective-POV, multiple perspectives, or omniscient narrator.",
+      "content": "Mystery POV choices shape information flow. Detective-limited POV means readers know only what the detective discovers—creating genuine mystery but risking frustration if the detective withholds thoughts. Multiple POV can show readers information the detective lacks, creating dramatic irony ('the detective suspects the wrong person!') but requiring careful management to avoid revealing too much.\n\nThe killer's POV is high-risk, high-reward. Done well (hiding the killer's identity through careful pronoun use, misleading details, or disguised perspective), it creates intense dramatic irony. Done poorly, it either becomes obvious or feels like the narrative is lying. If using killer POV, play fair: mislead through framing and context, not by making the killer think thoughts they couldn't possibly think.\n\nOmniscient narration can work for mysteries but requires discipline. The narrator can't directly lie ('The killer entered the room'—but it's someone else), but can misdirect through emphasis, selection, and framing. Some mystery subgenres (cozy, classic detective) traditionally use omniscient perspective; others (hardboiled, thriller) favor tight limited POV for suspense.",
+      "ruleNumber": 11,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: First-person detective POV: 'I suspected Thompson, but something felt wrong. The pieces fit too perfectly. Someone wanted me to suspect him.' (Readers share detective's uncertainty and reasoning process.)",
+        "✗ AVOID: 'Cross knew who the killer was from chapter five but spent the next 200 pages not telling readers or explaining her reasoning, withholding information purely to extend the mystery artificially.'",
+        "✓ GOOD: Disguised killer POV: 'I watched the detective piece together the evidence. Smart woman. She was getting close. Would she figure it out before I finished what I started?' (Gender-neutral, no identifying details, could be any character.)",
+        "✗ AVOID: Killer POV that makes the character explicitly think 'I can't let them discover I murdered Harrison' while readers are supposed to believe this is an innocent character's perspective. (Narrative lying.)",
+        "✓ GOOD: Multiple POV: Chapter alternates between detective Cross investigating and victim's daughter Sarah dealing with grief. Sarah chapters provide family context and clues without revealing solution.",
+        "✗ AVOID: 'The omniscient narrator stated facts that were later revealed to be completely false: 'Jenkins was alone in his office that night.' (Actually, the killer was there.) This wasn't misdirection; this was the narrator lying.'"
+      ]
+    },
+    {
+      "id": "mystery-setting-atmosphere",
+      "heading": "Setting and Atmospheric Contribution",
+      "summary": "Use setting to enhance mystery atmosphere, provide investigative constraints or advantages, and reflect themes.",
+      "content": "Mystery settings should function as more than backdrop. Small-town mysteries leverage everyone knowing everyone, limited suspect pools, and social pressure. Urban mysteries use anonymity, diverse populations, and institutional resources. Isolated settings (islands, snowbound estates, remote locations) limit suspects and prevent outside help—classic closed-circle mystery. Each setting type creates different investigative challenges and atmospheric possibilities.\n\nAtmosphere enhances mystery tone. Gothic mansions create foreboding; sunny beach towns make murder feel more shocking. But avoid letting atmosphere dictate plausibility: a creepy setting doesn't justify illogical behavior. Characters shouldn't act stupid because the spooky house demands victims. Use atmosphere to complement the mystery, not replace logic.\n\nSetting details can provide clues and investigative tools. Local geography affects alibis and logistics. Social structures determine who talks to whom. Historical context shapes motives. Architecture creates opportunities for locked rooms or hidden passages. The best mystery settings feel lived-in and integral to plot, not just aesthetic choices.",
+      "ruleNumber": 12,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'In Millbrook, everyone knew everyone's business. The killer was counting on that—hiding in plain sight among neighbors who thought they knew all the secrets. Cross had to look past the town's assumptions.'",
+        "✗ AVOID: 'The setting (Victorian mansion, fog, thunderstorm) was described extensively but had zero relevance to the plot. The mystery could have happened anywhere; the atmosphere was purely decorative.'",
+        "✓ GOOD: 'The island had one ferry. Twice daily, weather permitting. The storm hit two hours after Harrison died. No one could leave. No one could arrive. The killer was one of the thirty-seven people trapped here with Cross.'",
+        "✗ AVOID: 'The characters behaved irrationally—investigating dark basements alone, ignoring obvious danger—because the creepy mansion setting demanded classic horror-movie stupidity for atmosphere.'",
+        "✓ GOOD: 'Chicago's grid system meant precise timing for the getaway route. Michigan Avenue traffic, Red Line schedule, pedestrian patterns—Cross mapped them all. Urban geography became the key to breaking the killer's timeline alibi.'",
+        "✗ AVOID: 'The mystery was set in Tokyo, but the author clearly knew nothing about the city. Geography, culture, and police procedures were all wrong, breaking immersion for anyone familiar with the setting.'"
+      ]
+    },
+    {
+      "id": "mystery-subgenre-conventions",
+      "heading": "Subgenre-Specific Conventions",
+      "summary": "Understand and honor specific subgenre conventions: cozy vs hardboiled vs procedural vs thriller mystery.",
+      "content": "Mystery subgenres have distinct conventions and reader expectations. Cozy mysteries feature amateur sleuths, limited violence (murder happens off-page), quirky small-town settings, and often lighthearted tone despite death. Think Agatha Christie or modern culinary mysteries. Readers expect clever puzzles, not graphic violence or noir cynicism.\n\nHardboiled mysteries emphasize cynical detectives, urban crime, moral ambiguity, and tough prose. Violence happens on-page; corruption is systemic; happy endings are rare. Think Raymond Chandler or modern noir. Readers expect gritty realism and flawed protagonists navigating moral gray areas.\n\nPolice procedurals focus on authentic law enforcement methods, team dynamics, and bureaucratic challenges. The investigation process is as important as the solution. Think Michael Connelly or procedural TV. Readers expect realistic police work, not lone genius detectives ignoring protocol.\n\nThriller mysteries emphasize pace and danger over fair-play puzzle-solving. The protagonist may be in physical danger; ticking clocks create urgency. Think Gillian Flynn or domestic suspense. Readers expect tension and twists more than logic-puzzle satisfaction.",
+      "ruleNumber": 13,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD (Cozy): 'The body was discovered in the garden—fortunately, by the police, not by Emma during her morning walk. She left the investigating to Sheriff Boyd while she questioned the book club members about their alibis. Someone here knew what happened to poor Mrs. Henderson.'",
+        "✗ AVOID (Cozy violation): 'The cozy mystery included graphic torture scenes, police corruption, and ended with the amateur sleuth killing three people in a violent shootout. (Totally wrong tone and content for the subgenre.)'",
+        "✓ GOOD (Hardboiled): 'Cross found the witness dead in a dumpster, throat cut. The killer was cleaning up loose ends. In this city, cooperating with police got you killed as often as staying silent. No wonder no one talked.'",
+        "✗ AVOID (Hardboiled violation): 'The hardboiled noir detective solved the murder through gentle questioning and clever logic puzzles in a charming small town where everyone cooperated cheerfully. (Wrong tone for noir.)'",
+        "✓ GOOD (Procedural): 'The case required coordination: homicide, forensics, the district attorney's office. Rivera handled the witnesses while Chen managed evidence chain of custody. Solving murders was teamwork, not lone-wolf heroics.'",
+        "✗ AVOID (Procedural violation): 'The police detective ignored all protocols, illegally obtained evidence, and solved the case single-handedly without any departmental support or legal constraints. (Not actually a procedural.)'"
+      ]
+    },
+    {
+      "id": "mystery-trope-awareness",
+      "heading": "Mystery Trope Awareness and Innovation",
+      "summary": "Recognize classic mystery tropes and either execute them excellently or subvert them thoughtfully.",
+      "content": "Mystery readers know the tropes: the least-likely suspect, the butler did it, the detective's sidekick, locked-room mysteries, dying messages, the narrator is the killer. Using tropes isn't bad—they're tropes because they work—but requires awareness. Execute classics well or twist them interestingly. Don't use tropes unconsciously, creating unintentionally predictable mysteries.\n\nSubverting tropes works when the subversion serves the story. 'The most obvious suspect actually did it, but their motive was unexpected' can surprise readers who assumed red herring. 'The detective is wrong and realizes it' creates fresh tension. But don't subvert solely for shock value: 'It was aliens!' in a grounded detective story feels like cheating.\n\nFresh execution means finding the specific, character-driven version of familiar patterns. Not just 'locked room mystery' but 'this particular locked room with this unique solution.' Not just 'dying message' but 'this specific clue that fits this victim's personality and the killer's methodology.' Specificity and authentic characterization make old tropes feel new.",
+      "ruleNumber": 14,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Everyone suspected Thompson—obvious motive, weak alibi, suspicious behavior. Cross arrested him. Three chapters later, new evidence proved Thompson innocent. Cross had made the mistake readers expected her to avoid. Now she had to start over.'",
+        "✗ AVOID: 'The mystery used every classic trope completely straight: least-likely suspect, dying message, locked room, butler did it—utterly predictable with zero fresh execution or awareness of reader expectations.'",
+        "✓ GOOD: 'The dying message wasn't a clue—it was misdirection. The killer had staged it, knowing investigators would waste time decoding meaningless letters. Simple but effective. Cross had fallen for the oldest trick.'",
+        "✗ AVOID: 'The shocking twist: the detective was hallucinating the entire investigation, the victim never existed, and nothing was real. (Completely violated genre expectations and fair-play principles with a cheat ending.)'",
+        "✓ GOOD: 'The locked-room murder seemed impossible until Cross realized the room wasn't locked when the killer entered—it was locked afterward, from outside, by someone else who thought they were protecting a different suspect. Two crimes, two criminals, one murder.'",
+        "✗ AVOID: 'The mystery featured every trope badly: incompetent police, genius amateur detective, unrealistically perfect evidence, overly complicated murder method that made no practical sense, and villain monologuing their entire plan.'"
+      ]
+    },
+    {
+      "id": "mystery-series-continuity",
+      "heading": "Series Continuity and Character Development",
+      "summary": "In series mysteries, balance standalone cases with character growth, avoiding stagnation while maintaining core appeal.",
+      "content": "Mystery series face unique challenges: each book needs a standalone case while developing recurring characters across installments. Readers should be able to start anywhere without confusion, but long-time readers deserve character growth and ongoing arcs. Balance is crucial.\n\nDetectives in series should evolve without fundamentally changing. Their core methodology and personality remain consistent (readers return for that), but they learn from cases, form relationships, and deal with accumulating trauma or experience. Thirty murders in, a detective should show some wear—or at least acknowledge the statistical absurdity of their murder rate.\n\nAvoid series stagnation: the same character beats, relationship dynamics, or mystery structures repeated across books. Raise the stakes gradually. Introduce new challenges. Let supporting characters develop. But don't let continuity overwhelm individual books—readers picking up book seven shouldn't need to read books one through six to understand the plot, even if they miss some character context.",
+      "ruleNumber": 15,
+      "category": "Genre Convention",
+      "section": "Mystery",
+      "examples": [
+        "✓ GOOD: 'Cross's fifth case showed the toll: she checked alibis three times now, paranoid after missing the killer in book three. Her methods hadn't changed, but her confidence had. Character growth without personality transformation.'",
+        "✗ AVOID: 'After fifteen books, the detective was exactly the same: same personality, same methods, same relationships, same approach. Nothing grew or changed; each book was interchangeable with the others.'",
+        "✓ GOOD: 'Each Cross novel resolved its central murder completely—standalone mysteries. But her relationship with former partner Morgan developed across books: book two showed conflict, book five reconciliation, book seven partnership. Ongoing character arc, standalone plots.'",
+        "✗ AVOID: 'Book seven ended on a massive cliffhanger for the main murder case, requiring readers to buy book eight for resolution. Individual books weren't complete stories—just serial chapters forcing continued purchase.'",
+        "✓ GOOD: 'New readers got enough context: 'Cross had left the FBI after the Brennan case went wrong.' Long-time readers knew the full story from book one, but newcomers had sufficient information. Series-aware but newcomer-friendly.'",
+        "✗ AVOID: 'Book six referenced events from books one through five constantly without explanation, making it impossible for new readers to follow character motivations or relationships without reading the entire series first.'"
+      ]
+    }
+  ]
+}

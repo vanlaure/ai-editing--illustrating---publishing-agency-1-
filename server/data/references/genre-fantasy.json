@@ -1,0 +1,264 @@
+{
+  "documentId": "genre-fantasy",
+  "title": "Fantasy Genre Writing Conventions",
+  "description": "Fantasy-specific writing rules covering magic systems, worldbuilding, language, tropes, and conventions for epic fantasy, urban fantasy, and related subgenres.",
+  "version": "1.0.0",
+  "lastUpdated": "2025-01-13",
+  "chunks": [
+    {
+      "id": "fantasy-magic-system-rules",
+      "heading": "Consistent Magic System Rules",
+      "summary": "Establish clear, consistent rules for how magic works, including limitations, costs, and consequences.",
+      "content": "Fantasy readers expect magic systems to follow internal logic. Whether hard magic (strictly defined rules like Brandon Sanderson's Allomancy) or soft magic (mysterious and mythic like Tolkien's Gandalf), the system must remain consistent throughout the narrative. Clearly establish what magic can and cannot do, who can use it, what it costs (energy, materials, life force), and what happens when rules are broken.\n\nLimitations make magic interesting. If magic can solve any problem without cost or consequence, tension evaporates. The best magic systems create difficult choices: using magic should involve sacrifice, risk, or moral complexity. Show characters struggling with magical limitations rather than wielding unlimited power.\n\nForeshadow magical capabilities before using them to resolve major plot points. Readers feel cheated when previously unmentioned magical abilities suddenly solve climactic problems. Introduce magical concepts, demonstrate their use in smaller contexts, then deploy them strategically in key scenes.",
+      "ruleNumber": 1,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Kael's fireball flickered and died. Three spells in one hour—his limit. He'd need to choose his next casting carefully, and his hands still trembled from the last one.'",
+        "✗ AVOID: 'Kael summoned endless waves of fire, obliterating the enemy army without breaking a sweat. Magic was easy when you were talented.'",
+        "✓ GOOD: 'Blood magic required blood. Sera pricked her thumb, watching the crimson drop fall onto the rune. The spell would work, but the headache would last for days.'",
+        "✗ AVOID: 'The protagonist suddenly revealed they could resurrect the dead—a power never mentioned before—and brought back the fallen hero just in time.'",
+        "✓ GOOD: 'Healing magic mended bones but transferred the pain to the healer. Master Thorne gritted his teeth as the soldier's shattered leg knitted together, feeling every fracture in his own body.'",
+        "✗ AVOID: 'Magic could do literally anything the plot needed. Teleportation, mind reading, time travel—whatever was convenient for that particular scene.'"
+      ]
+    },
+    {
+      "id": "fantasy-worldbuilding-integration",
+      "heading": "Seamless Worldbuilding Integration",
+      "summary": "Integrate worldbuilding naturally through action and dialogue rather than exposition dumps.",
+      "content": "Fantasy worldbuilding should feel immersive but not overwhelming. Use the iceberg principle: show the tip while suggesting vast depths beneath. Readers don't need encyclopedic knowledge of your world's history, religions, and politics in chapter one. Reveal worldbuilding details when they're relevant to the immediate story, through character perspective and action.\n\nAvoid 'as you know, Bob' dialogue where characters explain things they both already understand. Instead, let viewpoint characters notice details organically—the merchant's guild symbol that marks this district as neutral ground, the way nobles avert their eyes from the king's scarred face. Trust readers to assemble the bigger picture from contextual clues.\n\nBalance exotic and familiar elements. Too much invented terminology (creating names for every object, profession, and concept) exhausts readers. Use familiar words where possible, saving invented terms for truly unique aspects of your world. 'Sword' works fine even in a fantasy setting; you don't need 'zephyr-blade' unless the magical properties justify distinct terminology.",
+      "ruleNumber": 2,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Mira handed the merchant three silver lunars—nearly a week's wages for most folks, but the anti-scrying ward was worth it.'",
+        "✗ AVOID: 'As you know, Theron, the Lunar Reformation of 1247 established the three-tiered currency system we use today, with bronze suns worth ten copper moons, and silver lunars worth...'",
+        "✓ GOOD: 'The guard's hand moved to his sword when Kael entered the tavern. Dragon-marked. Even here, fifty miles from the border, people feared Flame-Touched refugees.'",
+        "✗ AVOID: 'Let me explain the entire thousand-year history of the Dragon Wars, the seventeen noble houses, the complex religious schism, and the detailed economic system before we get to the story.'",
+        "✓ GOOD: 'She adjusted her prayer beads—five black for the Dead Gods, three white for the New—and entered the temple. The priest's eyes lingered on the black beads. Old believers weren't welcome here anymore.'",
+        "✗ AVOID: 'The protagonist walked through a city where everything had an invented fantasy name: zornik-bread from the palanar-baker, purchased with glimmercoin, wrapped in wraphyll leaves.'"
+      ]
+    },
+    {
+      "id": "fantasy-archaic-language",
+      "heading": "Archaic Language and Dialogue",
+      "summary": "Use period-appropriate or elevated language carefully, balancing atmosphere with readability and avoiding purple prose.",
+      "content": "Fantasy dialogue walks a tightrope between modern accessibility and genre atmosphere. Readers expect some linguistic formality or archaism in epic fantasy, but excessive 'thee,' 'thou,' 'forsooth,' and overwrought proclamations create unreadable dialogue. Choose a middle register: slightly elevated but still natural, suggesting historical or secondary-world speech without mimicking Shakespeare or medieval texts.\n\nMaintain consistency in linguistic register within each character and setting. Peasants and nobles might speak differently, but each character's voice should remain recognizable and appropriate to their background. Avoid randomly switching between modern slang and pseudo-medieval formality within the same character's speech.\n\nPurple prose—overly ornate, flowery description—tempts fantasy writers but alienates readers. Vivid, specific description enhances fantasy worlds; thesaurus-abuse and melodramatic excess damages them. 'The knight drew his sword' beats 'The valiant warrior unsheathed his magnificent blade of silvered steel, its coruscating edge gleaming with preternatural luminescence.' Save elaborate description for moments that truly warrant it.",
+      "ruleNumber": 3,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'I cannot permit this,' the queen said, her voice cold. 'Your father swore an oath, and oaths bind us all—high and low alike.'",
+        "✗ AVOID: 'Verily, I say unto thee, forsooth this matter doth perplex mine heart greatly, for thou art most vexing in thine obstinance, good sir knight.'",
+        "✓ GOOD: 'The morning sun turned the towers gold. Kael watched from the garden, counting the pennants. Seven lords had answered the summons. Seven out of twenty.'",
+        "✗ AVOID: 'The coruscating orb of celestial radiance ascended majestically above the magnificent spires, bathing the resplendent battlements in aureate luminescence of incomparable splendor.'",
+        "✓ GOOD: 'We march at dawn,' the general said. 'Light armor, three days' rations. The forest road is faster, but the enemy knows it. Your thoughts?'",
+        "✗ AVOID: 'Dude, we need to totally bounce at sunrise. Grab some snacks and let's yeet ourselves toward the forest, k?' (modern slang in epic fantasy)"
+      ]
+    },
+    {
+      "id": "fantasy-chosen-one-subversion",
+      "heading": "Fresh Handling of Chosen One Tropes",
+      "summary": "Subvert or freshly execute 'chosen one' prophecies by giving protagonists agency, complicating destiny, or deconstructing the trope.",
+      "content": "The 'chosen one' and prophecy tropes are fantasy staples, but modern readers expect fresh execution. If using prophecies, complicate them: make them cryptic, potentially misleading, or self-fulfilling through character choices rather than cosmic fate. Better yet, give characters agency to reject, reinterpret, or actively work against their supposed destiny.\n\nMultiple interpretations of prophecy create interesting tension. Perhaps several characters could fulfill the prophecy's wording, or the prophecy itself was propaganda/manipulation rather than cosmic truth. Let characters question prophecies rather than blindly accepting predetermined roles.\n\nIf using the chosen one trope straight, justify it with character development. The protagonist should earn their special status through choices, growth, and sacrifice—not merely inherit it through bloodline or arbitrary selection. Show why this particular person succeeds where others might fail, beyond 'the prophecy said so.'",
+      "ruleNumber": 4,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Three children were born under the blood moon. The prophecy didn't specify which one would become the destroyer—or the savior. The Council was betting on the wrong child.'",
+        "✗ AVOID: 'You are the chosen one because the prophecy says so. Now accept your destiny without question and fulfill your predetermined role exactly as foretold.'",
+        "✓ GOOD: 'Everyone expected the prince to pull the sword from the stone. When the blacksmith's daughter managed it instead, the court had to decide: trust prophecy, or preserve power?'",
+        "✗ AVOID: 'I was chosen by birthright and ancient bloodline to be special. My noble heritage makes me naturally superior and destined to rule.'",
+        "✓ GOOD: 'The prophecy named you,' Kael said, 'but prophecies lie. They're tools of manipulation, written by those who want to control the future. You can choose differently.'",
+        "✗ AVOID: 'The protagonist had no personality beyond being 'the chosen one.' They succeeded at everything because destiny, with no meaningful choices or character development required.'"
+      ]
+    },
+    {
+      "id": "fantasy-quest-structure",
+      "heading": "Quest Structure and Pacing",
+      "summary": "Structure quests with clear goals, escalating stakes, meaningful obstacles, and character development, avoiding episodic 'then this happened' pacing.",
+      "content": "Fantasy quests need structure beyond 'travel from A to B encountering random obstacles.' Each stage of the journey should serve multiple purposes: advancing the plot, developing characters, revealing worldbuilding, raising stakes, or providing thematic resonance. Avoid episodic 'monster of the week' pacing where each chapter presents a disconnected challenge that teaches nothing and changes nothing.\n\nEscalating obstacles increase tension. Early challenges test individual skills; later obstacles require teamwork, moral choices, or sacrifice. The antagonist should actively oppose the quest, creating mounting pressure rather than coincidental difficulties. Make the journey harder as characters grow stronger, maintaining tension throughout.\n\nAllow quest goals to evolve. Characters might discover their original objective was wrong, impossible, or less important than new revelations. The best quests transform participants: they return changed, having gained wisdom, lost innocence, or found purpose beyond the initial goal.",
+      "ruleNumber": 5,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Finding the sword was supposed to end the war. But when Mira learned where the blade's power came from—the trapped souls of a thousand murdered children—she faced a harder choice than any battle.'",
+        "✗ AVOID: 'The party traveled through the forest, fought some bandits, then crossed a river, fought a troll, then climbed a mountain, fought a dragon. The end.'",
+        "✓ GOOD: 'Each village they passed was emptier than the last. Refugees fleeing north, farms burned, wells poisoned. The enemy wasn't just pursuing them—it was erasing the world behind them, leaving nowhere to retreat.'",
+        "✗ AVOID: 'Despite supposedly being hunted by a powerful enemy, the protagonists encountered only random monsters and minor inconveniences that never meaningfully threatened their quest.'",
+        "✓ GOOD: 'Kael had set out to save his village. Six months later, standing at the gates of the capital, he barely remembered that boy. The village was ashes now. Everyone he'd loved was dead. But he could still stop this from happening to every village in the kingdom.'",
+        "✗ AVOID: 'The characters completed their quest and returned home exactly the same people they were at the start, having learned nothing and changed not at all.'"
+      ]
+    },
+    {
+      "id": "fantasy-economics-politics",
+      "heading": "Secondary World Economics and Politics",
+      "summary": "Ground fantasy worlds in realistic economic and political systems that create organic conflict and logical consequences.",
+      "content": "Secondary worlds need functional economies and politics. Consider where food comes from, how trade works, what people use for currency, and how power structures maintain themselves. These systems don't need extensive exposition, but they should exist logically in the background, creating realistic constraints and motivations for characters.\n\nPolitical systems shape story conflict. Succession crises, trade disputes, religious schisms, class tensions, and diplomatic marriages provide rich plot material rooted in worldbuilding. Show how common people are affected by noble politics rather than treating kingdoms as merely aesthetic backdrops for heroes.\n\nMagic's economic implications warrant consideration. If healing magic exists, how does it affect medicine and warfare? If wizards can teleport, how does that impact trade and military strategy? If magical artifacts are common, how do societies regulate them? The best fantasy worlds think through these implications, creating coherent systems where magic and economics interact logically.",
+      "ruleNumber": 6,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'The Mages' Guild charged fifty gold for healing services—a fortune for most citizens. But if mages healed for free, how would they fund training? The Council was still debating public healing halls when plague reached the city.'",
+        "✗ AVOID: 'Money and resources were never a problem. The heroes had unlimited funds from unexplained sources, and armies appeared from nowhere without considering food, payment, or logistics.'",
+        "✓ GOOD: 'The northern lords hoarded grain while southern provinces starved. Not cruelty—practicality. One bad harvest from famine themselves. The king could force redistribution, but that might trigger northern rebellion.'",
+        "✗ AVOID: 'The kingdom's politics were simple: good king versus evil usurper, with no complex loyalties, economic motivations, or difficult choices for anyone involved.'",
+        "✓ GOOD: 'Teleportation circles broke the merchants' guild in five years. Why pay for caravans when mages could move goods instantly? Now the guild was funding anti-magic legislation, and merchant guards were assassinating wizards.'",
+        "✗ AVOID: 'Magic existed but had no logical impact on economy, warfare, medicine, communication, or social structures. Everyone still fought with swords and used medieval technology for no reason.'"
+      ]
+    },
+    {
+      "id": "fantasy-creatures-races",
+      "heading": "Fantastical Creatures and Non-Human Races",
+      "summary": "Create distinct non-human races and creatures with unique cultures, avoiding stereotypes and 'humans with pointed ears' syndrome.",
+      "content": "Non-human races need meaningful differences beyond cosmetic features and stat bonuses. Elves aren't just 'humans with pointed ears and bows'; they should have genuinely different cultural values, psychology, or sensory experiences shaped by their unique traits. If elves live 500 years, how does that affect their relationships, politics, or concept of time? If dwarves have darkvision, how does that shape their architecture and art?\n\nAvoid real-world ethnic stereotypes transplanted onto fantasy races. The 'proud warrior race,' 'wise mysterious Orientals,' or 'greedy hoarding race' often reproduce harmful stereotypes. Give non-human cultures the same complexity and internal diversity that human cultures deserve. Not all elves think alike; not all orcs are the same.\n\nFantastical creatures should feel genuinely other, not just Earth animals with magical additions. Consider how biology, habitat, and magic shape behavior. A dragon that lives 1000 years, hoards treasure, and breathes fire would develop a psychology unlike any mammal. Make creatures strange, wondrous, and occasionally terrifying—not domesticated.",
+      "ruleNumber": 7,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Elven contracts spanned centuries. They'd negotiated this treaty 200 years ago, still considered it new, and expected another 300 years before revision. Human diplomats aged and died; elven negotiators simply waited.'",
+        "✗ AVOID: 'Elves were basically humans with pointed ears and natural archery skills. They had identical psychology, culture, and motivations despite living ten times longer.'",
+        "✓ GOOD: 'The dwarf held the stone to her forehead, reading its history through touch—compression layers, crystal formation, the ancient river that carved this cave. Humans couldn't sense stone-memory, couldn't hear mountains breathing. Pity.'",
+        "✗ AVOID: 'The entire orc race were savage, violent brutes with no culture, diversity, or individual personality—just a faceless enemy for heroes to kill without moral complexity.'",
+        "✓ GOOD: 'The dragon's hoard wasn't greed. Each item held a memory—this sword from a worthy opponent, that crown from a clever thief. In 800 years, you collected stories, not gold.'",
+        "✗ AVOID: 'The fantasy races were all just slightly different flavored humans: elves were snooty humans, dwarves were short humans with beards, orcs were violent humans, etc.'"
+      ]
+    },
+    {
+      "id": "fantasy-power-scaling",
+      "heading": "Power Progression and Scaling",
+      "summary": "Manage character power growth carefully, maintaining tension by escalating challenges alongside character capabilities.",
+      "content": "Fantasy protagonists often gain power throughout the story, but unchecked power escalation destroys tension. If your hero becomes godlike, you're forced to create increasingly cosmic threats until stakes become abstract and unrelatable. Better to set clear power ceilings early, or provide meaningful costs/limitations that keep even powerful characters vulnerable.\n\nShow characters mastering existing abilities rather than constantly acquiring new ones. Depth beats breadth. A character learning subtle applications of three core powers creates more interesting problem-solving than a character collecting fifty abilities they barely understand. Mastery should feel earned through practice, failure, and creative thinking.\n\nPhysical or magical power isn't the only progression path. Characters can grow in wisdom, leadership, political influence, or relationships while maintaining relatively stable combat abilities. The best fantasy stories balance multiple progression axes, so characters gain strength without becoming unstoppable.",
+      "ruleNumber": 8,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Kael learned to weave three spells simultaneously—not more powerful magic, but more precise control. The fire was smaller now, but it went exactly where he wanted, burning clean through the warded lock.'",
+        "✗ AVOID: 'Each chapter the protagonist unlocked new ultimate powers, becoming exponentially stronger until they could destroy planets with a thought, making all previous conflicts meaningless.'",
+        "✓ GOOD: 'Master Thorne could level cities. He'd proven that in the Sundering. Fifty years later, he was no weaker—but he'd learned power wasn't the answer. His student needed wisdom, not destructive capability.'",
+        "✗ AVOID: 'Power had no cost or consequence. The protagonist absorbed infinite magical energy, mastered every ability instantly, and faced no meaningful limitations or difficult choices.'",
+        "✓ GOOD: 'Sera would never be a great duelist—her reflexes weren't fast enough. But she'd spent five years building alliances across three kingdoms. Now she commanded armies without swinging a sword.'",
+        "✗ AVOID: 'The character reached maximum power level halfway through the story, then spent the rest of the book easily defeating threats that should have been challenging.'"
+      ]
+    },
+    {
+      "id": "fantasy-mythology-inspiration",
+      "heading": "Mythological and Cultural Inspiration",
+      "summary": "Draw respectfully from real-world mythology and cultures, adapting rather than appropriating, crediting inspiration, and avoiding stereotypes.",
+      "content": "Real-world mythology provides rich fantasy inspiration, but requires respectful handling. Research thoroughly rather than relying on pop-culture versions. If borrowing from living cultures, consider sensitivity readers and acknowledge inspiration. Adaptation means transformation—creating something new from source material, not copy-pasting sacred stories or cultural elements into fantasy window dressing.\n\nAvoid creating fantasy cultures that are just 'medieval Europe' plus one element stolen from another culture (samurai elves, Viking dwarves with no other cultural depth). If drawing inspiration from non-European cultures, invest equal worldbuilding depth: show the culture's philosophy, art, family structures, and values—not just aesthetic elements and fighting styles.\n\nMyth often contains cultural context essential to meaning. The trickster figure means different things in different traditions. Gods embody cultural values. When adapting mythological elements, consider what made them meaningful in original context, and how to honor that meaning while creating something new for your fantasy world.",
+      "ruleNumber": 9,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'The Shifting God borrowed from Norse Loki and West African Anansi, but Kael had developed the mythology deeply: tricksters as social rebels who maintained cultural flexibility, testing rigid power structures through creative chaos.'",
+        "✗ AVOID: 'The author copied a sacred Native American ceremony, renamed it slightly, and inserted it into their fantasy world with no understanding or respect for its cultural significance.'",
+        "✓ GOOD: 'The dragon legends drew from multiple traditions—Chinese, European, Mesoamerican—synthesized into something new: dragons as manifestations of geological forces, worshipped by volcanic cultures, feared by seafarers.'",
+        "✗ AVOID: 'The fantasy world had 'samurai elves' whose culture consisted entirely of wearing kimonos and using katanas, with no deeper engagement with Japanese philosophy, history, or cultural complexity.'",
+        "✓ GOOD: 'Acknowledgments: My depiction of the Desert Tribes was inspired by and researched from Bedouin, Tuareg, and Mongolian nomadic cultures. Thanks to sensitivity readers [names] for cultural consultation.'",
+        "✗ AVOID: 'The 'exotic' culture was a mishmash of stereotypes from various Asian and Middle Eastern cultures, treated as interchangeable and used purely for aesthetic flavor.'"
+      ]
+    },
+    {
+      "id": "fantasy-magic-implications",
+      "heading": "Magic's Social and Ethical Implications",
+      "summary": "Explore how magic shapes society, ethics, and daily life, considering both benefits and dangers of magical power.",
+      "content": "Magic doesn't exist in a vacuum. Consider its social implications: Who controls magic? How do societies regulate it? What happens when magical and non-magical people coexist? The presence of magic should shape legal systems, social hierarchies, ethics, and everyday life. A world with common healing magic develops different medical ethics than one where healing is rare and expensive.\n\nMagical power raises ethical questions. Mind magic creates privacy and consent issues. Necromancy challenges beliefs about death and souls. Prophecy raises questions about free will. The best fantasy stories explore these implications rather than treating magic as mere plot device. Characters should grapple with moral complexity of magical capabilities.\n\nPower imbalances between magical and non-magical people create natural conflict. How do ordinary people protect themselves from magical threats? What prevents magical tyrants? Historical parallels to privilege, class, and systemic inequality make magic feel real and consequential. Don't shy from the darker implications of magical power.",
+      "ruleNumber": 10,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Mind-mages swore binding oaths enforced by magical contracts: never read without consent, never alter memories, submit to annual ethical reviews. Those who broke oath had their power burned away. The Council of Whispers didn't take violations lightly.'",
+        "✗ AVOID: 'Mind reading magic existed but nobody worried about privacy, consent, or abuse of power. Characters casually read minds with no ethical concerns or social regulation.'",
+        "✓ GOOD: 'The Revolution started when a blacksmith's daughter asked: why should wizards rule? They were born lucky, nothing more. Magical talent didn't make someone wise, just, or fit to govern. Time to end the Blood Towers.'",
+        "✗ AVOID: 'Magic made some people inherently superior. The magical aristocracy's right to rule was never questioned; non-magical people were just background peasants who accepted their inferior status.'",
+        "✓ GOOD: 'Necromancy was legal, regulated, and expensive. The dead could testify in court, but only with family consent. Forced resurrection was slavery. The Bone Speakers' Guild handled all negotiations between living and dead.'",
+        "✗ AVOID: 'Magic could solve literally any problem but was only used for combat and convenience plots. Characters never considered broader social applications, ethical implications, or why magical solutions weren't widespread.'"
+      ]
+    },
+    {
+      "id": "fantasy-medieval-accuracy",
+      "heading": "Historical Accuracy vs Fantasy License",
+      "summary": "Balance historical inspiration with fantasy needs, making informed choices about when to follow historical accuracy and when to deviate for story purposes.",
+      "content": "Fantasy often draws from medieval history, but isn't bound by it. Make informed choices about historical accuracy. Research medieval life (disease, sanitation, gender roles, technology, economics) to understand what you're changing and why. Deliberate deviation for story purposes is fine; ignorant deviation from lack of research creates unintentional absurdity.\n\nCertain historical accuracies enhance immersion: realistic armor functionality, castle design, disease prevalence, food preservation. Others limit storytelling unnecessarily: if gender equality serves your story, create cultural/magical justifications rather than defaulting to historical patriarchy. Fantasy's strength is asking 'what if this was different?'\n\nAnachronisms should be intentional, not accidental. Modern concepts, technology, or social attitudes in medieval-inspired fantasy jar readers unless justified. A 'coffee shop' in a medieval-style fantasy needs explanation (or replacement with tavern/tea house). Modern egalitarian values might exist, but showing cultural/magical reasons why adds depth.",
+      "ruleNumber": 11,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'The armor weighed sixty pounds. Kael couldn't run in it, could barely mount his horse. But one sword stroke that would've killed him just glanced off the plate. You endured the weight or you died.'",
+        "✗ AVOID: 'Characters fought in elaborate full plate armor for hours, doing acrobatic flips and running marathons, because the author didn't research how armor actually works or weighs.'",
+        "✓ GOOD: 'In the Isles, women commanded armies because magic ran stronger in female bloodlines. The matriarchal structure wasn't moral progress—just practical power politics in a world where battlefield mages determined victory.'",
+        "✗ AVOID: 'The medieval-inspired kingdom had perfect modern gender equality, democratic elections, and contemporary social attitudes with zero explanation or worldbuilding justification.'",
+        "✓ GOOD: 'The siege lasted three months. Disease killed more defenders than combat. Rats in the granary, dysentery from contaminated wells, gangrene from minor wounds. Glory mattered less when you were shitting yourself to death.'",
+        "✗ AVOID: 'The medieval-style world had no disease, perfect sanitation, unlimited food supplies, and modern medicine despite zero magical or technological explanation for these conditions.'"
+      ]
+    },
+    {
+      "id": "fantasy-naming-conventions",
+      "heading": "Names and Naming Conventions",
+      "summary": "Create consistent, pronounceable naming systems that enhance worldbuilding without confusing readers.",
+      "content": "Fantasy names should be distinctive but pronounceable. Avoid apostrophe abuse (T'k'r'n'th'k is unreadable), random consonant clusters (Xzvrlpt), and names that look like alphabet soup. Readers need to pronounce names mentally while reading; unpronounceable names create reading friction that throws people out of the story.\n\nDevelop consistent naming patterns for each culture or race. Real-world cultures have naming conventions: syllable patterns, common sounds, name structure (given name, family name, honorifics). Your fantasy cultures should too. Elvish names might emphasize vowels and flowing sounds; dwarvish names might favor hard consonants. Consistency helps readers distinguish cultures and remember characters.\n\nBalance exotic and familiar. Some common names ground your world; some unusual names create fantasy flavor. Vary name lengths and sounds to avoid confusion. If every character name starts with 'K' or ends in '-ion,' readers will mix them up. Give major characters distinctive, memorable names that don't sound too similar to each other.",
+      "ruleNumber": 12,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: Elven names: Elarion, Thalindra, Miravel, Caelen (flowing vowels, soft consonants). Dwarvish names: Thorak, Grimli, Dolgrun, Kravik (hard consonants, short syllables). Consistent patterns per culture.",
+        "✗ AVOID: T'k'l'n'th'x'p, Xzvrlptch, Ng'thryy'q, Qq'xllp'tn—names that are impossible to pronounce and make readers give up on remembering who anyone is.",
+        "✓ GOOD: 'Kael, Mira, Thoren, Seraphina, Drake'—varied name lengths and sounds, all memorable and distinct from each other, easy to track in dialogue and action.",
+        "✗ AVOID: 'Kyra, Kyran, Kyler, Kyrana, Kylian, Kyrielle'—all major characters with similar-sounding names starting with 'Ky,' making it impossible to keep them straight.",
+        "✓ GOOD: 'In the northern clans, children took their parent's name as surname: Kael Thorenson, Mira Kaeldaughter. Simple, consistent, and culturally meaningful.'",
+        "✗ AVOID: Random inconsistent naming where some characters have normal names (John, Sarah) next to incomprehensible fantasy names (X'thl'r'q'p) with no cultural logic or pattern."
+      ]
+    },
+    {
+      "id": "fantasy-geography-consistency",
+      "heading": "Map and Geography Consistency",
+      "summary": "Maintain geographic consistency in travel times, climate, resources, and strategic importance of locations.",
+      "content": "Fantasy worlds need geographic logic. If you have a map, respect it. Travel times should remain consistent: the journey that took three weeks in chapter five shouldn't take three days in chapter twenty just because plot demands it. Readers notice these inconsistencies, especially in epic fantasy with extensive travel.\n\nClimate and terrain affect culture, resources, and story. Desert kingdoms value water; forest kingdoms value timber and hunting; island nations value ships and trade. Strategic locations (mountain passes, river crossings, ports) naturally become sites of castles, cities, and conflict. Geography shouldn't just be backdrop—it should shape politics, economics, and plot.\n\nConsider realistic geography: rivers flow downhill from mountains to sea, deserts form in rain shadows, forests require sufficient rainfall. You can have magical geography (floating islands, eternal winter), but non-magical geography should follow Earth-like rules unless specifically noted. Readers bring real-world geographic assumptions; violating them without explanation breaks immersion.",
+      "ruleNumber": 13,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'The pass closed in winter. Any army crossing the Spine Mountains before spring thaw would freeze. The defenders only had to hold until snowfall—six weeks, maybe seven.'",
+        "✗ AVOID: Travel times were completely inconsistent—the same journey took weeks or days depending on plot convenience, with no explanation for the variation.",
+        "✓ GOOD: 'Riverhold controlled the only bridge for 200 miles. Every trade caravan paid toll; every army needed permission to cross. The city's wealth and power came from geography, not resources.'",
+        "✗ AVOID: 'The desert kingdom had unlimited water and lush forests growing despite no rain. Geography existed purely for aesthetic variety with no logical implications.'",
+        "✓ GOOD: 'Kael's map showed three routes: mountain pass (fast, dangerous), forest road (slow, safe), or sea voyage (weather-dependent). He traced each path, calculating time against risk.'",
+        "✗ AVOID: 'Characters traveled thousands of miles instantly whenever convenient, with no planning, supplies, or acknowledgment of distance. Geography was completely ignored except as pretty scenery.'"
+      ]
+    },
+    {
+      "id": "fantasy-ending-resolution",
+      "heading": "Ending and World State Resolution",
+      "summary": "Resolve not just the plot, but the state of the fantasy world, considering lasting implications of the story's events.",
+      "content": "Fantasy endings should address the world's future, not just the hero's victory. If the Dark Lord falls, what happens to his empire? If magic disappears, how do magic-dependent societies survive? If prophecy is fulfilled, what comes next? The best fantasy endings show consequences rippling through the world, acknowledging that major events reshape societies.\n\nAvoid 'snap back' endings where everything returns to normal after apocalyptic events. Wars, magical catastrophes, political revolutions, or slain gods should leave permanent marks. Characters might return home, but home has changed—or they've changed too much to fit back in. Bittersweet endings often feel more earned than purely happy ones.\n\nSeries finales require special care. Resolve major plot threads while leaving some mystery intact. Not every question needs answering; some ambiguity makes worlds feel real and lived-in. But readers deserve resolution of central conflicts and character arcs. Rushing or padding the ending damages even excellent series.",
+      "ruleNumber": 14,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'The war ended, but peace proved harder. Former enemies sat at the same council table, decades of hatred between them. Rebuilding would take a generation. But it would happen.'",
+        "✗ AVOID: 'The epic war ended and somehow everything immediately returned to exactly how it was before, with no lasting consequences, rebuilding period, or acknowledgment of the thousands who died.'",
+        "✓ GOOD: 'Kael saved the kingdom, but the magic cost him everything. He'd return to his village a stranger—immortal now, unchanging, while everyone he loved would age and die. Some prices couldn't be unpaid.'",
+        "✗ AVOID: 'The hero defeated the ultimate evil with no sacrifice, cost, or lasting impact. Everyone lived happily ever after with zero complications or consequences from the apocalyptic events that just occurred.'",
+        "✓ GOOD: 'The trilogy ended with the prophecy fulfilled, the kingdom saved, and three major character arcs resolved. Some mysteries remained—the world felt alive, not exhausted. Room for imagination, but no unsatisfying loose threads.'",
+        "✗ AVOID: 'The series finale left every major plot thread unresolved, introduced new mysteries with no answers, and ended on a cliffhanger despite being marketed as the final book.'"
+      ]
+    },
+    {
+      "id": "fantasy-trope-awareness",
+      "heading": "Trope Awareness and Fresh Execution",
+      "summary": "Acknowledge fantasy tropes and execute them freshly through subversion, complication, or self-aware handling.",
+      "content": "Fantasy readers know the tropes: orphan protagonists, wise mentors who die, ancient artifacts, dark lords, medieval European settings, prophecies, dragons, elves. Using tropes isn't lazy—tropes are tools—but using them unconsciously creates stale stories. The best fantasy either subverts tropes deliberately or executes them so well that freshness comes from character and detail rather than pure novelty.\n\nSubversion requires understanding what you're subverting. 'Grumpy mentor who doesn't die' only works if readers expect dead mentor. 'Evil Dark Lord with sympathetic motivation' needs readers to know the trope. Reference points create meaning. But subversion for its own sake feels hollow; twist tropes only when the alternative strengthens your story.\n\nFresh execution means: give tropes specific, character-driven details that make them feel new. Not 'the orphan protagonist,' but 'this particular orphan with this specific backstory and voice.' Not 'a generic dragon,' but 'this individual dragon with unique motivations and personality.' Specificity defeats staleness.",
+      "ruleNumber": 15,
+      "category": "Genre Convention",
+      "section": "Fantasy",
+      "examples": [
+        "✓ GOOD: 'Everyone expected Master Thorne to die nobly, passing his wisdom to Kael before the final battle. Instead he survived, retired, and left Kael to figure things out alone. Turned out mentors weren't obligated to die dramatically.'",
+        "✗ AVOID: 'The story used every fantasy trope completely straight with zero awareness or fresh execution: orphan chosen one, dead mentor, ancient sword, evil dark lord, medieval Europe, prophecy. Completely predictable.'",
+        "✓ GOOD: 'The Dark Lord's motivation: saving his dying world by draining magic from this one. Not evil—desperate. Kael had to find a solution that didn't require choosing which world deserved to survive.'",
+        "✗ AVOID: 'The story tried to be edgy by mechanically inverting every trope: the mentor was evil, the Dark Lord was good, the prophecy was backwards, etc.—subversion without depth or purpose.'",
+        "✓ GOOD: 'Yes, another dragon. But this dragon collected plays, not gold. Hoarded performances like jewels, kidnapped actors instead of princesses. Kael had to stage a theatrical production to win an audience with the Wyrm of Stories.'",
+        "✗ AVOID: 'The dragon was exactly like every other generic dragon: lived in a cave, hoarded gold, kidnapped princesses, breathed fire, fought heroes. Zero individual personality or fresh detail.'"
+      ]
+    }
+  ]
+}

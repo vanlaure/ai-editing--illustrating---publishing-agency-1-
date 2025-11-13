@@ -16,6 +16,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1UPkFX4FxysFhXK9pGORiFn
 - **Video Trailers**: Generate promotional video content using Veo 3.1
 - **Publishing Workflow**: Automated metadata generation, cover art creation, and keyword optimization
 - **Marketing Suite**: AI-generated marketing campaigns, social media content, and promotional materials
+- **Analytics Dashboard**: Real-time metrics, predictive insights, business intelligence, ROI calculator, and interactive charts
 - **Rich Text Editor**: TipTap-powered WYSIWYG editor with advanced formatting
 - **World Bible**: Track characters, settings, and series continuity
 - **Research Tools**: Import and analyze manuscripts, including Project Gutenberg books
@@ -232,6 +233,17 @@ This application uses Google Gemini AI APIs:
 - **Campaign Generation**: Complete marketing campaigns
 - **Video Trailers**: Promotional video content
 - **Social Media Content**: Platform-specific marketing copy
+
+### Analytics Dashboard
+
+- **Real-time Metrics**: Live dashboards showing writing progress, AI usage, and collaboration activity
+- **Custom Dashboards**: User-configurable analytics views with five specialized tabs
+- **Predictive Insights**: ML-powered recommendations and completion estimates
+- **Business Intelligence**: Market intelligence, competitor analysis, and strategic recommendations
+- **ROI Calculator**: Track productivity gains and cost savings from AI features
+- **Interactive Charts**: Advanced visualizations with Chart.js for data analysis
+
+See [Analytics Dashboard Guide](docs/DASHBOARD_GUIDE.md) for detailed usage instructions.
 
 ## Troubleshooting
 

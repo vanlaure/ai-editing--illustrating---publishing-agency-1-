@@ -1,0 +1,341 @@
+{
+  "documentId": "chicago-manual-grammar",
+  "title": "Chicago Manual of Style - Grammar Rules",
+  "description": "Core grammar rules from the Chicago Manual of Style for manuscript editing",
+  "chunks": [
+    {
+      "id": "chicago-5.1",
+      "heading": "Subject-Verb Agreement",
+      "summary": "Verbs must agree with their subjects in number and person",
+      "content": "A verb must agree with its subject in number (singular or plural) and person (first, second, or third). When the subject is a collective noun, the verb should be singular if the group acts as a unit, plural if members act individually. Intervening phrases do not affect agreement.",
+      "ruleNumber": "5.1",
+      "category": "grammar",
+      "section": "5.1-5.9",
+      "examples": [
+        "Correct: The team wins the championship. (collective noun, singular verb)",
+        "Correct: The team are arguing among themselves. (members acting individually)",
+        "Correct: The list of ingredients is on the counter. (subject is 'list', not 'ingredients')",
+        "Incorrect: The team win the championship.",
+        "Incorrect: The list of ingredients are on the counter.",
+        "Correct: Neither the coach nor the players were ready. (verb agrees with nearest subject)"
+      ]
+    },
+    {
+      "id": "chicago-5.120",
+      "heading": "Tense Consistency",
+      "summary": "Maintain consistent verb tense unless a time shift is indicated",
+      "content": "Writers should maintain a consistent tense throughout a narrative unless there is a clear reason to shift (e.g., flashbacks, dialogue tags). Past tense is most common in fiction. Avoid unmotivated shifts between past and present tense within the same scene or paragraph.",
+      "ruleNumber": "5.120",
+      "category": "grammar",
+      "section": "5.119-5.128",
+      "examples": [
+        "Correct: She walked to the door and opened it. (consistent past)",
+        "Incorrect: She walked to the door and opens it. (unmotivated shift to present)",
+        "Correct: She walks to the door and opens it. (consistent present - literary present)",
+        "Correct: He remembered that she had told him the truth. (past perfect for earlier action)",
+        "Correct: She said, 'I am tired.' (dialogue can use different tense)",
+        "Incorrect: Yesterday, I go to the store and bought milk. (inconsistent tenses)"
+      ]
+    },
+    {
+      "id": "chicago-5.31",
+      "heading": "Pronoun-Antecedent Agreement",
+      "summary": "Pronouns must agree with their antecedents in number, gender, and person",
+      "content": "A pronoun must agree with its antecedent (the noun it refers to) in number (singular/plural), gender (he/she/they), and person (first/second/third). Singular indefinite pronouns (everyone, anybody, each) take singular pronouns. Use 'they' as a singular pronoun when gender is unknown or nonbinary.",
+      "ruleNumber": "5.31",
+      "category": "grammar",
+      "section": "5.31-5.48",
+      "examples": [
+        "Correct: Everyone should bring their own lunch. (singular 'they')",
+        "Correct: Each student must submit his or her paper. (or 'their paper')",
+        "Incorrect: Everyone should bring their own lunches. (pronoun singular, noun should be singular)",
+        "Correct: The committee issued its report. (committee as unit)",
+        "Incorrect: Neither John nor Mary brought their umbrella. (should be 'his or her')",
+        "Correct: The author writes about their experiences. (gender-neutral)"
+      ]
+    },
+    {
+      "id": "chicago-5.250",
+      "heading": "Parallel Structure",
+      "summary": "Express similar ideas in similar grammatical forms",
+      "content": "When listing items, expressing comparisons, or using correlative conjunctions (either/or, neither/nor, not only/but also), maintain parallel grammatical structure. All items in a series should be the same part of speech or grammatical form (all nouns, all verbs, all phrases, etc.).",
+      "ruleNumber": "5.250",
+      "category": "grammar",
+      "section": "5.250",
+      "examples": [
+        "Correct: She likes reading, writing, and editing. (all gerunds)",
+        "Incorrect: She likes reading, writing, and to edit. (mixing gerunds and infinitive)",
+        "Correct: The report was clear, concise, and comprehensive. (all adjectives)",
+        "Incorrect: The report was clear, concise, and had comprehensive detail. (mixing adjectives and clause)",
+        "Correct: Either we finish now or we come back tomorrow. (parallel clauses)",
+        "Incorrect: Either we finish now or coming back tomorrow. (not parallel)"
+      ]
+    },
+    {
+      "id": "chicago-5.176",
+      "heading": "Dangling Modifiers",
+      "summary": "Modifiers must clearly and logically relate to the word they modify",
+      "content": "A dangling modifier is a phrase that doesn't logically or clearly modify the word it's supposed to describe. Often occurs with introductory participial phrases. The subject of the main clause must be the thing being modified by the introductory phrase.",
+      "ruleNumber": "5.176",
+      "category": "grammar",
+      "section": "5.176-5.180",
+      "examples": [
+        "Incorrect: Walking down the street, the trees were beautiful. (trees weren't walking)",
+        "Correct: Walking down the street, I saw beautiful trees.",
+        "Incorrect: After reading the book, it was clear that the author was talented.",
+        "Correct: After reading the book, I realized the author was talented.",
+        "Incorrect: To improve her writing, the workshop was attended. (workshop didn't improve)",
+        "Correct: To improve her writing, she attended the workshop."
+      ]
+    },
+    {
+      "id": "chicago-5.181",
+      "heading": "Misplaced Modifiers",
+      "summary": "Place modifiers as close as possible to the words they modify",
+      "content": "Modifiers should be positioned next to the word or phrase they describe. Misplaced modifiers create ambiguity or unintended humor. Adverbs like 'only,' 'just,' 'almost,' and 'nearly' are particularly prone to misplacement and should be placed immediately before the word they modify.",
+      "ruleNumber": "5.181",
+      "category": "grammar",
+      "section": "5.181-5.185",
+      "examples": [
+        "Unclear: She almost drove her kids to school every day. (almost drove? or almost every day?)",
+        "Clear: She drove her kids to school almost every day.",
+        "Incorrect: I only have eyes for you. (you only have eyes, nothing else?)",
+        "Correct: I have eyes only for you.",
+        "Unclear: The author signed books for fans with a smile.",
+        "Clear: With a smile, the author signed books for fans.",
+        "Unclear: He nearly spent $100. (he didn't spend it?)",
+        "Clear: He spent nearly $100."
+      ]
+    },
+    {
+      "id": "chicago-5.140",
+      "heading": "Active vs. Passive Voice",
+      "summary": "Prefer active voice for clarity and directness; use passive voice sparingly",
+      "content": "In active voice, the subject performs the action. In passive voice, the subject receives the action. Active voice is generally clearer, more direct, and more engaging. Use passive voice when the actor is unknown, unimportant, or when you want to emphasize the action's recipient.",
+      "ruleNumber": "5.140",
+      "category": "grammar",
+      "section": "5.140-5.145",
+      "examples": [
+        "Active (preferred): The committee approved the proposal.",
+        "Passive (weaker): The proposal was approved by the committee.",
+        "Active (preferred): She wrote the novel in six months.",
+        "Passive (weaker): The novel was written by her in six months.",
+        "Passive (appropriate): The suspect was arrested. (actor unknown or irrelevant)",
+        "Passive (appropriate): Mistakes were made. (deflecting responsibility, often criticized)"
+      ]
+    },
+    {
+      "id": "chicago-5.203",
+      "heading": "Sentence Fragments",
+      "summary": "Complete sentences require a subject and a predicate; fragments are acceptable in dialogue or for stylistic effect",
+      "content": "A complete sentence must have a subject (who or what) and a predicate (verb and its complements). Fragments lack one or both. While fragments are grammatically incorrect in formal writing, they are acceptable in dialogue, fiction for emphasis, or to mimic natural speech patterns. Use intentionally and sparingly.",
+      "ruleNumber": "5.203",
+      "category": "grammar",
+      "section": "5.203-5.208",
+      "examples": [
+        "Fragment: Because he was tired. (dependent clause, incomplete thought)",
+        "Complete: He went to bed because he was tired.",
+        "Intentional fragment (acceptable): Why did she leave? Because she was angry.",
+        "Intentional fragment (fiction): The door creaked open. Slowly. Deliberately.",
+        "Fragment: Running through the park. (no subject doing the action)",
+        "Complete: Running through the park, she felt free."
+      ]
+    },
+    {
+      "id": "chicago-5.209",
+      "heading": "Run-on Sentences and Comma Splices",
+      "summary": "Join independent clauses with proper punctuation; avoid comma splices",
+      "content": "A run-on sentence improperly joins two independent clauses without punctuation. A comma splice uses only a comma to join independent clauses. Fix by using: (1) a period and capital letter, (2) a semicolon, (3) a comma plus coordinating conjunction (and, but, or, nor, for, so, yet), or (4) a subordinating conjunction.",
+      "ruleNumber": "5.209",
+      "category": "grammar",
+      "section": "5.209-5.212",
+      "examples": [
+        "Run-on: She loves reading she reads every night. (no punctuation)",
+        "Comma splice: She loves reading, she reads every night. (comma alone insufficient)",
+        "Correct: She loves reading. She reads every night. (two sentences)",
+        "Correct: She loves reading; she reads every night. (semicolon)",
+        "Correct: She loves reading, so she reads every night. (comma + conjunction)",
+        "Correct: Because she loves reading, she reads every night. (subordination)"
+      ]
+    },
+    {
+      "id": "chicago-5.74",
+      "heading": "Subjunctive Mood",
+      "summary": "Use subjunctive mood for hypothetical, contrary-to-fact, or wished-for conditions",
+      "content": "The subjunctive mood expresses wishes, hypotheticals, demands, or suggestions. Common in 'if' clauses contrary to fact, after verbs like 'wish,' 'demand,' 'suggest,' and in formal 'that' clauses. The subjunctive form uses 'were' instead of 'was' and base verb forms without 's' in third person.",
+      "ruleNumber": "5.74",
+      "category": "grammar",
+      "section": "5.74-5.80",
+      "examples": [
+        "Correct: If I were rich, I would travel the world. (contrary to fact)",
+        "Incorrect: If I was rich, I would travel the world. (indicative, not subjunctive)",
+        "Correct: I wish he were here. (wish, subjunctive)",
+        "Correct: The professor demanded that he submit the paper on time. (demand, base form)",
+        "Incorrect: The professor demanded that he submits the paper on time.",
+        "Correct: It is essential that she be present. (base form 'be', not 'is')"
+      ]
+    },
+    {
+      "id": "chicago-5.21",
+      "heading": "Pronoun Case (Nominative vs. Objective)",
+      "summary": "Use nominative case for subjects, objective case for objects",
+      "content": "Nominative pronouns (I, he, she, we, they, who) function as subjects. Objective pronouns (me, him, her, us, them, whom) function as objects of verbs or prepositions. Common errors occur in compound subjects/objects and after 'than' or 'as' in comparisons.",
+      "ruleNumber": "5.21",
+      "category": "grammar",
+      "section": "5.21-5.30",
+      "examples": [
+        "Correct: She and I went to the store. (compound subject, nominative)",
+        "Incorrect: Her and me went to the store. (should be nominative)",
+        "Correct: The teacher called him and me. (compound object, objective)",
+        "Incorrect: The teacher called he and I. (should be objective)",
+        "Correct: He is taller than I [am]. (nominative after 'than' when subject)",
+        "Correct: Between you and me, this is difficult. (objective after preposition)",
+        "Incorrect: Between you and I, this is difficult. (should be 'me')"
+      ]
+    },
+    {
+      "id": "chicago-5.49",
+      "heading": "Vague Pronoun Reference",
+      "summary": "Pronouns must have clear, unambiguous antecedents",
+      "content": "Every pronoun should clearly refer to a specific noun. Avoid vague uses of 'it,' 'this,' 'that,' or 'which' that could refer to multiple nouns or entire clauses. When the reference is unclear, repeat the noun or rephrase the sentence.",
+      "ruleNumber": "5.49",
+      "category": "grammar",
+      "section": "5.49-5.56",
+      "examples": [
+        "Vague: John told Mark that he needed to leave. (who needs to leave?)",
+        "Clear: John told Mark, 'You need to leave.'",
+        "Vague: She put the vase on the table, and it broke. (which broke?)",
+        "Clear: She put the vase on the table, and the vase broke.",
+        "Vague: The author revised her manuscript, which took three months. (what took three months?)",
+        "Clear: The author revised her manuscript, a process that took three months.",
+        "Vague: They said on the news it would rain.",
+        "Clear: The weather forecast predicted rain."
+      ]
+    },
+    {
+      "id": "chicago-5.106",
+      "heading": "Irregular Verb Forms",
+      "summary": "Use correct forms for irregular past tense and past participle verbs",
+      "content": "Irregular verbs do not follow the standard '-ed' pattern for past tense and past participle. Common errors include using 'seen' instead of 'saw,' 'done' instead of 'did,' or 'went' instead of 'gone.' Consult a dictionary for irregular verb forms.",
+      "ruleNumber": "5.106",
+      "category": "grammar",
+      "section": "5.106-5.118",
+      "examples": [
+        "Correct: I saw the movie yesterday. (past tense)",
+        "Incorrect: I seen the movie yesterday. (should be 'saw')",
+        "Correct: I have seen the movie before. (past participle with 'have')",
+        "Correct: She did her homework. (past tense)",
+        "Incorrect: She done her homework. (should be 'did')",
+        "Correct: They have gone to the store. (past participle)",
+        "Incorrect: They have went to the store. (should be 'gone')"
+      ]
+    },
+    {
+      "id": "chicago-5.191",
+      "heading": "Split Infinitives",
+      "summary": "Avoid inserting adverbs between 'to' and the verb except for emphasis or clarity",
+      "content": "A split infinitive places an adverb between 'to' and the base verb (e.g., 'to boldly go'). While traditional grammar discouraged splitting infinitives, modern usage accepts them when they sound natural or when avoiding the split creates awkwardness. Prioritize clarity and readability.",
+      "ruleNumber": "5.191",
+      "category": "grammar",
+      "section": "5.191-5.195",
+      "examples": [
+        "Traditional: She decided to go quietly.",
+        "Split (acceptable): She decided to quietly go.",
+        "Famous split: 'to boldly go where no one has gone before' (Star Trek)",
+        "Awkward avoidance: She wanted to gradually improve her writing. (natural)",
+        "Awkward: She wanted gradually to improve her writing. (awkward)",
+        "Acceptable split: We need to really focus on this project. (emphasis)"
+      ]
+    },
+    {
+      "id": "chicago-5.220",
+      "heading": "Double Negatives",
+      "summary": "Avoid using two negative words in the same clause",
+      "content": "In standard English, double negatives create a positive meaning or are considered nonstandard. Use a single negative word to express negation. Exception: Litotes (deliberate double negative for understatement, e.g., 'not uncommon').",
+      "ruleNumber": "5.220",
+      "category": "grammar",
+      "section": "5.220-5.225",
+      "examples": [
+        "Incorrect (nonstandard): I don't have no money. (double negative)",
+        "Correct: I don't have any money. (or 'I have no money')",
+        "Incorrect: She can't hardly wait. ('hardly' is negative)",
+        "Correct: She can hardly wait. (or 'She can't wait')",
+        "Acceptable (litotes): This is not an uncommon occurrence. (deliberate understatement)",
+        "Incorrect: I didn't do nothing wrong.",
+        "Correct: I didn't do anything wrong."
+      ]
+    },
+    {
+      "id": "chicago-5.157",
+      "heading": "Who vs. Whom",
+      "summary": "Use 'who' for subjects, 'whom' for objects",
+      "content": "'Who' is the nominative case (subject); 'whom' is the objective case (object of a verb or preposition). To test: substitute 'he/she' (use 'who') or 'him/her' (use 'whom'). In informal writing, 'who' is increasingly accepted in objective positions, but formal writing maintains the distinction.",
+      "ruleNumber": "5.157",
+      "category": "grammar",
+      "section": "5.157-5.165",
+      "examples": [
+        "Correct: Who called? (subject - he/she called)",
+        "Correct: Whom did you call? (object - you called him/her)",
+        "Correct: To whom should I address this letter? (object of preposition)",
+        "Incorrect: To who should I address this letter?",
+        "Correct: She is the author who won the award. (subject of 'won')",
+        "Correct: She is the author whom we admire. (object of 'admire')",
+        "Test: We admire her. → 'whom' is correct"
+      ]
+    },
+    {
+      "id": "chicago-5.196",
+      "heading": "Prepositions at End of Sentences",
+      "summary": "Ending sentences with prepositions is acceptable when natural",
+      "content": "Traditional grammar discouraged ending sentences with prepositions, but modern usage accepts it when the alternative sounds stilted or pompous. Prioritize natural, clear writing over rigid adherence to the old rule. Rewrite only if the sentence is truly awkward.",
+      "ruleNumber": "5.196",
+      "category": "grammar",
+      "section": "5.196-5.200",
+      "examples": [
+        "Natural: What are you talking about?",
+        "Stilted: About what are you talking? (overly formal)",
+        "Natural: This is the book I was looking for.",
+        "Stilted: This is the book for which I was looking. (acceptable but formal)",
+        "Churchill's rebuke: 'This is the sort of English up with which I will not put.'",
+        "Natural: Where did you come from?",
+        "Awkward: From where did you come?"
+      ]
+    },
+    {
+      "id": "chicago-5.230",
+      "heading": "Collective Nouns - Singular or Plural Treatment",
+      "summary": "Treat collective nouns as singular when acting as a unit, plural when members act individually",
+      "content": "Collective nouns (team, committee, family, staff) can be singular or plural depending on whether the group acts as a single entity or as individuals. In American English, singular treatment is more common. Maintain consistency throughout the text once a choice is made.",
+      "ruleNumber": "5.230",
+      "category": "grammar",
+      "section": "5.230-5.235",
+      "examples": [
+        "Singular (unit): The team is winning the championship.",
+        "Plural (individuals): The team are arguing among themselves.",
+        "Singular: The committee has issued its report.",
+        "Plural: The committee have different opinions on the matter.",
+        "Singular: The family is moving to a new house.",
+        "Plural: The family are scattered across the country.",
+        "Consistency: The jury has reached its verdict. (not 'their verdict' after singular verb)"
+      ]
+    },
+    {
+      "id": "chicago-5.240",
+      "heading": "Noun-Pronoun Agreement with Indefinite Pronouns",
+      "summary": "Singular indefinite pronouns take singular verbs and pronouns",
+      "content": "Indefinite pronouns (everyone, someone, anyone, nobody, each, either, neither) are singular and require singular verbs and pronouns. Use singular 'they' for gender neutrality. Some indefinite pronouns (all, some, none, most) can be singular or plural depending on context.",
+      "ruleNumber": "5.240",
+      "category": "grammar",
+      "section": "5.240-5.248",
+      "examples": [
+        "Correct: Everyone has their own opinion. (singular 'they')",
+        "Correct: Each of the students has submitted their paper.",
+        "Incorrect: Everyone have their own opinion. (should be 'has')",
+        "Correct: Neither of them is ready. (singular verb)",
+        "Context-dependent: Some of the cake is missing. (singular - cake is uncountable)",
+        "Context-dependent: Some of the guests are arriving. (plural - guests are countable)",
+        "Correct: None of the evidence was conclusive. (singular when mass noun)"
+      ]
+    }
+  ]
+}

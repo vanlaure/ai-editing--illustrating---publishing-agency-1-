@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "ingest-references": "node ./node_modules/tsx/dist/cli.mjs src/scripts/ingestReferences.ts"
   },
   "dependencies": {
     "@google/genai": "^1.24.0",
@@ -14,7 +15,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "socket.io": "^4.8.1",
     "uuid": "^9.0.1",
+    "uws": "^200.0.0",
+    "ws": "^8.18.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

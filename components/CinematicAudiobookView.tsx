@@ -5,8 +5,12 @@ import {
   Soundscape,
   MusicCue,
   VoiceTalent,
-  AIVoiceModel
+  AIVoiceModel,
+  AudioProvider
 } from '../types';
+import SfxLibraryBrowser from './SfxLibraryBrowser';
+import { SoundEffect } from '../services/sfxLibrary';
+import { exportForAudacity, exportForResolve, exportWithProgress } from '../services/audioExport';
 
 interface CinematicAudiobookViewProps {
   projects: CinematicAudiobook[];
@@ -34,6 +38,10 @@ export default function CinematicAudiobookView({
   const [showVoiceAssignModal, setShowVoiceAssignModal] = useState(false);
   const [showSoundscapeModal, setShowSoundscapeModal] = useState(false);
   const [showMusicCueModal, setShowMusicCueModal] = useState(false);
+  const [showSfxBrowser, setShowSfxBrowser] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportResult, setExportResult] = useState<{ success: boolean; path?: string; error?: string } | null>(null);
   
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
@@ -42,7 +50,22 @@ export default function CinematicAudiobookView({
     characterName: '',
     voiceActorId: '',
     voiceSample: '',
-    sceneAppearances: []
+    sceneAppearances: [],
+    audioProvider: undefined,
+    voiceConfig: {
+      voiceId: '',
+      modelId: '',
+      style: '',
+      temperature: 1.0,
+      speed: 1.0
+    },
+    personalityPreset: {
+      name: 'natural',
+      pitch: 0,
+      speed: 1.0,
+      reverb: 0,
+      warmth: 0
+    }
   });
 
   // Soundscape State
@@ -78,7 +101,10 @@ export default function CinematicAudiobookView({
       characterName: newCharacterVoice.characterName,
       voiceActorId: newCharacterVoice.voiceActorId,
       voiceSample: newCharacterVoice.voiceSample || '',
-      sceneAppearances: newCharacterVoice.sceneAppearances || []
+      sceneAppearances: newCharacterVoice.sceneAppearances || [],
+      audioProvider: newCharacterVoice.audioProvider,
+      voiceConfig: newCharacterVoice.voiceConfig,
+      personalityPreset: newCharacterVoice.personalityPreset
     };
 
     onAddCharacterVoice(selectedProjectId, assignment);
@@ -86,7 +112,22 @@ export default function CinematicAudiobookView({
       characterName: '',
       voiceActorId: '',
       voiceSample: '',
-      sceneAppearances: []
+      sceneAppearances: [],
+      audioProvider: undefined,
+      voiceConfig: {
+        voiceId: '',
+        modelId: '',
+        style: '',
+        temperature: 1.0,
+        speed: 1.0
+      },
+      personalityPreset: {
+        name: 'natural',
+        pitch: 0,
+        speed: 1.0,
+        reverb: 0,
+        warmth: 0
+      }
     });
     setShowVoiceAssignModal(false);
   };
@@ -153,11 +194,93 @@ export default function CinematicAudiobookView({
     setShowMusicCueModal(false);
   };
 
+  const handleAddSfxToSoundscape = (sfx: SoundEffect) => {
+    if (!selectedProjectId) return;
+
+    const soundscape: Soundscape = {
+      id: `soundscape-${Date.now()}`,
+      name: sfx.name,
+      description: `${sfx.category} sound effect from ${sfx.source}`,
+      audioUrl: sfx.url,
+      sceneIds: [],
+      volume: 30,
+      fadeIn: 2,
+      fadeOut: 2
+    };
+
+    onAddSoundscape(selectedProjectId, soundscape);
+    setShowSfxBrowser(false);
+  };
+
   const handleToggleSpatialAudio = () => {
     if (!selectedProject) return;
     onUpdateProject(selectedProject.id, {
       spatialAudioEnabled: !selectedProject.spatialAudioEnabled
     });
+  };
+
+  const handleExportAudacity = async () => {
+    if (!selectedProject) return;
+    
+    setIsExporting(true);
+    setExportProgress(0);
+    setExportResult(null);
+    
+    try {
+      const result = await exportWithProgress(
+        selectedProject,
+        {
+          projectName: selectedProject.id,
+          outputDir: './exports',
+          sampleRate: 48000,
+          bitDepth: 24,
+          includeMetadata: true
+        },
+        'audacity',
+        (progress) => setExportProgress(progress)
+      );
+      
+      setExportResult(result);
+    } catch (error) {
+      setExportResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Export failed'
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportResolve = async () => {
+    if (!selectedProject) return;
+    
+    setIsExporting(true);
+    setExportProgress(0);
+    setExportResult(null);
+    
+    try {
+      const result = await exportWithProgress(
+        selectedProject,
+        {
+          projectName: selectedProject.id,
+          outputDir: './exports',
+          sampleRate: 48000,
+          bitDepth: 24,
+          includeMetadata: true
+        },
+        'resolve',
+        (progress) => setExportProgress(progress)
+      );
+      
+      setExportResult(result);
+    } catch (error) {
+      setExportResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Export failed'
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const getVoiceTalentName = (voiceActorId: string): string => {
@@ -195,12 +318,30 @@ export default function CinematicAudiobookView({
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h4 className="text-md font-semibold text-purple-400">
-                    {assignment.characterName}
-                  </h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-md font-semibold text-purple-400">
+                      {assignment.characterName}
+                    </h4>
+                    {assignment.audioProvider && (
+                      <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-300 rounded">
+                        {assignment.audioProvider}
+                      </span>
+                    )}
+                    {assignment.personalityPreset && assignment.personalityPreset.name !== 'natural' && (
+                      <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-300 rounded">
+                        {assignment.personalityPreset.name}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-400 mt-1">
                     Voice: {getVoiceTalentName(assignment.voiceActorId)}
                   </p>
+                  {assignment.voiceConfig && (assignment.voiceConfig.voiceId || assignment.voiceConfig.modelId) && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {assignment.voiceConfig.voiceId && `Voice ID: ${assignment.voiceConfig.voiceId}`}
+                      {assignment.voiceConfig.modelId && ` • Model: ${assignment.voiceConfig.modelId}`}
+                    </div>
+                  )}
                   {assignment.voiceSample && (
                     <div className="mt-3">
                       <audio controls className="w-full max-w-md">
@@ -237,8 +378,8 @@ export default function CinematicAudiobookView({
 
         {/* Voice Assignment Modal */}
         {showVoiceAssignModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 overflow-y-auto">
+            <div className="bg-gray-800 rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
               <h3 className="text-xl font-bold mb-4">Assign Character Voice</h3>
               
               <div className="space-y-4">
@@ -284,6 +425,191 @@ export default function CinematicAudiobookView({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Audio Provider
+                  </label>
+                  <select
+                    value={newCharacterVoice.audioProvider || ''}
+                    onChange={(e) => setNewCharacterVoice({ ...newCharacterVoice, audioProvider: (e.target.value || undefined) as AudioProvider | undefined })}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  >
+                    <option value="">Auto (from settings)</option>
+                    <option value="gemini">Gemini TTS</option>
+                    <option value="openai">OpenAI TTS</option>
+                    <option value="chatterbox">Chatterbox TTS (Local)</option>
+                    <option value="comfyui">ComfyUI (Music)</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                    <option value="azure">Azure TTS</option>
+                    <option value="aws">AWS Polly</option>
+                  </select>
+                </div>
+
+                {newCharacterVoice.audioProvider && (
+                  <div className="p-4 bg-gray-750 rounded border border-gray-600">
+                    <h4 className="text-sm font-medium mb-3">Voice Configuration</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Voice ID</label>
+                        <input
+                          type="text"
+                          value={newCharacterVoice.voiceConfig?.voiceId || ''}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            voiceConfig: { ...newCharacterVoice.voiceConfig!, voiceId: e.target.value }
+                          })}
+                          className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"
+                          placeholder="e.g., alloy, nova"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Model ID</label>
+                        <input
+                          type="text"
+                          value={newCharacterVoice.voiceConfig?.modelId || ''}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            voiceConfig: { ...newCharacterVoice.voiceConfig!, modelId: e.target.value }
+                          })}
+                          className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"
+                          placeholder="e.g., tts-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Style</label>
+                        <input
+                          type="text"
+                          value={newCharacterVoice.voiceConfig?.style || ''}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            voiceConfig: { ...newCharacterVoice.voiceConfig!, style: e.target.value }
+                          })}
+                          className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"
+                          placeholder="e.g., conversational"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Temperature: {newCharacterVoice.voiceConfig?.temperature ?? 1.0}</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={newCharacterVoice.voiceConfig?.temperature ?? 1.0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            voiceConfig: { ...newCharacterVoice.voiceConfig!, temperature: parseFloat(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-gray-400 mb-1">Speed: {newCharacterVoice.voiceConfig?.speed ?? 1.0}x</label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.1"
+                          value={newCharacterVoice.voiceConfig?.speed ?? 1.0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            voiceConfig: { ...newCharacterVoice.voiceConfig!, speed: parseFloat(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 bg-gray-750 rounded border border-gray-600">
+                  <h4 className="text-sm font-medium mb-3">Voice Personality (FFmpeg Effects)</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Preset</label>
+                      <select
+                        value={newCharacterVoice.personalityPreset?.name || 'natural'}
+                        onChange={(e) => setNewCharacterVoice({
+                          ...newCharacterVoice,
+                          personalityPreset: {
+                            ...newCharacterVoice.personalityPreset!,
+                            name: e.target.value
+                          }
+                        })}
+                        className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"
+                      >
+                        <option value="natural">Natural</option>
+                        <option value="deep">Deep Voice</option>
+                        <option value="bright">Bright & Cheerful</option>
+                        <option value="warm">Warm & Friendly</option>
+                        <option value="ethereal">Ethereal</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Pitch Shift: {newCharacterVoice.personalityPreset?.pitch ?? 0}</label>
+                        <input
+                          type="range"
+                          min="-12"
+                          max="12"
+                          step="1"
+                          value={newCharacterVoice.personalityPreset?.pitch ?? 0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            personalityPreset: { ...newCharacterVoice.personalityPreset!, pitch: parseInt(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Speed: {newCharacterVoice.personalityPreset?.speed ?? 1.0}x</label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.1"
+                          value={newCharacterVoice.personalityPreset?.speed ?? 1.0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            personalityPreset: { ...newCharacterVoice.personalityPreset!, speed: parseFloat(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Reverb: {newCharacterVoice.personalityPreset?.reverb ?? 0}%</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={newCharacterVoice.personalityPreset?.reverb ?? 0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            personalityPreset: { ...newCharacterVoice.personalityPreset!, reverb: parseInt(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Warmth: {newCharacterVoice.personalityPreset?.warmth ?? 0}%</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={newCharacterVoice.personalityPreset?.warmth ?? 0}
+                          onChange={(e) => setNewCharacterVoice({
+                            ...newCharacterVoice,
+                            personalityPreset: { ...newCharacterVoice.personalityPreset!, warmth: parseInt(e.target.value) }
+                          })}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Voice Sample URL (optional)
                   </label>
                   <input
@@ -302,8 +628,8 @@ export default function CinematicAudiobookView({
                   <input
                     type="text"
                     value={newCharacterVoice.sceneAppearances?.join(', ') || ''}
-                    onChange={(e) => setNewCharacterVoice({ 
-                      ...newCharacterVoice, 
+                    onChange={(e) => setNewCharacterVoice({
+                      ...newCharacterVoice,
                       sceneAppearances: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                     })}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
@@ -346,12 +672,20 @@ export default function CinematicAudiobookView({
               Ambient atmosphere layers: forest ambience, city noise, rain, wind, etc.
             </p>
           </div>
-          <button
-            onClick={() => setShowSoundscapeModal(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
-          >
-            + Add Soundscape
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSoundscapeModal(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              + Add Soundscape
+            </button>
+            <button
+              onClick={() => setShowSfxBrowser(true)}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              🔊 Browse SFX Library
+            </button>
+          </div>
         </div>
 
         {/* Soundscape Grid */}
@@ -581,6 +915,13 @@ export default function CinematicAudiobookView({
               </div>
             </div>
           </div>
+        )}
+  
+        {showSfxBrowser && (
+          <SfxLibraryBrowser
+            onAddToSoundscape={handleAddSfxToSoundscape}
+            onClose={() => setShowSfxBrowser(false)}
+          />
         )}
       </div>
     );
@@ -981,10 +1322,76 @@ export default function CinematicAudiobookView({
           )}
         </div>
 
-        {/* Export Final Mix Button */}
-        <button className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold text-lg transition-colors">
-          🎬 Export Final Cinematic Mix
-        </button>
+        {/* Export Section */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h4 className="text-md font-semibold text-gray-200 mb-4">Export Project</h4>
+          <p className="text-sm text-gray-400 mb-6">
+            Export your cinematic audiobook project to professional editing software for final mixing and mastering.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <button
+              onClick={handleExportAudacity}
+              disabled={isExporting}
+              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+            >
+              {isExporting ? '⏳ Exporting...' : '🎵 Export for Audacity (.aup3)'}
+            </button>
+            
+            <button
+              onClick={handleExportResolve}
+              disabled={isExporting}
+              className="px-6 py-4 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+            >
+              {isExporting ? '⏳ Exporting...' : '🎬 Export for DaVinci Resolve (.edl)'}
+            </button>
+          </div>
+
+          {isExporting && (
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-400 mb-2">
+                <span>Exporting project...</span>
+                <span>{Math.round(exportProgress)}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${exportProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {exportResult && (
+            <div className={`p-4 rounded-lg ${exportResult.success ? 'bg-green-900/20 border border-green-800' : 'bg-red-900/20 border border-red-800'}`}>
+              {exportResult.success ? (
+                <div>
+                  <p className="text-sm text-green-300 font-semibold">✓ Export successful!</p>
+                  {exportResult.path && (
+                    <p className="text-xs text-green-400 mt-1">Saved to: {exportResult.path}</p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-red-300 font-semibold">✗ Export failed</p>
+                  {exportResult.error && (
+                    <p className="text-xs text-red-400 mt-1">{exportResult.error}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 p-4 bg-gray-750 rounded border border-gray-600">
+            <h5 className="text-sm font-medium text-gray-300 mb-2">Export Details</h5>
+            <ul className="text-xs text-gray-400 space-y-1">
+              <li>• Sample Rate: 48 kHz (professional quality)</li>
+              <li>• Bit Depth: 24-bit (studio standard)</li>
+              <li>• Track Organization: Separate tracks for dialogue, soundscapes, music, and SFX</li>
+              <li>• Metadata: Project name, track names, volume levels, and timecode information</li>
+            </ul>
+          </div>
+        </div>
       </div>
     );
   };

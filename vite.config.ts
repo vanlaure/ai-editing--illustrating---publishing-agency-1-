@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        fs: {
+          deny: ['**/fastsdcpu/**']
+        },
         proxy: {
           '/api': {
             target: env.VITE_API_PROXY_TARGET || 'http://localhost:4000',
@@ -16,6 +19,9 @@ export default defineConfig(({ mode }) => {
         }
       },
       plugins: [react()],
+      optimizeDeps: {
+        exclude: ['fastsdcpu']
+      },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

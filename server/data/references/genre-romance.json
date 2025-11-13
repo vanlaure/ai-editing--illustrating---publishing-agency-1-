@@ -1,0 +1,262 @@
+{
+  "documentId": "genre-romance",
+  "title": "Romance Genre Writing Conventions",
+  "description": "Genre-specific writing conventions for romance fiction, covering emotional beats, dialogue, POV, and structural requirements",
+  "chunks": [
+    {
+      "id": "romance-hea",
+      "heading": "Happily Ever After (HEA) or Happy For Now (HFN) Requirement",
+      "summary": "Romance novels must end with HEA (permanent commitment) or HFN (couple together, commitment implied)",
+      "content": "The defining characteristic of romance is the emotionally satisfying and optimistic ending. A romance must have either an HEA (Happily Ever After - marriage, permanent commitment, explicit future together) or HFN (Happy For Now - couple together at the end, future commitment strongly implied). The relationship must be the central plot focus, and the ending must provide emotional closure and satisfaction for the reader.",
+      "ruleNumber": "R-1",
+      "category": "structure",
+      "section": "Core Requirements",
+      "examples": [
+        "HEA Example: 'Six months later, they stood at the altar, exchanging vows they'd written together.'",
+        "HFN Example: 'As they drove into the sunset, her hand in his, she knew this was just the beginning.'",
+        "Non-romance ending (avoid): 'They went their separate ways, forever changed by what they'd shared.' (bittersweet, not satisfying)",
+        "Required elements: Couple united, obstacles overcome, mutual love declared, future implied or stated",
+        "Subgenre variation: Contemporary HFN often acceptable; historical typically requires HEA",
+        "The journey to HEA/HFN must feel earned through character growth and obstacle resolution"
+      ]
+    },
+    {
+      "id": "romance-central-love-story",
+      "heading": "Romance as Central Plot",
+      "summary": "The developing romantic relationship must be the main plot, not a subplot",
+      "content": "In romance, the love story is the primary narrative arc. While subplots (career, family, mystery) enhance the story, the central focus is the romantic relationship's development. Remove the romance, and the plot collapses. Both characters' emotional journeys and relationship growth drive the narrative forward.",
+      "ruleNumber": "R-2",
+      "category": "structure",
+      "section": "Core Requirements",
+      "examples": [
+        "Correct focus: 'She couldn't concentrate on the merger while his words echoed in her mind: I love you.'",
+        "Romance as subplot (incorrect): 'She solved the murder case. Bonus: she fell in love with her partner.'",
+        "Balanced plot: External goal (save the ranch) tied to romance (working together creates intimacy)",
+        "Both POVs necessary: Show how each character processes their growing feelings",
+        "Page time: 60-70% of narrative should directly involve romantic relationship development",
+        "Emotional stakes: Reader must care whether couple ends up together above all other plot outcomes"
+      ]
+    },
+    {
+      "id": "romance-pov",
+      "heading": "Point of View Conventions",
+      "summary": "Romance typically uses dual POV (both protagonists); third person limited or first person; present or past tense",
+      "content": "Most modern romance uses dual POV, alternating between both romantic leads to show their internal thoughts and feelings. Third person limited is most common, though first person is popular in contemporary. Each POV character's voice should be distinct. Avoid head-hopping within scenes. Historical and inspirational romance sometimes use single POV (heroine only).",
+      "ruleNumber": "R-3",
+      "category": "pov",
+      "section": "Technical Conventions",
+      "examples": [
+        "Dual POV setup: 'Chapter 1 - Emma's POV. Chapter 2 - Liam's POV.' (alternating chapters or scenes)",
+        "Third limited: 'She watched him cross the room, heart racing. Did he feel it too?'",
+        "First person: 'I couldn't stop staring at the way his hands moved. Get it together, Maya.'",
+        "Distinct voices: Hero POV might be more reserved, heroine more emotionally aware (avoid stereotypes)",
+        "Avoid: 'She felt nervous. He thought she looked beautiful.' (head-hopping in same paragraph)",
+        "Exception: Single POV works in category romance, inspirational, or historical sub-genres"
+      ]
+    },
+    {
+      "id": "romance-emotional-interiority",
+      "heading": "Emotional Interiority and Internal Monologue",
+      "summary": "Romance requires deep POV showing characters' emotions, thoughts, fears, and desires",
+      "content": "Readers must experience characters' emotional journeys intimately. Use internal monologue, visceral reactions, and deep POV to show vulnerability, longing, fear of intimacy, and growing love. Don't just tell emotions—show physical sensations, racing thoughts, and emotional conflict. The internal stakes (fear of heartbreak, trust issues) often drive the external plot.",
+      "ruleNumber": "R-4",
+      "category": "emotion",
+      "section": "Emotional Writing",
+      "examples": [
+        "Deep POV: 'Her pulse jumped. This is dangerous. He's dangerous—to her carefully constructed walls.'",
+        "Physical sensation: 'His voice sent shivers down her spine. She fought the urge to lean closer.'",
+        "Internal conflict: 'I should walk away. Every logical part of me knows it. So why won't my feet move?'",
+        "Vulnerability: 'No one had ever looked at her like that—like she mattered more than anything.'",
+        "Avoid distant telling: 'She felt attracted to him.' (too clinical, not emotional)",
+        "Show thought process: 'He'd promised himself no complications. She was nothing but complications. And somehow, that made her irresistible.'"
+      ]
+    },
+    {
+      "id": "romance-dialogue-subtext",
+      "heading": "Dialogue with Romantic Subtext",
+      "summary": "Romance dialogue carries emotional weight; subtext and tension matter more than explicit declarations",
+      "content": "Dialogue in romance should crackle with tension, humor, longing, or conflict. What's unsaid often matters more than what's spoken. Characters deflect, use banter, reveal vulnerability through slips, or say the opposite of what they feel. Avoid on-the-nose emotional declarations until earned moments. Let dialogue reveal character attraction through chemistry and subtext.",
+      "ruleNumber": "R-5",
+      "category": "dialogue",
+      "section": "Technical Conventions",
+      "examples": [
+        "Subtext: 'You should go.' Her voice broke. 'Yeah,' he said, not moving. (neither wants him to leave)",
+        "Banter: 'You're insufferable.' 'And yet, you're still here.' 'Biggest mistake of my life.' 'Second biggest.' (flirting disguised as arguing)",
+        "Vulnerability slip: 'I don't need rescuing.' 'What if I need to be the one who—' He stopped. (reveals his feelings)",
+        "Avoid: 'I am experiencing romantic feelings toward you.' (too clinical)",
+        "Sexual tension: 'Cold?' he asked, stepping closer. 'No,' she lied, trembling. (proximity creates tension)",
+        "Emotional reveal: 'Don't.' Her whisper was barely audible. 'Don't what?' 'Don't make me hope.'"
+      ]
+    },
+    {
+      "id": "romance-emotional-beats",
+      "heading": "Key Emotional Beats and Story Structure",
+      "summary": "Romance follows specific emotional beats: meet-cute, conflict, black moment, grand gesture, resolution",
+      "content": "Romance structure includes predictable emotional beats readers expect: (1) Meet-cute or initial attraction, (2) Growing connection despite obstacles, (3) Intimacy/vulnerability, (4) Black moment (breakup or crisis), (5) Grand gesture or realization, (6) HEA/HFN. These beats create emotional satisfaction. The black moment must feel devastating but earn the eventual reunion.",
+      "ruleNumber": "R-6",
+      "category": "structure",
+      "section": "Story Architecture",
+      "examples": [
+        "Meet-cute: 'She crashed into him, coffee exploding everywhere. Great. First day, and she'd assaulted her new boss.'",
+        "First kiss moment: Should occur 30-50% through story, raising emotional stakes",
+        "Black moment (75-85%): 'I can't do this. I can't be what you need.' (believable separation)",
+        "Grand gesture: 'He showed up at her door, rain-soaked. I was wrong. I was terrified. But losing you terrifies me more.'",
+        "Avoid rushed reunion: Characters must grow/change to overcome the black moment obstacle",
+        "Epilogue (optional): Flash-forward showing HEA (wedding, baby, anniversary) for extra emotional satisfaction"
+      ]
+    },
+    {
+      "id": "romance-tension-pacing",
+      "heading": "Sexual and Emotional Tension Pacing",
+      "summary": "Build tension through delayed gratification; balance emotional intimacy with physical awareness",
+      "content": "Tension is the lifeblood of romance. Build anticipation through near-misses, lingering glances, accidental touches, and internal awareness of attraction. The first kiss should feel earned and significant. Physical intimacy (level depends on heat rating) should parallel emotional intimacy. Avoid rushing—readers savor the journey to confession and consummation.",
+      "ruleNumber": "R-7",
+      "category": "tension",
+      "section": "Pacing & Tension",
+      "examples": [
+        "Building tension: 'His hand brushed hers. Accidental? She didn't pull away.'",
+        "Near-miss: 'He leaned in. The door burst open. Moment shattered. She released a breath—relief or disappointment?'",
+        "Physical awareness: 'She couldn't stop noticing the way his shirt pulled across his shoulders.'",
+        "Emotional-physical parallel: 'She'd shared her secret. Now, in the quiet aftermath, his arms around her felt inevitable.'",
+        "Heat levels: Closed door (fade to black), sensual (some detail), steamy (explicit)",
+        "Avoid: Physical intimacy before emotional connection feels hollow (unless intentional character arc)"
+      ]
+    },
+    {
+      "id": "romance-conflict-obstacles",
+      "heading": "Believable Conflict and Obstacles",
+      "summary": "Conflict must be compelling and not easily resolved by conversation; internal and external obstacles both matter",
+      "content": "Romance conflict includes external obstacles (family disapproval, distance, career demands) and internal wounds (fear of commitment, trust issues, past trauma). The best romance blends both. Avoid 'Big Misunderstanding' plots solvable by one honest conversation. Conflicts should challenge characters' emotional growth and make the relationship feel hard-won.",
+      "ruleNumber": "R-8",
+      "category": "conflict",
+      "section": "Story Architecture",
+      "examples": [
+        "External conflict: 'He's being transferred across the country. Two weeks to decide: her career or their future.'",
+        "Internal wound: 'After her ex's betrayal, trusting someone new feels impossible—even him.'",
+        "Layered conflict: External (competing for same promotion) + Internal (she fears being vulnerable)",
+        "Avoid: 'They love each other but won't talk about it.' (frustrating, not compelling)",
+        "Good conflict: 'He needs to sell the ranch to save his company. It's her childhood home. Both positions are valid.'",
+        "Resolution: Conflict must be resolved through character growth, compromise, or creative solutions"
+      ]
+    },
+    {
+      "id": "romance-character-agency",
+      "heading": "Character Agency and Mutual Choice",
+      "summary": "Both characters must actively choose the relationship; avoid passive heroines or domineering heroes",
+      "content": "Modern romance emphasizes equality and mutual choice. Both characters pursue the relationship (even if hesitantly). Heroines demonstrate agency, making decisions about their lives and relationships. Heroes respect boundaries and communicate. Avoid old tropes: doormat heroines, controlling heroes, or relationships where one character lacks power or voice.",
+      "ruleNumber": "R-9",
+      "category": "character",
+      "section": "Modern Romance Expectations",
+      "examples": [
+        "Mutual pursuit: 'She kissed him first. Bold. Terrifying. Worth it.'",
+        "Heroine agency: 'I'm choosing this. Choosing you. But on my terms.'",
+        "Hero respects boundaries: 'Tell me to stop, and I will. No questions.' (consent is sexy)",
+        "Avoid: 'He made all the decisions. She simply followed.' (dated, disempowering)",
+        "Equal partnership: Both characters sacrifice, compromise, and grow for the relationship",
+        "Modern expectation: Healthy communication, respect, emotional intelligence from both leads"
+      ]
+    },
+    {
+      "id": "romance-chemistry-attraction",
+      "heading": "Showing Chemistry and Attraction",
+      "summary": "Chemistry must be shown through action, dialogue, and physical awareness—not just stated",
+      "content": "Readers must feel the spark between characters. Show chemistry through charged dialogue, magnetic pull, physical awareness (noticing details about each other), and inability to stay away despite trying. Use visceral language for attraction—racing hearts, breathlessness, electric touches. Chemistry should be present from early scenes, even if characters initially dislike each other.",
+      "ruleNumber": "R-10",
+      "category": "attraction",
+      "section": "Emotional Writing",
+      "examples": [
+        "Physical awareness: 'She tracked his movements across the room like a magnet to north.'",
+        "Visceral reaction: 'His laugh sent warmth pooling in her stomach. Dangerous.'",
+        "Charged moment: 'The elevator door closed. Suddenly the space felt too small. Too intimate. Too him.'",
+        "Banter chemistry: Their arguments crackled with energy. Everyone else in the room faded away.",
+        "Avoid: 'They had great chemistry.' (telling, not showing)",
+        "Enemies-to-lovers: Initial animosity should mask underlying attraction, revealed through obsessive thoughts"
+      ]
+    },
+    {
+      "id": "romance-heat-levels",
+      "heading": "Heat Level Conventions",
+      "summary": "Romance heat ranges from sweet (no sex) to erotic (explicit); must match reader expectations for subgenre",
+      "content": "Heat levels indicate explicit sexual content: Sweet (kisses only), Sensual (closed door, implied), Steamy (explicit but romantic focus), Erotic (very explicit, graphic). The heat level must match genre expectations and market positioning. Regardless of heat level, emotional connection matters most. Even sweet romance needs sexual tension; erotic romance still requires emotional intimacy.",
+      "ruleNumber": "R-11",
+      "category": "content",
+      "section": "Heat Levels",
+      "examples": [
+        "Sweet: 'His lips met hers, tender and questioning. The world fell away.'",
+        "Sensual: 'He carried her to the bedroom. [Scene break] She woke in his arms, content.'",
+        "Steamy: 'His hands traced her curves, learning her. She arched into his touch, breathless.'",
+        "Market expectations: Inspirational = sweet; Contemporary = sensual to steamy; Erotic = very explicit",
+        "Emotional focus: Even in explicit scenes, emphasize emotional connection, not just physical acts",
+        "Consent required: All heat levels must show clear, enthusiastic consent"
+      ]
+    },
+    {
+      "id": "romance-trope-awareness",
+      "heading": "Popular Tropes and Fresh Execution",
+      "summary": "Romance readers love tropes (enemies-to-lovers, fake dating, etc.) but expect fresh execution",
+      "content": "Romance thrives on beloved tropes: enemies-to-lovers, second chance, fake relationship, forced proximity, grumpy/sunshine, friends-to-lovers. Readers actively seek these tropes but expect unique twists, fresh settings, or diverse characters. Don't subvert tropes readers love—deliver them with your unique voice and creative execution.",
+      "ruleNumber": "R-12",
+      "category": "craft",
+      "section": "Genre Conventions",
+      "examples": [
+        "Enemies-to-lovers: 'I hate you.' 'No, you don't.' Her silence was answer enough.",
+        "Fake dating: 'Be my girlfriend. Just for the wedding. What could go wrong?' (everything)",
+        "Forced proximity: Snowed in, single bed, or stuck on desert island—close quarters accelerate attraction",
+        "Second chance: 'Ten years ago, I let you go. Biggest mistake of my life.'",
+        "Fresh twist: Classic trope + unique setting (e.g., enemies-to-lovers in competitive baking show)",
+        "Multiple tropes: Combine 2-3 tropes for richer story (fake dating + enemies + forced proximity)"
+      ]
+    },
+    {
+      "id": "romance-consent-respect",
+      "heading": "Explicit Consent and Respect",
+      "summary": "Modern romance requires clear consent, healthy boundaries, and respectful relationships",
+      "content": "Contemporary romance standards mandate enthusiastic consent, respect for boundaries, and healthy relationship dynamics. Characters check in during intimate moments, respect 'no,' and communicate wants/needs. Stalking, coercion, or ignoring boundaries are no longer romantic. Red flags in hero behavior (possessiveness, jealousy, control) must be addressed and resolved, not romanticized.",
+      "ruleNumber": "R-13",
+      "category": "modern-standards",
+      "section": "Modern Romance Expectations",
+      "examples": [
+        "Consent check-in: 'Is this okay?' he whispered against her lips. 'Yes,' she breathed. 'More than okay.'",
+        "Respecting 'no': 'I need space.' He stepped back immediately. 'Of course. I'm here when you're ready.'",
+        "Healthy jealousy: Brief insecurity that's communicated and resolved, not controlling behavior",
+        "Avoid: 'He grabbed her arm, ignoring her protests, and kissed her.' (coercive, not romantic)",
+        "Addressing red flags: If hero acts possessive, heroine must call it out and he must grow/change",
+        "Modern expectation: Emotional intelligence, therapy references, characters working on themselves"
+      ]
+    },
+    {
+      "id": "romance-diverse-characters",
+      "heading": "Diversity and Representation",
+      "summary": "Modern romance embraces diverse characters, relationships, and experiences; avoid stereotypes",
+      "content": "Contemporary romance includes characters of all races, abilities, body types, sexualities, and gender identities. LGBTQ+ romance is a major market segment. When writing outside your identity, research thoroughly and consider sensitivity readers. Avoid stereotypes, tokenism, or trauma porn. Diverse characters deserve joy, HEAs, and full character development—not just representation boxes.",
+      "ruleNumber": "R-14",
+      "category": "diversity",
+      "section": "Modern Romance Expectations",
+      "examples": [
+        "Authentic representation: Character's identity is integral to who they are, not their only trait",
+        "LGBTQ+ romance: Same emotional beats, tension, and HEA as heterosexual romance",
+        "Disability rep: Avoid 'magical cure' narratives; disabled characters deserve romance without fixing",
+        "Body diversity: Romance for all body types; avoid fatphobia or body-shaming",
+        "Cultural authenticity: Research cultural nuances, language, traditions if writing outside your culture",
+        "Avoid: Token diverse character who exists to validate white/straight protagonist"
+      ]
+    },
+    {
+      "id": "romance-sensory-details",
+      "heading": "Sensory and Evocative Description",
+      "summary": "Romance uses rich sensory details to immerse readers in emotional and physical experiences",
+      "content": "Romance relies on evocative, sensory-rich prose to create emotional and physical intimacy. Use all five senses—the scent of his cologne, the rough texture of his voice, the taste of her lips, the warmth of skin, the sound of breathing. Metaphors and similes should enhance emotional resonance. Avoid purple prose, but don't shy from lyrical, emotional language.",
+      "ruleNumber": "R-15",
+      "category": "prose",
+      "section": "Technical Conventions",
+      "examples": [
+        "Scent: 'His cologne—cedar and something darker—made her dizzy with want.'",
+        "Touch: 'His thumb traced her jawline, callused and gentle, a contradiction like the man himself.'",
+        "Sound: 'His voice dropped an octave. Her name had never sounded like that—like a prayer, a plea.'",
+        "Taste: 'She tasted like summer—strawberries and sunshine and reckless hope.'",
+        "Emotional metaphor: 'Her heart was a wild thing, trapped and beating against the cage of her ribs.'",
+        "Avoid purple prose: 'Her orbs glistened with crystalline tears.' (overwrought, not evocative)"
+      ]
+    }
+  ]
+}

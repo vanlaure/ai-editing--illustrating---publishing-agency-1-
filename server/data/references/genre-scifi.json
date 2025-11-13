@@ -1,0 +1,322 @@
+{
+  "metadata": {
+    "title": "Science Fiction Genre Writing Conventions",
+    "description": "Established conventions for science fiction writing, including worldbuilding, technical accuracy, and speculative concept integration",
+    "version": "1.0",
+    "last_updated": "2025-01-13"
+  },
+  "chunks": [
+    {
+      "id": "scifi-worldbuilding-integration",
+      "heading": "Seamless Worldbuilding Integration",
+      "summary": "Science fiction worldbuilding should be revealed through story action and character perspective, not exposition dumps.",
+      "content": "Integrate worldbuilding naturally through character actions, dialogue, and sensory details rather than stopping the story to explain. Show technology in use rather than describing it. Reveal cultural differences through character interactions and conflicts. Use viewpoint character's familiarity with their world to avoid explaining obvious (to them) details. The 'iceberg principle'—show 10% of your worldbuilding, imply the other 90% exists beneath.",
+      "ruleNumber": "scifi-worldbuilding-integration",
+      "category": "worldbuilding",
+      "section": "craft",
+      "examples": [
+        "✓ GOOD: 'She pressed her palm to the scanner, annoyed when it took three tries to recognize her through the radiation burns.' (Tech shown in use + character detail)",
+        "✗ AVOID: 'The palm scanner worked by reading biometric data through a quantum resonance field invented fifty years ago by Dr. Chen...' (Exposition dump)",
+        "✓ GOOD: 'The Martian delegation arrived late, as always. Venus Standard Time meant nothing to them.' (Cultural detail through character observation)",
+        "✗ AVOID: 'Mars had different time zones than Venus, which had been established in the Colonial Accords of 2247...' (Info-dumping)",
+        "✓ GOOD: Character casually uses unfamiliar tech without explaining it, reader infers function from context.",
+        "✗ AVOID: Character explains to another character things both would already know: 'As you know, our FTL drives work by...'",
+        "✓ GOOD: 'The air tasted wrong—too much oxygen, Earth-heavy. She'd been off-planet too long.' (Worldbuilding through sensation)",
+        "✗ AVOID: Paragraphs explaining planetary atmospheric composition before story begins."
+      ]
+    },
+    {
+      "id": "scifi-hard-vs-soft",
+      "heading": "Hard vs. Soft Science Fiction Conventions",
+      "summary": "Hard SF requires scientific plausibility and technical accuracy; soft SF prioritizes social/philosophical speculation over rigorous science.",
+      "content": "Hard science fiction emphasizes scientific accuracy, plausible technology based on current understanding, technical detail, and extrapolation from real science. Soft science fiction focuses on social sciences, character psychology, philosophical implications, and speculative 'what if' scenarios with less concern for technical rigor. Both are valid—consistency with chosen approach is key.",
+      "ruleNumber": "scifi-hard-vs-soft",
+      "category": "subgenre",
+      "section": "conventions",
+      "examples": [
+        "✓ HARD SF: FTL travel explained through theoretical physics (Alcubierre drive), with realistic limitations and energy requirements.",
+        "✓ SOFT SF: FTL travel exists as plot device; focus is on cultural contact and philosophical implications.",
+        "✗ AVOID: Claiming to be hard SF while violating basic physics without explanation.",
+        "✓ HARD SF: Detailed orbital mechanics, delta-v calculations, realistic space travel constraints.",
+        "✓ SOFT SF: Space travel abstracted; focus on alien cultures and social dynamics.",
+        "✗ AVOID: Mixing approaches inconsistently—treating some tech realistically while others magically.",
+        "✓ HARD SF: Extensive research into biology, chemistry, engineering to make speculation plausible.",
+        "✓ SOFT SF: Speculative social structures, gender dynamics, consciousness studies take priority.",
+        "✗ AVOID: Claiming scientific rigor while including impossible technology without addressing contradictions."
+      ]
+    },
+    {
+      "id": "scifi-terminology-consistency",
+      "heading": "Technical Terminology Consistency",
+      "summary": "Maintain consistent terminology, naming conventions, and technical vocabulary throughout the manuscript.",
+      "content": "Establish clear, consistent names for technology, alien species, planets, and scientific concepts. Create a glossary or style guide during drafting. Don't use multiple terms for the same technology. Maintain consistent capitalization and hyphenation. Technical jargon should be introduced once with context, then used naturally. Avoid excessive acronyms unless realistic for the setting.",
+      "ruleNumber": "scifi-terminology-consistency",
+      "category": "consistency",
+      "section": "terminology",
+      "examples": [
+        "✓ GOOD: Establish 'neural link' in Chapter 1, use consistently throughout (not switching to 'brain interface' or 'mental connection').",
+        "✗ AVOID: Chapter 1: 'neural link', Chapter 5: 'neurolink', Chapter 10: 'brain connector' for same technology.",
+        "✓ GOOD: Alien species 'Zentari' (capitalized consistently), never 'zentari' or 'Zentarii' or 'Zentarians'.",
+        "✗ AVOID: Inconsistent capitalization or spelling variations for same species/planet/tech.",
+        "✓ GOOD: Technology names follow consistent pattern: 'gravitic drive', 'gravitic compensator', 'gravitic field'.",
+        "✗ AVOID: 'Gravitic drive' but 'anti-gravity compensator' and 'grav-field' (inconsistent naming pattern).",
+        "✓ GOOD: Acronym introduced: 'Faster-Than-Light (FTL)' then use FTL consistently.",
+        "✗ AVOID: Using undefined acronyms or switching between full term and acronym randomly."
+      ]
+    },
+    {
+      "id": "scifi-sense-of-wonder",
+      "heading": "Cultivating Sense of Wonder",
+      "summary": "Science fiction should evoke awe, curiosity, and imagination through big ideas and novel concepts.",
+      "content": "Create moments of revelation and discovery. Show characters encountering genuinely alien or novel concepts. Use vivid description for strange phenomena. Balance the familiar with the utterly foreign. Allow characters (and readers) to experience wonder at the universe's complexity. Big ideas should inspire awe, not just serve plot. The 'sensawunda' effect distinguishes great SF.",
+      "ruleNumber": "scifi-sense-of-wonder",
+      "category": "tone",
+      "section": "atmosphere",
+      "examples": [
+        "✓ GOOD: 'The nebula stretched across half the sky, stellar nurseries birthing suns that would outlive humanity's entire history.' (Scale creates wonder)",
+        "✗ AVOID: Treating extraordinary phenomena as mundane: 'Another nebula. Whatever.' (Loses wonder)",
+        "✓ GOOD: First contact moment treated with appropriate weight and strangeness.",
+        "✗ AVOID: Aliens described as 'like humans but with blue skin' (not genuinely alien).",
+        "✓ GOOD: 'Time didn't flow here. Past and future existed simultaneously, causality a suggestion rather than law.' (Mind-expanding concept)",
+        "✗ AVOID: Treating time travel as casually as taking a bus, no sense of profound implications.",
+        "✓ GOOD: Technology or discovery that changes everything about how characters understand reality.",
+        "✗ AVOID: New technology that's just a shinier version of existing tech with no paradigm shift.",
+        "✓ GOOD: Character pauses to truly absorb the implications of what they're experiencing.",
+        "✗ AVOID: Rushing past potentially awe-inspiring moments for plot convenience."
+      ]
+    },
+    {
+      "id": "scifi-scientific-plausibility",
+      "heading": "Scientific Plausibility and Extrapolation",
+      "summary": "Ground speculative technology and concepts in plausible extrapolation from current scientific understanding.",
+      "content": "Research current science in relevant fields. When extrapolating, follow logical extensions of known principles. If violating known physics, acknowledge it explicitly (e.g., FTL requires breaking Einstein—own it). Show how technology would realistically impact society, not just cool factor. Consider unintended consequences. Plausibility creates immersion even in far-future settings.",
+      "ruleNumber": "scifi-scientific-plausibility",
+      "category": "research",
+      "section": "accuracy",
+      "examples": [
+        "✓ GOOD: AI development extrapolated from current machine learning, neural networks, with realistic limitations and dangers.",
+        "✗ AVOID: Instant sentient AI with no explanation of how it emerged or why it has human-like consciousness.",
+        "✓ GOOD: Genetic engineering shown with unintended consequences, ethical dilemmas, technical limitations.",
+        "✗ AVOID: Genetic engineering as magic that does exactly what's needed with no complications.",
+        "✓ GOOD: Space travel includes realistic problems: radiation, life support, psychological effects of isolation, resource constraints.",
+        "✗ AVOID: Space travel as airplane flight in vacuum with no real challenges.",
+        "✓ GOOD: FTL drive violates relativity but story acknowledges this, explains it with consistent internal logic.",
+        "✗ AVOID: Casual FTL with no explanation while treating other physics realistically (inconsistent rigor).",
+        "✓ GOOD: New technology disrupts economy, politics, social structure—shows cascading effects.",
+        "✗ AVOID: Revolutionary technology invented but society remains unchanged."
+      ]
+    },
+    {
+      "id": "scifi-info-dump-avoidance",
+      "heading": "Avoiding Information Dumps",
+      "summary": "Parcel out worldbuilding information gradually through action, dialogue, and necessity rather than exposition blocks.",
+      "content": "The 'As you know, Bob' trap—characters explaining to each other what both already know. Instead: reveal information when characters need it, through conflict or problem-solving. Use dramatic questions to make readers want the information. Show rather than tell. Break up necessary exposition into digestible pieces. Make exposition serve multiple purposes (character development + worldbuilding).",
+      "ruleNumber": "scifi-info-dump-avoidance",
+      "category": "craft",
+      "section": "exposition",
+      "examples": [
+        "✓ GOOD: Character struggles with malfunctioning equipment, reveals how it works through troubleshooting process.",
+        "✗ AVOID: 'As you know, Sarah, our quantum drives work by...' (Character telling another character what both know)",
+        "✓ GOOD: Tutorial scene where character genuinely teaches novice—information delivery is natural to situation.",
+        "✗ AVOID: Expert explaining basics to another expert for reader's benefit.",
+        "✓ GOOD: Historical information revealed through character researching mystery, discovering relevant past events as needed.",
+        "✗ AVOID: Paragraph of backstory inserted that neither advances plot nor reveals character.",
+        "✓ GOOD: Worldbuilding details emerge through sensory experience and character reactions.",
+        "✗ AVOID: 'The colony had been founded in 2247 by...' followed by paragraph of history lecture.",
+        "✓ GOOD: Dialogue reveals information while also showing character relationship, conflict, or personality.",
+        "✗ AVOID: Dialogue that exists only to convey information, sounds unnatural."
+      ]
+    },
+    {
+      "id": "scifi-alien-cultures",
+      "heading": "Genuinely Alien Cultures and Biology",
+      "summary": "Create aliens that are truly different from humans in biology, psychology, culture, and values—not humans in rubber suits.",
+      "content": "Alien species should have psychology shaped by their biology and evolution. Different sensory apparatuses affect perception and culture. Avoid human-centric assumptions about morality, family structures, communication. Make aliens challenging to understand and relate to, not just exotic humans. Different evolutionary pressures create genuinely different minds.",
+      "ruleNumber": "scifi-alien-cultures",
+      "category": "worldbuilding",
+      "section": "aliens",
+      "examples": [
+        "✓ GOOD: Species evolved from hive insects—no concept of individual identity, communal decision-making literally incomprehensible to humans.",
+        "✗ AVOID: Aliens with human family structures, emotions, and values just because they're convenient to write.",
+        "✓ GOOD: Aliens perceive electromagnetic spectrum—their 'language' includes frequencies humans can't hear, colors we can't see.",
+        "✗ AVOID: All aliens conveniently speak English or have universal translator solving all communication challenges.",
+        "✓ GOOD: Aquatic species with no fire—their technology developed completely differently, metal-working replaced by bio-engineering.",
+        "✗ AVOID: Aliens developed identical technology to humans despite different biology and environment.",
+        "✓ GOOD: Species with different concept of time/causality/consciousness that creates genuine communication barriers.",
+        "✗ AVOID: Aliens who are just cultural stereotypes from Earth transplanted to space.",
+        "✓ GOOD: Alien morality based on their evolutionary needs—predator species vs. prey species have fundamentally different ethics.",
+        "✗ AVOID: Aliens adopt human moral framework with no explanation of why their evolution would produce same values."
+      ]
+    },
+    {
+      "id": "scifi-time-consistency",
+      "heading": "Temporal and Historical Consistency",
+      "summary": "Maintain consistent timelines, technological progression, and cause-effect relationships across the narrative.",
+      "content": "Track dates, ages, technological development timelines carefully. Ensure historical events referenced align chronologically. Technology should advance logically—later developments build on earlier ones. If using time travel, maintain consistent rules about causality and paradoxes. Keep timeline documents during drafting to avoid contradictions.",
+      "ruleNumber": "scifi-time-consistency",
+      "category": "consistency",
+      "section": "continuity",
+      "examples": [
+        "✓ GOOD: Timeline document tracks when each technology was invented, ensuring references across chapters align.",
+        "✗ AVOID: Chapter 3: FTL invented 2157; Chapter 15: character references FTL in 2145 (contradiction).",
+        "✓ GOOD: Character ages, birth dates, and historical references all mathematically consistent.",
+        "✗ AVOID: Character said to be 30 in one chapter, 35 in another set same year.",
+        "✓ GOOD: Technology progression shows logical development: basic AI → learning AI → sentient AI over decades.",
+        "✗ AVOID: Advanced AI appears suddenly with no developmental history or intermediate stages.",
+        "✓ GOOD: Time travel rules established and followed consistently throughout narrative.",
+        "✗ AVOID: Time travel rules change based on plot convenience—sometimes paradoxes matter, sometimes not.",
+        "✓ GOOD: Historical events mentioned maintain consistent details across all references.",
+        "✗ AVOID: 'The Mars Rebellion' described differently in different chapters (date changes, outcome changes)."
+      ]
+    },
+    {
+      "id": "scifi-social-implications",
+      "heading": "Technology's Social and Ethical Implications",
+      "summary": "Explore how technological changes would realistically impact society, ethics, politics, economy, and human relationships.",
+      "content": "New technology disrupts existing power structures. Consider economic implications—who benefits, who loses. Explore ethical dilemmas created by capabilities. Show how technology changes human relationships and social organization. Avoid technological determinism (tech solves everything) or Luddite pessimism (tech ruins everything)—nuanced examination is most realistic.",
+      "ruleNumber": "scifi-social-implications",
+      "category": "worldbuilding",
+      "section": "society",
+      "examples": [
+        "✓ GOOD: Life extension technology creates generational wealth concentration, political stagnation, resistance from younger generations.",
+        "✗ AVOID: Life extension exists but society functions identically to current day.",
+        "✓ GOOD: Mind-reading technology explored through privacy concerns, legal implications, psychological trauma, consent issues.",
+        "✗ AVOID: Mind-reading exists as cool plot device with no one addressing obvious ethical problems.",
+        "✓ GOOD: Automation creates unemployment crisis, economic restructuring, social unrest—characters navigate these changes.",
+        "✗ AVOID: Advanced automation exists but everyone still has traditional jobs as if nothing changed.",
+        "✓ GOOD: FTL communication changes diplomacy, warfare, trade—shown through political and economic shifts.",
+        "✗ AVOID: Revolutionary communication tech but society organized as if still limited to light-speed.",
+        "✓ GOOD: Genetic enhancement creates class divisions, discrimination, new forms of inequality.",
+        "✗ AVOID: Genetic enhancement available but no social consequences or ethical debates."
+      ]
+    },
+    {
+      "id": "scifi-character-voice",
+      "heading": "Character Voice in Futuristic Settings",
+      "summary": "Characters should sound like products of their time and culture while remaining accessible to readers.",
+      "content": "Balance period-appropriate language with reader comprehension. Future/alien characters may have different idioms, references, slang. Avoid excessive neologisms that make dialogue incomprehensible. Character background affects their technical knowledge and vocabulary. POV character's expertise level determines how much technical detail appears natural in narrative voice.",
+      "ruleNumber": "scifi-character-voice",
+      "category": "character",
+      "section": "voice",
+      "examples": [
+        "✓ GOOD: Engineer character's POV includes technical details naturally; artist character's POV focuses on visual/emotional aspects.",
+        "✗ AVOID: All characters speak with same level of technical knowledge regardless of background.",
+        "✓ GOOD: Future slang used sparingly, meaning clear from context: 'That's stellar' (context: approval for good idea).",
+        "✗ AVOID: 'He was feeling totally krobnaxed from the flibbertigibbet' (incomprehensible neologisms).",
+        "✓ GOOD: Character from Earth vs. character from Mars have subtly different speech patterns, references, idioms.",
+        "✗ AVOID: All characters sound identical despite coming from vastly different cultures/planets.",
+        "✓ GOOD: Historical/cultural references appropriate to character's background and era.",
+        "✗ AVOID: Future character making references to 21st century pop culture that wouldn't survive 300 years.",
+        "✓ GOOD: Technical terminology used naturally by expert characters, explained in context for non-experts.",
+        "✗ AVOID: Info-dumping through character dialogue: 'As we both know, the quantum flux capacitor works by...'"
+      ]
+    },
+    {
+      "id": "scifi-pacing-exposition",
+      "heading": "Balancing Action and Explanation",
+      "summary": "Intersperse worldbuilding exposition with action, dialogue, and character development to maintain narrative momentum.",
+      "content": "Don't front-load all exposition. Reveal worldbuilding when it becomes relevant to immediate story. Use action sequences to break up heavier exposition sections. Make exposition scenes serve plot or character development simultaneously. When technical explanation is necessary, tie it to immediate stakes or consequences. Readers tolerate exposition better when invested in story.",
+      "ruleNumber": "scifi-pacing-exposition",
+      "category": "pacing",
+      "section": "structure",
+      "examples": [
+        "✓ GOOD: Technical explanation embedded in crisis: 'The reactor's failing. If we don't vent plasma before cascade—' (Urgency drives exposition)",
+        "✗ AVOID: Pages explaining reactor mechanics before anything goes wrong (no dramatic context).",
+        "✓ GOOD: Chapter alternates: action scene → brief worldbuilding → character moment → action continues.",
+        "✗ AVOID: Ten pages of exposition, then ten pages of action, then ten pages of exposition (lumpy pacing).",
+        "✓ GOOD: Worldbuilding revealed during character pursuing goal: discovers history while researching, learns tech while fixing problem.",
+        "✗ AVOID: Worldbuilding inserted as random aside unconnected to current scene's action or goals.",
+        "✓ GOOD: Exposition scene advances plot: character learns critical information while reader learns worldbuilding.",
+        "✗ AVOID: Exposition scene is pure info-dump that could be deleted without affecting plot.",
+        "✓ GOOD: Opening chapter combines action hook + essential worldbuilding + character introduction (multi-purpose).",
+        "✗ AVOID: Opening chapter is just worldbuilding with no character engagement or story momentum."
+      ]
+    },
+    {
+      "id": "scifi-speculation-grounding",
+      "heading": "Grounding Speculative Concepts",
+      "summary": "Anchor wild ideas with concrete details, sensory description, and relatable human elements.",
+      "content": "Even wildly speculative concepts need grounding in tangible detail. Use sensory description to make abstract ideas concrete. Connect strange concepts to familiar human experiences where possible. Show how characters physically interact with technology. Ground philosophical speculation in character emotions and relationships. The more speculative the idea, the more concrete grounding it needs.",
+      "ruleNumber": "scifi-speculation-grounding",
+      "category": "craft",
+      "section": "technique",
+      "examples": [
+        "✓ GOOD: Abstract AI consciousness explored through character's emotional relationship with AI—grief, trust, betrayal (human grounding).",
+        "✗ AVOID: Pages of abstract philosophy about AI consciousness with no character connection or emotional stakes.",
+        "✓ GOOD: Time dilation described through sensory detail: 'Her daughter aged while she blinked. Wrinkles appeared. Gray hair.' (Concrete impact)",
+        "✗ AVOID: Time dilation explained purely mathematically with no human cost shown.",
+        "✓ GOOD: Alien landscape made tangible: 'The ground crunched like broken glass. Ammonia smell burned her throat. Purple vegetation dripped resin.'",
+        "✗ AVOID: 'The alien planet was very different from Earth.' (Vague, no sensory grounding)",
+        "✓ GOOD: Mind-upload concept explored through character missing physical sensations—taste, touch, breath.",
+        "✗ AVOID: Mind upload treated as pure data transfer with no exploration of embodiment loss.",
+        "✓ GOOD: Faster-than-light travel shown through character's physical experience—nausea, disorientation, sensory distortion.",
+        "✗ AVOID: FTL travel described only technically without bodily consequences."
+      ]
+    },
+    {
+      "id": "scifi-common-tropes",
+      "heading": "Science Fiction Tropes and Fresh Execution",
+      "summary": "SF tropes (first contact, robot rebellion, dystopia) can be effective if given fresh perspective or subversive twist.",
+      "content": "Common SF tropes include: first contact, AI awakening, time travel paradox, generation ship, dystopian future, post-apocalyptic survival, cyberpunk megacorp, space opera adventure, robot uprising, clone ethics. These work because they explore timeless questions—but execution must feel fresh. Subvert expectations, combine tropes unexpectedly, or examine familiar concepts from new angles.",
+      "ruleNumber": "scifi-common-tropes",
+      "category": "genre",
+      "section": "tropes",
+      "examples": [
+        "✓ GOOD: First contact story where humans are the less advanced, more violent species (subverts expectation).",
+        "✗ AVOID: First contact follows exact pattern of every other first contact story with no new angle.",
+        "✓ GOOD: AI awakening story told from AI's perspective, humans are the incomprehensible aliens.",
+        "✗ AVOID: Evil AI wants to destroy humanity for vague reasons (Skynet retread).",
+        "✓ GOOD: Time travel paradox used to explore character's relationship with their past self, identity questions.",
+        "✗ AVOID: Time travel purely for plot convenience, paradoxes ignored or hand-waved.",
+        "✓ GOOD: Dystopia where protagonists are complicit in system, not pure rebels (morally complex).",
+        "✗ AVOID: Dystopia where evil government is evil for no reason, rebels are purely heroic (simplistic).",
+        "✓ GOOD: Generation ship story focuses on middle generation—between founders and arrival, forgotten purpose.",
+        "✗ AVOID: Generation ship story hits every expected beat with no surprises."
+      ]
+    },
+    {
+      "id": "scifi-dialogue-naturalism",
+      "heading": "Natural Dialogue in Technical Contexts",
+      "summary": "Characters should communicate naturally even when discussing complex science, avoiding lecturing or unnatural exposition.",
+      "content": "Technical dialogue should sound like real experts talking—shorthand, assumed knowledge, interruptions. Avoid speeches. Use conflict in dialogue to reveal information (disagreement requires explanation). Let characters be wrong or uncertain. Include miscommunication. Technical discussions should reveal character personality, not just information.",
+      "ruleNumber": "scifi-dialogue-naturalism",
+      "category": "dialogue",
+      "section": "craft",
+      "examples": [
+        "✓ GOOD: '\\\"Cascade?\\\" / \\\"Plasma venting hits—\\\" / \\\"I know what cascade means! Can we stop it?\\\"' (Natural interruption, urgency)",
+        "✗ AVOID: '\\\"The cascade effect, which as you know means plasma venting will cause...\\\" (Unnatural lecture)",
+        "✓ GOOD: '\\\"That's not how quantum...\\\" / \\\"Close enough for now.\\\" (Acknowledgment of simplification)",
+        "✗ AVOID: Characters speak in perfectly accurate technical exposition that sounds like textbook.",
+        "✓ GOOD: Scientists disagree about interpretation of data—argument reveals information naturally.",
+        "✗ AVOID: Scientists agree on everything, explain it to each other for reader's benefit.",
+        "✓ GOOD: Character uses wrong technical term, gets corrected, personality revealed through interaction.",
+        "✗ AVOID: All characters are perfectly knowledgeable, never make mistakes or have different expertise levels.",
+        "✓ GOOD: '\\\"In English?\\\" / \\\"The ship's breaking apart.\\\" (Translation for non-expert grounded in character dynamic)",
+        "✗ AVOID: Expert spontaneously simplifies complex concept with no prompting from other character."
+      ]
+    },
+    {
+      "id": "scifi-ending-resolution",
+      "heading": "Satisfying Resolution of Speculative Elements",
+      "summary": "SF endings should resolve immediate plot while leaving room for wonder about larger implications.",
+      "content": "Answer central story questions while acknowledging that big philosophical/scientific questions may remain open. Technology introduced should have payoff—Chekhov's gun applies to worldbuilding. Character arcs should connect to thematic elements. Avoid deus ex machina solutions using unexplained technology. The more thoughtful the speculation, the more satisfying when it pays off meaningfully.",
+      "ruleNumber": "scifi-ending-resolution",
+      "category": "structure",
+      "section": "endings",
+      "examples": [
+        "✓ GOOD: Time travel introduced early pays off in climax; rules established are followed in resolution.",
+        "✗ AVOID: Time travel solves everything at end despite never being mentioned before (deus ex machina).",
+        "✓ GOOD: Character's relationship with AI resolved; larger question of AI consciousness acknowledged as ongoing mystery.",
+        "✗ AVOID: Story pretends to definitively answer 'what is consciousness?' in final chapter (overreach).",
+        "✓ GOOD: Immediate threat resolved; implications of technology discovered will ripple into future (room for wonder).",
+        "✗ AVOID: Everything wrapped up perfectly, all questions answered, no sense of larger universe continuing.",
+        "✓ GOOD: Technology's limitations established throughout pay off—hero's plan must work within those constraints.",
+        "✗ AVOID: Technology suddenly does something it was established it couldn't do because plot requires it.",
+        "✓ GOOD: Thematic questions explored through plot resolution—ending comments on themes raised.",
+        "✗ AVOID: Plot resolved but themes about humanity, technology, ethics never addressed or concluded.",
+        "✓ GOOD: Scientific concept explored throughout reaches logical conclusion based on speculation's premises.",
+        "✗ AVOID: Speculation abandoned or contradicted in ending for convenient plot resolution."
+      ]
+    }
+  ]
+}

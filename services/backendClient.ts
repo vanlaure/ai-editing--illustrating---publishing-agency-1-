@@ -1,6 +1,10 @@
 import type { LaunchScenario, ManuscriptSegment, ManuscriptSearchResult, ComplianceIssue, CostPlan } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE =
+  (typeof import.meta !== 'undefined' &&
+    (import.meta as any).env &&
+    (import.meta as any).env.VITE_API_BASE_URL) ||
+  '/api';
 
 const post = async <T>(path: string, body: Record<string, unknown>): Promise<T> => {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -17,7 +21,7 @@ const post = async <T>(path: string, body: Record<string, unknown>): Promise<T> 
 
 export const backendClient = {
   async extractWorldBible(context: string) {
-    const response = await fetch('/api/world/extract', {
+    const response = await fetch(`${API_BASE}/world/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ context }),
