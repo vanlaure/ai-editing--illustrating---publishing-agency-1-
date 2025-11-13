@@ -1,13 +1,31 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const dotenv = require('dotenv');
-const fs = require('fs').promises;
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const http = require('http');
-const https = require('https');
+import express from "express";
+import multer from "multer";
+import cors from "cors";
+import path from "path";
+import dotenv from "dotenv";
+import fs from "fs/promises";
+import { exec } from "child_process";
+import { promisify } from "util";
+import http from "http";
+import https from "https";
+import { WebSocketServer } from "ws";
+import * as db from "./db.js";
+
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Serve generated videos statically before other routes
+const tmpApp = express();
+tmpApp.use('/videos', express.static(path.join(__dirname, '../data/videos'), {
+ setHeaders: (res, filePath) => {
+   if (filePath.endsWith('.mp4')) {
+     res.set('Content-Type', 'video/mp4');
+   }
+ }
+}));
+const appInstance = tmpApp;
 
 // Load environment variables from project root .env.local (if present), then server/.env
 try {
@@ -18,8 +36,15 @@ try {
 }
 
 const execAsync = promisify(exec);
-const app = express();
-const PORT = 3002;
+let app = global.appInstance || express();
+// Backend port can be overridden via PORT or BACKEND_PORT
+const DEFAULT_PORT = 3002;
+const PORT_ENV = Number(process.env.PORT || process.env.BACKEND_PORT || DEFAULT_PORT);
+// Keep existing reference name used below
+const PORT = PORT_ENV;
+// Standard backend host and port to be used consistently
+const BACKEND_HOST = 'localhost';
+const BACKEND_PORT = 3002;
 const A1111_URL = process.env.A1111_API_URL || 'http://localhost:7860';
 
 // Configure multer for file uploads
@@ -41,7 +66,10 @@ const upload = multer({
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3001', 'http://localhost:3000'], // Allow both ports
+  exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length']
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use('/images', express.static('data/images'));
 app.use('/videos', express.static('data/videos'));
@@ -124,6 +152,151 @@ app.delete('/api/productions/:id', async (req, res) => {
   }
 });
 
+// ==================== DATABASE MEDIA SERVING ENDPOINTS ====================
+
+// Serve image from database
+app.get('/api/media/image/:id', async (req, res) => {
+  try {
+    const imageId = parseInt(req.params.id);
+    const result = db.getImageBinary(imageId);
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // If binary data exists in database, serve it
+    if (result.binary_data) {
+      res.setHeader('Content-Type', result.mime_type || 'image/png');
+      res.setHeader('Content-Disposition', `inline; filename="${result.filename}"`);
+      return res.send(result.binary_data);
+    }
+    
+    // Fallback to filesystem if binary_data is NULL (hybrid mode)
+    const filePath = path.join('data/images', result.filename);
+    try {
+      const fileData = await fs.readFile(filePath);
+      res.setHeader('Content-Type', result.mime_type || 'image/png');
+      res.setHeader('Content-Disposition', `inline; filename="${result.filename}"`);
+      return res.send(fileData);
+    } catch (fsError) {
+      return res.status(404).json({ error: 'Image file not found' });
+    }
+  } catch (error) {
+    console.error('Error serving image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
+// Serve video from database
+app.get('/api/media/video/:id', async (req, res) => {
+  try {
+    const videoId = parseInt(req.params.id);
+    const result = db.getVideoBinary(videoId);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const mimeType = result.mime_type || 'video/mp4';
+    const range = req.headers.range;
+
+    // If binary data exists in database, stream with Range support
+    if (result.binary_data) {
+      const buffer = Buffer.from(result.binary_data);
+      const total = buffer.length;
+
+      if (range) {
+        const match = /bytes=(\d+)-(\d+)?/.exec(range);
+        const start = match ? parseInt(match[1], 10) : 0;
+        const end = match && match[2] ? Math.min(parseInt(match[2], 10), total - 1) : Math.min(start + 1024 * 1024 - 1, total - 1); // 1MB chunks
+        const chunkSize = end - start + 1;
+
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Length', chunkSize);
+        res.setHeader('Content-Type', mimeType);
+        return res.end(buffer.subarray(start, end + 1));
+      }
+
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Length', total);
+      res.setHeader('Content-Disposition', `inline; filename="${result.filename}"`);
+      return res.end(buffer);
+    }
+
+    // Fallback to filesystem if binary_data is NULL (hybrid mode)
+    const filePath = path.join('data/videos', result.filename);
+    try {
+      const stat = await require('fs').promises.stat(filePath);
+      const total = stat.size;
+
+      if (range) {
+        const match = /bytes=(\d+)-(\d+)?/.exec(range);
+        const start = match ? parseInt(match[1], 10) : 0;
+        const end = match && match[2] ? Math.min(parseInt(match[2], 10), total - 1) : Math.min(start + 1024 * 1024 - 1, total - 1);
+        const chunkSize = end - start + 1;
+
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${total}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': mimeType,
+          'Content-Disposition': `inline; filename="${result.filename}"`
+        });
+        const stream = require('fs').createReadStream(filePath, { start, end });
+        return stream.pipe(res);
+      }
+
+      res.writeHead(200, {
+        'Content-Type': mimeType,
+        'Content-Length': total,
+        'Content-Disposition': `inline; filename="${result.filename}"`
+      });
+      const stream = require('fs').createReadStream(filePath);
+      return stream.pipe(res);
+    } catch (fsError) {
+      return res.status(404).json({ error: 'Video file not found' });
+    }
+  } catch (error) {
+    console.error('Error serving video:', error);
+    res.status(500).json({ error: 'Failed to serve video' });
+  }
+});
+
+// Serve audio from database
+app.get('/api/media/audio/:id', async (req, res) => {
+  try {
+    const audioId = parseInt(req.params.id);
+    const result = db.getAudioBinary(audioId);
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Audio not found' });
+    }
+    
+    // If binary data exists in database, serve it
+    if (result.binary_data) {
+      res.setHeader('Content-Type', result.mime_type || 'audio/mpeg');
+      res.setHeader('Content-Disposition', `inline; filename="${result.filename}"`);
+      return res.send(result.binary_data);
+    }
+    
+    // Fallback to filesystem if binary_data is NULL (hybrid mode)
+    const filePath = path.join('data/audio', result.filename);
+    try {
+      const fileData = await fs.readFile(filePath);
+      res.setHeader('Content-Type', result.mime_type || 'audio/mpeg');
+      res.setHeader('Content-Disposition', `inline; filename="${result.filename}"`);
+      return res.send(fileData);
+    } catch (fsError) {
+      return res.status(404).json({ error: 'Audio file not found' });
+    }
+  } catch (error) {
+    console.error('Error serving audio:', error);
+    res.status(500).json({ error: 'Failed to serve audio' });
+  }
+});
+
 // ==================== IMAGE ENDPOINTS ====================
 
 // Upload image
@@ -133,15 +306,33 @@ app.post('/api/images/upload', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image provided' });
     }
 
-    const imageId = Date.now().toString();
+    const productionId = req.body.production_id || null;
     const ext = path.extname(req.file.originalname);
-    const filename = `${imageId}${ext}`;
-    const destPath = path.join('data/images', filename);
+    const filename = `${Date.now()}${ext}`;
+    const format = ext.substring(1).toLowerCase();
+    const mimeType = req.file.mimetype || `image/${format}`;
     
-    await fs.rename(req.file.path, destPath);
+    // Read file binary data
+    const binaryData = await fs.readFile(req.file.path);
     
-    const imageUrl = `http://localhost:${PORT}/images/${filename}`;
-    res.json({ success: true, url: imageUrl, filename });
+    // Insert into database
+    const result = db.insertImage(
+      productionId,
+      filename,
+      null, // width - can be extracted with sharp library if needed
+      null, // height - can be extracted with sharp library if needed
+      format,
+      binaryData.length,
+      binaryData,
+      mimeType
+    );
+    
+    // Clean up temp file
+    await fs.unlink(req.file.path);
+    
+    const imageId = result.lastInsertRowid;
+    const imageUrl = `http://localhost:${PORT}/api/media/image/${imageId}`;
+    res.json({ success: true, url: imageUrl, filename, id: imageId });
   } catch (error) {
     console.error('Error uploading image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
@@ -155,18 +346,38 @@ app.post('/api/images/upload-batch', upload.array('images', 100), async (req, re
       return res.status(400).json({ error: 'No images provided' });
     }
 
+    const productionId = req.body.production_id || null;
+    
     const images = await Promise.all(
       req.files.map(async (file, index) => {
-        const imageId = `${Date.now()}-${index}`;
         const ext = path.extname(file.originalname);
-        const filename = `${imageId}${ext}`;
-        const destPath = path.join('data/images', filename);
+        const filename = `${Date.now()}-${index}${ext}`;
+        const format = ext.substring(1).toLowerCase();
+        const mimeType = file.mimetype || `image/${format}`;
         
-        await fs.rename(file.path, destPath);
+        // Read file binary data
+        const binaryData = await fs.readFile(file.path);
         
+        // Insert into database
+        const result = db.insertImage(
+          productionId,
+          filename,
+          null,
+          null,
+          format,
+          binaryData.length,
+          binaryData,
+          mimeType
+        );
+        
+        // Clean up temp file
+        await fs.unlink(file.path);
+        
+        const imageId = result.lastInsertRowid;
         return {
-          url: `http://localhost:${PORT}/images/${filename}`,
-          filename
+          url: `http://localhost:${PORT}/api/media/image/${imageId}`,
+          filename,
+          id: imageId
         };
       })
     );
@@ -187,15 +398,32 @@ app.post('/api/audio/upload', upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    const audioId = Date.now().toString();
+    const timestamp = Date.now();
     const ext = path.extname(req.file.originalname);
-    const filename = `${audioId}${ext}`;
-    const destPath = path.join('data/audio', filename);
+    const format = ext.substring(1).toLowerCase();
+    const filename = `${timestamp}${ext}`;
+    const mimeType = req.file.mimetype || `audio/${format}`;
     
-    await fs.rename(req.file.path, destPath);
+    // Read file binary data
+    const binaryData = await fs.readFile(req.file.path);
     
-    const audioUrl = `http://localhost:${PORT}/audio/${filename}`;
-    res.json({ success: true, url: audioUrl, filename });
+    // Insert into database
+    const result = db.insertAudio(
+      null, // production_id
+      filename,
+      null, // duration
+      format,
+      binaryData.length,
+      binaryData,
+      mimeType
+    );
+    
+    // Clean up temp file
+    await fs.unlink(req.file.path);
+    
+    const audioId = result.lastInsertRowid;
+    const audioUrl = `http://localhost:${PORT}/api/media/audio/${audioId}`;
+    res.json({ success: true, url: audioUrl, filename, id: audioId });
   } catch (error) {
     console.error('Error uploading audio:', error);
     res.status(500).json({ error: 'Failed to upload audio' });
@@ -209,15 +437,38 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
       return res.status(400).json({ error: 'No video file provided' });
     }
 
-    const videoId = Date.now().toString();
+    const timestamp = Date.now();
     const ext = path.extname(req.file.originalname) || '.mp4';
-    const filename = `${videoId}${ext}`;
-    const destPath = path.join('data/videos', filename);
+    const format = ext.substring(1).toLowerCase();
+    const filename = `${timestamp}${ext}`;
+    const mimeType = req.file.mimetype || `video/${format}`;
 
-    await fs.rename(req.file.path, destPath);
+    // Read file binary data
+    const binaryData = await fs.readFile(req.file.path);
+    
+    // Insert into database
+    const result = db.insertVideo(
+      null, // production_id
+      filename,
+      null, // duration
+      null, // width
+      null, // height
+      format,
+      binaryData.length,
+      binaryData,
+      mimeType
+    );
+    
+    // Clean up temp file
+    await fs.unlink(req.file.path);
 
-    const videoUrl = `http://localhost:${PORT}/videos/${filename}`;
-    res.json({ success: true, url: videoUrl, filename });
+    // Always use port 3002 for the backend media URLs
+    const BACKEND_PORT = 3002;
+    const BACKEND_HOST = 'localhost';
+    
+    const videoId = result.lastInsertRowid;
+    const videoUrl = `http://${BACKEND_HOST}:${BACKEND_PORT}/api/media/video/${videoId}`;
+    res.json({ success: true, url: videoUrl, filename, id: videoId });
   } catch (error) {
     console.error('Error uploading video:', error);
     res.status(500).json({ error: 'Failed to upload video' });
@@ -295,7 +546,17 @@ app.post('/api/video/generate', async (req, res) => {
 
       if (videoUrl && typeof videoUrl === 'string') {
         isVideo = true;
-        if (videoUrl.startsWith('http')) {
+        if (videoUrl.startsWith(`http://localhost:${PORT}/api/media/video/`)) {
+          // Database video URL - fetch from database
+          const videoId = videoUrl.split('/').pop();
+          const videoData = db.getVideoBinary(parseInt(videoId));
+          if (videoData && videoData.binary_data) {
+            inputPath = path.join(jobDir, `scene_${i}_video_${videoId}.mp4`);
+            await fs.writeFile(inputPath, videoData.binary_data);
+          } else {
+            console.error(`Video ${videoId} not found in database`); continue;
+          }
+        } else if (videoUrl.startsWith('http')) {
           let baseName = 'clip.mp4';
           try { baseName = path.basename(new URL(videoUrl).pathname) || 'clip.mp4'; } catch (_) {}
           baseName = baseName.split('?')[0].split('#')[0].replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -308,13 +569,24 @@ app.post('/api/video/generate', async (req, res) => {
           inputPath = path.join(jobDir, `scene_${i}.mp4`);
           await fs.writeFile(inputPath, Buffer.from(base64Data, 'base64'));
         } else if (videoUrl.startsWith(`http://localhost:${PORT}/videos/`)) {
+          // Legacy filesystem video URL
           const filename = videoUrl.split('/').pop();
           inputPath = path.join('data/videos', filename);
         }
       }
 
       if (!inputPath && imageUrl && typeof imageUrl === 'string' && !imageUrl.includes('error')) {
-        if (imageUrl.startsWith('http')) {
+        if (imageUrl.startsWith(`http://localhost:${PORT}/api/media/image/`)) {
+          // Database image URL - fetch from database
+          const imageId = imageUrl.split('/').pop();
+          const imageData = db.getImageBinary(parseInt(imageId));
+          if (imageData && imageData.binary_data) {
+            inputPath = path.join(jobDir, `scene_${i}_image_${imageId}.png`);
+            await fs.writeFile(inputPath, imageData.binary_data);
+          } else {
+            console.error(`Image ${imageId} not found in database`); continue;
+          }
+        } else if (imageUrl.startsWith('http')) {
           let baseName = 'image.png';
           try { baseName = path.basename(new URL(imageUrl).pathname) || 'image.png'; } catch (_) {}
           baseName = baseName.split('?')[0].split('#')[0].replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -327,6 +599,7 @@ app.post('/api/video/generate', async (req, res) => {
           inputPath = path.join(jobDir, `scene_${i}.png`);
           await fs.writeFile(inputPath, Buffer.from(base64Data, 'base64'));
         } else if (imageUrl.startsWith(`http://localhost:${PORT}/images/`)) {
+          // Legacy filesystem image URL
           const filename = imageUrl.split('/').pop();
           inputPath = path.join('data/images', filename);
         }
@@ -358,9 +631,20 @@ app.post('/api/video/generate', async (req, res) => {
 
     // Attach audio if provided
     let audioPath;
-    if (audioUrl && audioUrl.startsWith('http://localhost')) {
-      const audioFilename = audioUrl.split('/').pop();
-      audioPath = path.join('data/audio', audioFilename);
+    if (audioUrl) {
+      if (audioUrl.startsWith(`http://localhost:${PORT}/api/media/audio/`)) {
+        // Database audio URL - fetch from database
+        const audioId = audioUrl.split('/').pop();
+        const audioData = db.getAudioBinary(parseInt(audioId));
+        if (audioData && audioData.binary_data) {
+          audioPath = path.join(jobDir, `audio_${audioId}.mp3`);
+          await fs.writeFile(audioPath, audioData.binary_data);
+        }
+      } else if (audioUrl.startsWith('http://localhost')) {
+        // Legacy filesystem audio URL
+        const audioFilename = audioUrl.split('/').pop();
+        audioPath = path.join('data/audio', audioFilename);
+      }
     }
 
     const outputVideo = path.join(jobDir, 'output.mp4');
@@ -372,12 +656,28 @@ app.post('/api/video/generate', async (req, res) => {
       await fs.rename(combinedVideo, outputVideo);
     }
 
-    // Return video URL
-    const videoUrl = `http://localhost:${PORT}/videos/job_${jobId}/output.mp4`;
-    res.json({ 
-      success: true, 
+    // Read final video and store in database
+    const videoBinary = await fs.readFile(outputVideo);
+    const result = db.insertVideo(
+      null, // production_id
+      `output_${jobId}.mp4`,
+      null, // duration
+      width,
+      height,
+      'mp4',
+      videoBinary.length,
+      videoBinary,
+      'video/mp4'
+    );
+    
+    const videoId = result.lastInsertRowid;
+    const videoUrl = `http://${BACKEND_HOST}:${BACKEND_PORT}/api/media/video/${videoId}`;
+    
+    res.json({
+      success: true,
       videoUrl,
-      jobId 
+      videoId,
+      jobId
     });
 
   } catch (error) {
@@ -411,12 +711,12 @@ app.post('/api/a1111/generate', async (req, res) => {
     const {
       prompt,
       negative_prompt = 'blurry, low quality, worst quality, bad anatomy, extra limbs, watermark, text',
-      width = 512,
-      height = 512,
-      steps = 20,
-      cfg_scale = 7,
-      sampler_name = 'DPM++ 2M Karras',
-      model = 'realisticVisionV51_v51VAE.safetensors',
+      width = 1024,
+      height = 1024,
+      steps = 8,
+      cfg_scale = 2,
+      sampler_name = 'DPM++ SDE Karras',
+      model = 'juggernautXL_v9Rdphoto2Lightning.safetensors',
       lora = 'add_detail:0.7,more_details:0.5',
       vae = 'vae-ft-mse-840000-ema-pruned.safetensors',
       init_image = null,
@@ -573,6 +873,31 @@ app.post('/api/a1111/generate-batch', async (req, res) => {
 const COMFYUI_URL = process.env.COMFYUI_API_URL || 'http://localhost:8188';
 const COMFYUI_OUTPUT_DIR = process.env.COMFYUI_OUTPUT_DIR || '../outputs';
 
+// Cache for ComfyUI node registry to avoid repeated calls
+let __comfyNodeCache = null;
+let __comfyNodeCacheAt = 0;
+async function getComfyNodeMap(force = false) {
+  const now = Date.now();
+  const cacheStale = !__comfyNodeCache || (now - __comfyNodeCacheAt > 30_000);
+  if (!force && !cacheStale) return __comfyNodeCache;
+  try {
+    const resp = await fetch(`${COMFYUI_URL}/object_info`);
+    if (resp.ok) {
+      const info = await resp.json();
+      __comfyNodeCache = info?.nodes || info || {};
+      __comfyNodeCacheAt = now;
+      return __comfyNodeCache;
+    }
+  } catch (_) {}
+  __comfyNodeCache = {};
+  __comfyNodeCacheAt = now;
+  return __comfyNodeCache;
+}
+async function comfyHasNode(name) {
+  const nodes = await getComfyNodeMap();
+  return Object.prototype.hasOwnProperty.call(nodes, name);
+}
+
 // Check ComfyUI health
 app.get('/api/comfyui/health', async (req, res) => {
   try {
@@ -593,7 +918,7 @@ app.get('/api/comfyui/health', async (req, res) => {
   }
 });
 
-// Helper: Create ComfyUI workflow
+// Helper: Create ComfyUI workflow with ultra-realistic settings
 function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, cfg, seed, init_image = null, denoising_strength = 1.0 }) {
   const workflow = {
     "1": {
@@ -611,7 +936,7 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
   };
 
   if (init_image) {
-    // img2img workflow: LoadImage -> VAEEncode -> KSampler -> VAEDecode -> SaveImage
+    // img2img workflow with DPM++ 2M Karras sampler for quality
     workflow["4"] = {
       inputs: {
         image: init_image,
@@ -621,7 +946,7 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
     };
     workflow["5"] = {
       inputs: {
-        pixels: ["4", 0],  // Use only the image output, not the mask
+        pixels: ["4", 0],
         vae: ["1", 2]
       },
       class_type: "VAEEncode"
@@ -631,8 +956,8 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
         seed,
         steps,
         cfg,
-        sampler_name: "euler",
-        scheduler: "normal",
+        sampler_name: "dpmpp_2m",
+        scheduler: "karras",
         denoise: denoising_strength,
         model: ["1", 0],
         positive: ["2", 0],
@@ -666,8 +991,8 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
         seed,
         steps,
         cfg,
-        sampler_name: "euler",
-        scheduler: "normal",
+        sampler_name: "dpmpp_2m",
+        scheduler: "karras",
         denoise: 1.0,
         model: ["1", 0],
         positive: ["2", 0],
@@ -699,13 +1024,16 @@ function createAnimateDiffWorkflow({
   steps = 20,
   cfg = 7.0,
   seed = -1,
+  denoise = 0.8,
   frame_count = 16,
   fps = 8,
-  motion_model = "mm_sd_v15_v2.ckpt"
+  motion_model = "mm_sd_v15_v2.ckpt",
+  checkpoint = "realisticVisionV51_v51VAE.safetensors",
+  use_vhs = true
 }) {
   const workflow = {
     "1": {
-      inputs: { ckpt_name: "realisticVisionV51_v51VAE.safetensors" },
+      inputs: { ckpt_name: checkpoint },
       class_type: "CheckpointLoaderSimple"
     },
     "2": {
@@ -716,14 +1044,38 @@ function createAnimateDiffWorkflow({
       inputs: { text: negative_prompt, clip: ["1", 1] },
       class_type: "CLIPTextEncode"
     },
-    "6": {
-      inputs: {
-        width,
-        height,
-        batch_size: frame_count
+    ...(init_image ? {
+      "4": {
+        inputs: {
+          image: init_image,
+          upload: "image"
+        },
+        class_type: "LoadImage"
       },
-      class_type: "ADE_EmptyLatentImageLarge"
-    },
+      "5": {
+        inputs: {
+          pixels: ["4", 0],
+          vae: ["1", 2]
+        },
+        class_type: "VAEEncode"
+      },
+      "6": {
+        inputs: {
+          samples: ["5", 0],
+          amount: frame_count
+        },
+        class_type: "RepeatLatentBatch"
+      }
+    } : {
+      "6": {
+        inputs: {
+          width,
+          height,
+          batch_size: frame_count
+        },
+        class_type: "ADE_EmptyLatentImageLarge"
+      }
+    }),
     "7": {
       inputs: {
         model_name: motion_model
@@ -751,7 +1103,7 @@ function createAnimateDiffWorkflow({
         cfg,
         sampler_name: "euler",
         scheduler: "normal",
-        denoise: 1.0,
+        denoise,
         model: ["9", 0],
         positive: ["2", 0],
         negative: ["3", 0],
@@ -766,18 +1118,21 @@ function createAnimateDiffWorkflow({
       },
       class_type: "VAEDecode"
     },
-    "12": {
-      inputs: {
-        filename_prefix: "animatediff",
-        images: ["11", 0],
-        frame_rate: fps,
-        loop_count: 0,
-        pingpong: false,
-        save_output: true,
-        format: "video/h264-mp4"
-      },
-      class_type: "VHS_VideoCombine"
-    },
+    // Video combine via VHS (if installed). When unavailable, we rely on SaveImage + ffmpeg fallback.
+    ...(use_vhs ? {
+      "12": {
+        inputs: {
+          filename_prefix: "animatediff",
+          images: ["11", 0],
+          frame_rate: fps,
+          loop_count: 0,
+          pingpong: false,
+          save_output: true,
+          format: "video/h264-mp4"
+        },
+        class_type: "VHS_VideoCombine"
+      }
+    } : {}),
     "13": {
       inputs: {
         filename_prefix: "frames",
@@ -802,12 +1157,13 @@ function createHunyuanVideoWorkflow({
   frame_count = 48,
   fps = 24,
   denoise = 0.85,
-  camera_motion = "static"
+  camera_motion = "static",
+  use_vhs = true
 }) {
   const workflow = {
     "1": {
       inputs: {
-        model: [],
+        model: "hunyuan_video_720_fp8_e4m3fn.safetensors",
         base_precision: "bf16",
         quantization: "fp8_e4m3fn_fast",
         load_device: "main_device",
@@ -824,7 +1180,7 @@ function createHunyuanVideoWorkflow({
     },
     "3": {
       inputs: {
-        clip_name: []
+        clip_name: "clip-vit-large-patch14"
       },
       class_type: "CLIPVisionLoader"
     },
@@ -837,7 +1193,7 @@ function createHunyuanVideoWorkflow({
     },
     "5": {
       inputs: {
-        clip_name: []
+        clip_name: "clip-vit-large-patch14"
       },
       class_type: "CLIPLoader"
     },
@@ -873,7 +1229,7 @@ function createHunyuanVideoWorkflow({
         denoise,
         model: ["1", 0],
         positive: ["7", 0],
-        negative: ["7", 0],
+        negative: ["11", 0],
         latent_image: ["7", 1]
       },
       class_type: "KSampler"
@@ -887,23 +1243,35 @@ function createHunyuanVideoWorkflow({
     },
     "10": {
       inputs: {
-        model_name: ["vae-ft-mse-840000-ema-pruned.safetensors"],
+        model_name: "hunyuan_video_vae_fp16.safetensors",
         precision: "bf16"
       },
       class_type: "HyVideoVAELoader"
     },
     "11": {
       inputs: {
-        filename_prefix: "hunyuan_video",
-        images: ["9", 0],
-        frame_rate: fps,
-        loop_count: 0,
-        pingpong: false,
-        save_output: true,
-        format: "video/h264-mp4"
+        clip: ["5", 0],
+        clip_vision_output: ["4", 0],
+        prompt: "low quality, blurry, distorted, artifacts, pixelated, poor lighting, overexposed, underexposed",
+        image_interleave: 2
       },
-      class_type: "VHS_VideoCombine"
+      class_type: "TextEncodeHunyuanVideo_ImageToVideo"
     },
+    // Prefer VHS for video combine if available; otherwise fall back to frames only.
+    ...(use_vhs ? {
+      "13": {
+        inputs: {
+          filename_prefix: "hunyuan_video",
+          images: ["9", 0],
+          frame_rate: fps,
+          loop_count: 0,
+          pingpong: false,
+          save_output: true,
+          format: "video/h264-mp4"
+        },
+        class_type: "VHS_VideoCombine"
+      }
+    } : {}),
     "12": {
       inputs: {
         filename_prefix: "hunyuan_frames",
@@ -1038,8 +1406,8 @@ app.post('/api/comfyui/generate', async (req, res) => {
       negative_prompt = 'blurry, low quality, worst quality, bad anatomy, extra limbs, watermark, text, deformed',
       width = 1024,
       height = 576,
-      steps = 20,
-      cfg_scale = 7.0,
+      steps = 8,
+      cfg_scale = 2.0,
       init_image = null,
       denoising_strength = 0.45
     } = req.body;
@@ -1095,6 +1463,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
     let submitResponse;
     try {
       console.log('ComfyUI: Submitting workflow to', `${COMFYUI_URL}/prompt`);
+      console.log('ComfyUI: Workflow JSON:', JSON.stringify(workflow, null, 2));
       submitResponse = await fetch(`${COMFYUI_URL}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1109,6 +1478,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
       }
     } catch (error) {
       console.error('ComfyUI: Network error during submit:', error);
+      console.error('ComfyUI: Workflow that failed:', JSON.stringify(workflow, null, 2));
       throw new Error(`Failed to connect to ComfyUI at ${COMFYUI_URL}: ${error.message}`);
     }
 
@@ -1153,7 +1523,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
     console.log('ComfyUI: Generated filename:', filename);
     const imageUrl = `${COMFYUI_URL}/view?filename=${filename}&type=output`;
 
-    // Download image to local storage
+    // Download image and store in database
     try {
       console.log('ComfyUI: Downloading image from', imageUrl);
       const imageResponse = await fetch(imageUrl);
@@ -1163,20 +1533,33 @@ app.post('/api/comfyui/generate', async (req, res) => {
       }
 
       const imageBuffer = await imageResponse.arrayBuffer();
-      const imageId = Date.now();
-      const localFilename = `${imageId}.png`;
-      const localPath = path.join('data/images', localFilename);
+      const binaryData = Buffer.from(imageBuffer);
+      const timestamp = Date.now();
+      const localFilename = `${timestamp}.png`;
+      
+      // Insert into database
+      const result = db.insertImage(
+        null, // production_id - can be linked later
+        localFilename,
+        null, // width
+        null, // height
+        'png',
+        binaryData.length,
+        binaryData,
+        'image/png'
+      );
+      
+      const dbImageId = result.lastInsertRowid;
+      console.log('ComfyUI: Image saved to database with id:', dbImageId);
 
-      await fs.writeFile(localPath, Buffer.from(imageBuffer));
-      console.log('ComfyUI: Image saved to', localPath);
-
-      const localImageUrl = `http://localhost:${PORT}/images/${localFilename}`;
+      const localImageUrl = `http://localhost:${PORT}/api/media/image/${dbImageId}`;
 
       res.json({
         success: true,
         imageUrl: localImageUrl,
         promptId,
-        filename: localFilename
+        filename: localFilename,
+        id: dbImageId
       });
     } catch (error) {
       console.error('ComfyUI: Image download/save failed:', error);
@@ -1249,18 +1632,31 @@ app.post('/api/comfyui/generate-batch', async (req, res) => {
       const filename = resultImages[0].filename;
       const imageUrl = `${COMFYUI_URL}/view?filename=${filename}&type=output`;
 
-      // Download image to local storage
-      const imageId = Date.now();
-      const localFilename = `${imageId}.png`;
-      const localPath = path.join('data/images', localFilename);
-
+      // Download image and store in database
       const imageResponse = await fetch(imageUrl);
       const imageBuffer = await imageResponse.arrayBuffer();
-      await fs.writeFile(localPath, Buffer.from(imageBuffer));
+      const binaryData = Buffer.from(imageBuffer);
+      const timestamp = Date.now();
+      const localFilename = `${timestamp}.png`;
+      
+      // Insert into database
+      const dbResult = db.insertImage(
+        null, // production_id
+        localFilename,
+        null, // width
+        null, // height
+        'png',
+        binaryData.length,
+        binaryData,
+        'image/png'
+      );
+      
+      const dbImageId = dbResult.lastInsertRowid;
 
       return {
-        imageUrl: `http://localhost:${PORT}/images/${localFilename}`,
-        filename: localFilename
+        imageUrl: `http://localhost:${PORT}/api/media/image/${dbImageId}`,
+        filename: localFilename,
+        id: dbImageId
       };
     };
 
@@ -1304,6 +1700,28 @@ app.get('/api/comfyui/progress/:promptId', async (req, res) => {
 // Generate video clip using ComfyUI (AnimateDiff or HunyuanVideo)
 app.post('/api/comfyui/generate-video-clip', async (req, res) => {
   try {
+    // Check ComfyUI availability first
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const healthCheck = await fetch(`${COMFYUI_URL}/queue`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!healthCheck.ok) {
+        return res.status(503).json({
+          error: 'ComfyUI service unavailable',
+          details: `ComfyUI at ${COMFYUI_URL} returned status ${healthCheck.status}. Please ensure ComfyUI is running.`
+        });
+      }
+    } catch (healthError) {
+      console.error('ComfyUI health check failed:', healthError);
+      return res.status(503).json({
+        error: 'Cannot connect to ComfyUI',
+        details: `Failed to connect to ComfyUI at ${COMFYUI_URL}. Error: ${healthError.message}. Please ensure ComfyUI is running and accessible.`
+      });
+    }
+
     const {
       imageUrl,
       prompt,
@@ -1317,7 +1735,10 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       cfg,
       seed = -1,
       denoise = 0.85,
-      camera_motion = 'static'
+      camera_motion = 'static',
+      lipSync = false,
+      audioUrl,
+      shotId = null
     } = req.body;
 
     if (!imageUrl || !prompt) {
@@ -1339,13 +1760,31 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       frameCount = Math.ceil(clipDuration * videoFps);
       console.log(`ComfyUI HunyuanVideo: Generating ${clipDuration}s video (${frameCount} frames @ ${videoFps}fps, ${videoWidth}x${videoHeight})`);
     } else {
-      // AnimateDiff draft quality defaults (512p)
-      videoWidth = Number(width) || 512;
+      // AnimateDiff draft quality defaults - improved for better quality
+      videoWidth = Number(width) || 768;
       videoHeight = Number(height) || 512;
-      videoFps = Number(fps) || 8;
-      videoSteps = Number(steps) || 20;
-      videoCfg = Number(cfg) || 7.0;
+      videoFps = Number(fps) || 16;
+      videoSteps = Number(steps) || 25;
+      videoCfg = Number(cfg) || 7.5;
       frameCount = Math.ceil(clipDuration * videoFps);
+
+      // AnimateDiff (mm_sd_v15_v2) without context window supports max 32 frames.
+      // If requested frames exceed 32, reduce FPS to keep duration while staying within the limit.
+      const AD_MAX_FRAMES = 32;
+      if (frameCount > AD_MAX_FRAMES) {
+        const cappedFps = Math.max(1, Math.floor(AD_MAX_FRAMES / clipDuration));
+        if (cappedFps < videoFps) {
+          console.warn(
+            `AnimateDiff: capping to ${AD_MAX_FRAMES} frames. Adjusting fps from ${videoFps} to ${cappedFps} for duration ~${clipDuration}s.`
+          );
+          videoFps = cappedFps;
+          frameCount = Math.min(AD_MAX_FRAMES, Math.ceil(clipDuration * videoFps));
+        } else {
+          // Fallback: hard cap frames if fps cannot be lowered further
+          frameCount = AD_MAX_FRAMES;
+        }
+      }
+
       console.log(`ComfyUI AnimateDiff: Generating ${clipDuration}s video (${frameCount} frames @ ${videoFps}fps)`);
     }
 
@@ -1354,8 +1793,9 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
 
     // Upload image to ComfyUI
     let comfyImageName;
-    if (imageUrl.startsWith('data:image')) {
-      comfyImageName = await uploadImageToComfyUI(imageUrl);
+    try {
+      if (imageUrl.startsWith('data:image')) {
+        comfyImageName = await uploadImageToComfyUI(imageUrl);
     } else if (imageUrl.includes('localhost:8188/view')) {
       // Handle ComfyUI view URL: http://localhost:8188/view?filename=X
       const url = new URL(imageUrl);
@@ -1371,50 +1811,132 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       const imageBuffer = await imageResponse.arrayBuffer();
       const base64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
       comfyImageName = await uploadImageToComfyUI(base64);
+    } else if (imageUrl.startsWith(`http://localhost:${PORT}/api/media/image/`)) {
+      // Handle database image URL
+      const imageId = imageUrl.split('/').pop();
+      const imageData = db.getImageBinary(parseInt(imageId));
+      if (!imageData?.binary_data) {
+        return res.status(404).json({ error: 'Image not found in database' });
+      }
+      const base64 = `data:${imageData.mime_type};base64,${imageData.binary_data.toString('base64')}`;
+      comfyImageName = await uploadImageToComfyUI(base64);
     } else if (imageUrl.startsWith('http://localhost')) {
-      // Handle local backend URL
+      // Handle legacy local backend URL
       const filename = imageUrl.split('/').pop();
       const localPath = path.join('data/images', filename);
       const imageBuffer = await fs.readFile(localPath);
       const base64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
       comfyImageName = await uploadImageToComfyUI(base64);
-    } else {
-      return res.status(400).json({ error: 'Unsupported image URL format' });
+      } else {
+        return res.status(400).json({
+          error: 'Unsupported image URL format',
+          details: `Image URL must be a data URI, ComfyUI view URL, or localhost URL. Received: ${imageUrl.substring(0, 100)}`
+        });
+      }
+    } catch (uploadError) {
+      console.error('ComfyUI: Image upload failed:', uploadError);
+      return res.status(500).json({
+        error: 'Failed to upload image to ComfyUI',
+        details: uploadError.message
+      });
     }
 
     console.log(`ComfyUI: Image uploaded as ${comfyImageName}`);
 
     // Build workflow based on quality level
     let workflow;
-    if (quality === 'high') {
-      // HunyuanVideo high-quality workflow
-      workflow = createHunyuanVideoWorkflow({
-        prompt,
-        negative_prompt,
-        init_image: comfyImageName,
-        width: videoWidth,
-        height: videoHeight,
-        steps: videoSteps,
-        cfg: videoCfg,
-        seed: Number(seed) || -1,
-        frame_count: frameCount,
-        fps: videoFps,
-        denoise: Number(denoise) || 0.85,
-        camera_motion: camera_motion || 'static'
-      });
-    } else {
-      // AnimateDiff draft quality workflow
-      workflow = createAnimateDiffWorkflow({
-        prompt,
-        negative_prompt,
-        init_image: comfyImageName,
-        width: videoWidth,
-        height: videoHeight,
-        steps: videoSteps,
-        cfg: videoCfg,
-        seed: Number(seed) || -1,
-        frame_count: frameCount,
-        fps: videoFps
+    try {
+      // Detect if VHS_VideoCombine exists; if not, we'll save frames and combine via ffmpeg
+      let hasVHS = false;
+      try {
+        hasVHS = await comfyHasNode('VHS_VideoCombine');
+      } catch (vhsError) {
+        console.warn('ComfyUI: Failed to check for VHS_VideoCombine:', vhsError.message);
+      }
+      if (!hasVHS) {
+        console.warn('ComfyUI: VHS_VideoCombine not found. Falling back to frames + ffmpeg.');
+      }
+      
+      if (quality === 'high') {
+        console.log('ComfyUI: Building HunyuanVideo workflow...');
+        
+        // Check if HunyuanVideo nodes are available
+        const hasHunyuan = await comfyHasNode('HyVideoModelLoader');
+        if (!hasHunyuan) {
+          return res.status(503).json({
+            error: 'HunyuanVideo not available',
+            details: 'High-quality video generation requires HunyuanVideo nodes. Please install the HunyuanVideo custom nodes or use quality="draft" instead.',
+            stage: 'node_check',
+            suggestion: 'Switch to draft quality or install HunyuanVideo: https://github.com/kijai/ComfyUI-HunyuanVideoWrapper'
+          });
+        }
+        
+        // HunyuanVideo high-quality workflow
+        workflow = createHunyuanVideoWorkflow({
+          prompt,
+          negative_prompt,
+          init_image: comfyImageName,
+          width: videoWidth,
+          height: videoHeight,
+          steps: videoSteps,
+          cfg: videoCfg,
+          seed: Number(seed) || -1,
+          frame_count: frameCount,
+          fps: videoFps,
+          denoise: Number(denoise) || 0.85,
+          camera_motion: camera_motion || 'static',
+          use_vhs: hasVHS
+        });
+      } else {
+        console.log('ComfyUI: Building AnimateDiff workflow...');
+        
+        // Check if AnimateDiff nodes are available
+        const hasAnimateDiff = await comfyHasNode('ADE_LoadAnimateDiffModel');
+        if (!hasAnimateDiff) {
+          return res.status(503).json({
+            error: 'AnimateDiff not available',
+            details: 'Draft video generation requires AnimateDiff-Evolved custom nodes. Please install them to enable video generation.',
+            stage: 'node_check',
+            instructions: [
+              '1. Install AnimateDiff-Evolved: cd ComfyUI/custom_nodes && git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git',
+              '2. Install dependencies: cd ComfyUI-AnimateDiff-Evolved && pip install -r requirements.txt',
+              '3. Download motion model: python download_models.py',
+              '4. Restart ComfyUI',
+              'See COMFYUI_ANIMATEDIFF_SETUP.md for detailed instructions'
+            ]
+          });
+        }
+        
+        // AnimateDiff draft quality workflow (SD1.5 models only)
+        workflow = createAnimateDiffWorkflow({
+          prompt,
+          negative_prompt,
+          init_image: comfyImageName,
+          width: videoWidth,
+          height: videoHeight,
+          steps: videoSteps,
+          cfg: videoCfg,
+          seed: Number(seed) || -1,
+          denoise: Number(denoise) || 0.8,
+          frame_count: frameCount,
+          fps: videoFps,
+          checkpoint: "realisticVisionV51_v51VAE.safetensors", // Must be SD1.5 model
+          motion_model: "mm_sd_v15_v2.ckpt", // SD1.5 motion model
+          use_vhs: hasVHS
+        });
+      }
+      
+      if (!workflow) {
+        throw new Error('Workflow creation returned null or undefined');
+      }
+      
+      console.log('ComfyUI: Workflow created successfully');
+    } catch (workflowError) {
+      console.error('ComfyUI: Workflow creation failed:', workflowError);
+      return res.status(500).json({
+        error: 'Failed to create ComfyUI workflow',
+        details: workflowError.message,
+        stage: 'workflow_creation'
       });
     }
 
@@ -1422,20 +1944,41 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
     console.log('ComfyUI: Queueing workflow...');
     console.log('Workflow JSON:', JSON.stringify(workflow, null, 2));
     
-    const queueResponse = await fetch(`${COMFYUI_URL}/prompt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: workflow })
-    });
+    let queueResponse;
+    try {
+      queueResponse = await fetch(`${COMFYUI_URL}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: workflow })
+      });
+    } catch (queueError) {
+      console.error('ComfyUI queue connection error:', queueError);
+      return res.status(503).json({
+        error: 'Failed to connect to ComfyUI for workflow queuing',
+        details: queueError.message
+      });
+    }
 
     if (!queueResponse.ok) {
       const errorBody = await queueResponse.text();
       console.error('ComfyUI queue error:', errorBody);
-      throw new Error(`ComfyUI queue failed: ${queueResponse.statusText} - ${errorBody}`);
+      return res.status(500).json({
+        error: 'ComfyUI rejected workflow',
+        details: `${queueResponse.statusText} - ${errorBody}`
+      });
     }
 
     const queueResult = await queueResponse.json();
     const promptId = queueResult.prompt_id;
+    
+    if (!promptId) {
+      console.error('ComfyUI: No prompt_id returned:', queueResult);
+      return res.status(500).json({
+        error: 'ComfyUI did not return a prompt ID',
+        details: 'Workflow was submitted but no prompt_id was returned'
+      });
+    }
+    
     console.log(`ComfyUI: Workflow queued with prompt_id: ${promptId}`);
 
     // Return prompt_id immediately for progress polling
@@ -1469,45 +2012,185 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
         }
 
         if (!videoFilename) {
-          console.error(`ComfyUI: No video output found for prompt ${promptId}`);
+          console.warn(`ComfyUI: No video output found for prompt ${promptId}. Attempting frames fallback.`);
+          // Try to assemble frames into a video if SaveImage node produced images
+          const framesNode = (quality === 'high') ? '12' : '13';
+          const frames = outputs[framesNode]?.images || [];
+          if (frames.length > 0) {
+            const clipId = Date.now();
+            const framesDir = path.join('data', 'videos', `frames_${clipId}`);
+            await fs.mkdir(framesDir, { recursive: true });
+            // Copy frames into a sequentially numbered pattern
+            for (let i = 0; i < frames.length; i++) {
+              const src = path.join(COMFYUI_OUTPUT_DIR, frames[i].filename);
+              const dst = path.join(framesDir, `frame_${String(i + 1).padStart(5, '0')}.png`);
+              try {
+                await fs.copyFile(src, dst);
+              } catch (copyErr) {
+                console.error('Frame copy failed:', copyErr?.message || copyErr);
+              }
+            }
+
+            // Assemble with ffmpeg
+            const tempName = `temp_clip_${clipId}.mp4`;
+            const tempVideoPath = path.join('data', 'videos', tempName);
+            const ffmpegCmd = `ffmpeg -y -framerate ${videoFps} -i "${path.join(framesDir, 'frame_%05d.png')}" -c:v libx264 -pix_fmt yuv420p "${tempVideoPath}"`;
+            try {
+              await execAsync(ffmpegCmd);
+              // Clean up frames directory
+              try { await fs.rm(framesDir, { recursive: true, force: true }); } catch {}
+
+              // Continue with database save pipeline by setting videoFilename to the produced file
+              videoFilename = tempName; // mark as produced locally in data/videos
+              // Since downstream expects file inside COMFYUI_OUTPUT_DIR, we'll handle via special path later
+              // by bypassing sourceVideoPath copy if detected below.
+              var __framesFallbackLocal = true;
+            } catch (ffErr) {
+              console.error('FFmpeg frames->video failed:', ffErr?.message || ffErr);
+            }
+          }
+        }
+
+        if (!videoFilename) {
+          console.error(`ComfyUI: No video or frames-assembled output for prompt ${promptId}`);
+          videoResults.set(promptId, { success: false, error: 'No video output produced by ComfyUI (VHS missing and frames fallback failed).', shotId });
           return;
         }
 
         console.log(`ComfyUI: Video generated: ${videoFilename}`);
 
-        // Copy video to our videos directory
+        // Copy video to temp location first
         const clipId = Date.now();
         const sourceVideoPath = path.join(COMFYUI_OUTPUT_DIR, videoFilename);
-        const destVideoPath = path.join('data/videos', `clip_${clipId}.mp4`);
+        const tempVideoPath = path.join('data/videos', `temp_clip_${clipId}.mp4`);
+
+        if (typeof __framesFallbackLocal !== 'undefined' && __framesFallbackLocal === true) {
+          // Our tempName already points to data/videos; just rename to the expected temp path
+          const producedPath = path.join('data', 'videos', videoFilename);
+          try {
+            await fs.rename(producedPath, tempVideoPath);
+          } catch (rnErr) {
+            // Fallback to copy if rename across volume boundaries fails
+            await fs.copyFile(producedPath, tempVideoPath);
+            try { await fs.unlink(producedPath); } catch {}
+          }
+        } else {
+          await fs.copyFile(sourceVideoPath, tempVideoPath);
+        }
+
+        let finalVideoPath = tempVideoPath;
+
+        // Optional lip-sync post-process hook (Wav2Lip/SadTalker integration)
+        if (lipSync && audioUrl && typeof audioUrl === 'string') {
+          try {
+            console.log(`[LipSync] Requested for prompt ${promptId} using audio: ${audioUrl}`);
+            // Resolve local audio path, trimming to clip duration to keep alignment
+            let localAudioPath = null;
+            if (audioUrl.startsWith(`http://localhost:${PORT}/api/media/audio/`)) {
+              // Handle database audio URL
+              const audioId = audioUrl.split('/').pop();
+              const audioData = db.getAudioBinary(parseInt(audioId));
+              if (audioData?.binary_data) {
+                localAudioPath = path.join('data/videos', `temp_clip_${clipId}_audio.aac`);
+                await fs.writeFile(localAudioPath, audioData.binary_data);
+              }
+            } else if (audioUrl.startsWith(`http://localhost:${PORT}/audio/`)) {
+              // Handle legacy audio URL
+              const audioFilename = audioUrl.split('/').pop();
+              localAudioPath = path.join('data/audio', audioFilename);
+            }
+            if (localAudioPath) {
+              const trimmedAudio = path.join('data/videos', `temp_clip_${clipId}_audio_trimmed.aac`);
+              const trimCmd = `ffmpeg -y -i "${localAudioPath}" -t ${clipDuration} -c:a aac "${trimmedAudio}"`;
+              await execAsync(trimCmd);
+
+              const lipsyncedPath = path.join('data/videos', `temp_clip_${clipId}_lipsync.mp4`);
+              try {
+                await runLipSync({ videoPath: tempVideoPath, audioPath: trimmedAudio, outputPath: lipsyncedPath });
+                finalVideoPath = lipsyncedPath;
+              } catch (lipErr) {
+                console.error('[LipSync] Engine failed, continuing with original video:', lipErr.message);
+              }
+              
+              // Cleanup temp audio files
+              try {
+                if (localAudioPath.includes('temp_clip_')) await fs.unlink(localAudioPath);
+                await fs.unlink(trimmedAudio);
+              } catch {}
+            } else {
+              console.warn('[LipSync] Audio URL not local or missing; skipping lipsync');
+            }
+          } catch (e) {
+            console.error('[LipSync] Post-process failed (continuing with original video):', e);
+          }
+        }
+
+        // Store video in database
+        const videoBinary = await fs.readFile(finalVideoPath);
+        const result = db.insertVideo(
+          null, // production_id (not assigned yet)
+          `clip_${clipId}.mp4`,
+          videoWidth,
+          videoHeight,
+          clipDuration,
+          videoFps,
+          'mp4',
+          videoBinary.length,
+          videoBinary,
+          'video/mp4'
+        );
         
-        await fs.copyFile(sourceVideoPath, destVideoPath);
+        // Cleanup temp files
+        try {
+          await fs.unlink(tempVideoPath);
+          if (finalVideoPath !== tempVideoPath) await fs.unlink(finalVideoPath);
+        } catch {}
 
         // Store the result for retrieval via status endpoint
-        const clipUrl = `http://localhost:${PORT}/videos/clip_${clipId}.mp4`;
+        const clipUrl = `http://localhost:${PORT}/api/media/video/${result.lastInsertRowid}`;
         videoResults.set(promptId, {
           success: true,
           clipUrl,
           duration: clipDuration,
           frameCount,
           fps: videoFps,
-          comfyui_filename: videoFilename
+          comfyui_filename: videoFilename,
+          shotId,
+          videoId: result.lastInsertRowid
         });
         
-        console.log(`ComfyUI: Video saved to ${destVideoPath}`);
+        console.log(`ComfyUI: Video saved to database with ID ${result.lastInsertRowid}`);
+                
+                // Broadcast video availability via WebSocket
+                const videoUrl = `http://${BACKEND_HOST}:${BACKEND_PORT}/api/media/video/${result.lastInsertRowid}`;
+                if (global.broadcastToSubscribers) {
+                  global.broadcastToSubscribers('video_generated', {
+                    type: 'video_generated',
+                    id: shotId || result.lastInsertRowid,
+                    shotId,
+                    videoId: result.lastInsertRowid,
+                    url: videoUrl,
+                    filename: videoFilename,
+                    timestamp: Date.now()
+                  });
+                }
       } catch (error) {
         console.error(`ComfyUI: Background processing error for ${promptId}:`, error);
         videoResults.set(promptId, {
           success: false,
-          error: error.message
+          error: error.message,
+          shotId
         });
       }
     })();
 
   } catch (error) {
     console.error('Error generating video clip:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       error: 'Failed to generate video clip',
-      details: error.message
+      details: error.message,
+      stage: 'initialization'
     });
   }
 });
@@ -1541,6 +2224,53 @@ app.get('/api/comfyui/video-status/:promptId', async (req, res) => {
 });
 
 
+// ==================== MEDIA LIBRARY ====================
+
+app.get('/api/media/library', (req, res) => {
+  console.log('API: Fetching media library');
+  
+  try {
+    // Always use port 3002 for the backend media URLs
+    const BACKEND_PORT = 3002;
+    const BACKEND_HOST = 'localhost';
+    
+    const images = db.queries.getAllImagesUnfiltered.all();
+    const videos = db.queries.getAllVideosUnfiltered.all();
+    
+    const imageList = images.map(img => ({
+      id: img.id,
+      type: 'image',
+      url: `http://${BACKEND_HOST}:${BACKEND_PORT}/api/media/image/${img.id}`,
+      filename: img.filename,
+      width: img.width,
+      height: img.height,
+      size: img.size,
+      created_at: img.created_at
+    }));
+    
+    const videoList = videos.map(vid => ({
+      id: vid.id,
+      type: 'video',
+      url: `http://${BACKEND_HOST}:${BACKEND_PORT}/api/media/video/${vid.id}`,
+      filename: vid.filename,
+      width: vid.width,
+      height: vid.height,
+      duration: vid.duration,
+      size: vid.size,
+      created_at: vid.created_at
+    }));
+    
+    res.json({
+      images: imageList,
+      videos: videoList,
+      total: imageList.length + videoList.length
+    });
+  } catch (error) {
+    console.error('Error fetching media library:', error);
+    res.status(500).json({ error: 'Failed to fetch media library' });
+  }
+});
+
 // ==================== HEALTH CHECK ====================
 
 app.get('/api/health', async (req, res) => {
@@ -1573,9 +2303,70 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// ==================== COMFYUI PREFLIGHT ====================
+
+// Verify ComfyUI is reachable and required nodes exist
+app.get('/api/comfyui/preflight', async (req, res) => {
+  try {
+    // Quick availability check
+    const healthResp = await fetch(`${COMFYUI_URL}/queue`).catch(() => null);
+    if (!healthResp || !healthResp.ok) {
+      return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: `Cannot reach ComfyUI at ${COMFYUI_URL}` });
+    }
+
+    // Try to list object info (available nodes)
+    let nodes = {};
+    try {
+      const infoResp = await fetch(`${COMFYUI_URL}/object_info`);
+      if (infoResp.ok) {
+        const info = await infoResp.json();
+        nodes = info?.nodes || info || {};
+      }
+    } catch (_) {}
+
+    // Required node names to check (based on shipped workflows)
+    const required = [
+      // AnimateDiff
+      'ADE_EmptyLatentImageLarge', // error shows this when missing
+      // HunyuanVideo (actual node names from HunyuanVideoWrapper)
+      'HyVideoModelLoader',
+      'TextEncodeHunyuanVideo_ImageToVideo',
+      'HunyuanImageToVideo',
+      'HyVideoVAELoader',
+    ];
+    // Recommended but optional (we fall back to ffmpeg if not present)
+    const recommended = [
+      'VHS_VideoCombine'
+    ];
+
+    const availableNodeNames = Object.keys(nodes);
+    const missingNodes = required.filter((name) => !availableNodeNames.includes(name));
+    const missingRecommended = recommended.filter((name) => !availableNodeNames.includes(name));
+
+    if (missingNodes.length > 0) {
+      return res.json({
+        ok: false,
+        available: true,
+        missingNodes,
+        message: 'ComfyUI is up, but required custom nodes are missing.',
+        docs: {
+          animatediff: '/COMFYUI_ANIMATEDIFF_SETUP.md',
+          hunyuan: '/COMFYUI_HUNYUANVIDEO_SETUP.md',
+        },
+        warnings: missingRecommended.length ? { missingRecommended } : undefined
+      });
+    }
+
+    return res.json({ ok: true, available: true, missingNodes: [], warnings: missingRecommended.length ? { missingRecommended } : undefined });
+  } catch (error) {
+    console.error('Preflight error:', error);
+    return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: error.message });
+  }
+});
+
 // Start server
 ensureDirectories().then(() => {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`\n🎬 AI Music Video Backend Server`);
     console.log(`📡 Running on http://localhost:${PORT}`);
     console.log(`\n📁 Storage directories:`);
@@ -1586,4 +2377,50 @@ ensureDirectories().then(() => {
     console.log(`\n⚠️  Make sure FFmpeg is installed on your system`);
     console.log(`   Check: ffmpeg -version\n`);
   });
+  
+  // Set up WebSocket server
+  const wss = new WebSocketServer({ server });
+  
+  wss.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+    
+    ws.on('message', (message) => {
+      console.log('Received WebSocket message:', message);
+      // Handle WebSocket messages here
+      try {
+        const msgData = JSON.parse(message.toString());
+        
+        if (msgData.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        } else if (msgData.type === 'subscribe') {
+          console.log('Client subscribed to:', msgData.channel);
+          // Store the subscription
+          ws.subscriptions = ws.subscriptions || [];
+          ws.subscriptions.push(msgData.channel);
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+    });
+    
+    // Initial connection message
+    ws.send(JSON.stringify({ type: 'connection', message: 'Connected to AI Music Video Backend WebSocket server' }));
+  });
+  
+  // Helper function to broadcast to all clients or specific subscriptions
+  function broadcastToSubscribers(channel, data) {
+    wss.clients.forEach(client => {
+      if (client.readyState === 1 && client.subscriptions && client.subscriptions.includes(channel)) {
+        client.send(JSON.stringify(data));
+      }
+    });
+  }
+  
+  // Save the broadcast function globally so we can use it in other parts of the code
+  global.broadcastToSubscribers = broadcastToSubscribers;
 });
+import { runLipSync } from './lipsync.js';

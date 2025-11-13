@@ -1,5 +1,10 @@
 // Prefer environment-provided backend URL (set via Vite env)
-const BACKEND_URL = (import.meta as any)?.env?.VITE_BACKEND_URL || 'http://localhost:3002';
+// Prefer environment-provided backend URL (set via Vite env)
+// with a fallback to the correct port to ensure consistency
+export const BACKEND_URL = (import.meta as any)?.env?.VITE_BACKEND_URL || 'http://localhost:3002';
+
+// Add debug logging to confirm which URL is being used
+console.log('Backend URL initialized to:', BACKEND_URL);
 
 import type { IntroOverlayConfig, OutroOverlayConfig } from '../types';
 
@@ -219,6 +224,9 @@ export const backendService = {
     seed?: number;
     denoise?: number;
     camera_motion?: string;
+    lipSync?: boolean;
+    audioUrl?: string;
+    shotId?: string;
   }): Promise<{ promptId: string; message: string }> {
     const response = await fetch(`${BACKEND_URL}/api/comfyui/generate-video-clip`, {
       method: 'POST',
@@ -227,8 +235,36 @@ export const backendService = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to generate video clip');
+      const error = await response.json().catch(() => ({
+        error: response.statusText,
+        details: `HTTP ${response.status}`
+      }));
+      
+      // Build detailed error message
+      let errorMessage = error.error || 'Failed to generate video clip';
+      if (error.details) {
+        errorMessage += `\n\nDetails: ${error.details}`;
+      }
+      if (error.stage) {
+        errorMessage += `\n\nError occurred during: ${error.stage}`;
+      }
+      if (error.instructions) {
+        errorMessage += `\n\nSetup Instructions:\n${error.instructions.join('\n')}`;
+      }
+      if (error.suggestion) {
+        errorMessage += `\n\nSuggestion: ${error.suggestion}`;
+      }
+      
+      console.error('Video generation API error:', {
+        status: response.status,
+        error: error.error,
+        details: error.details,
+        stage: error.stage,
+        instructions: error.instructions,
+        suggestion: error.suggestion
+      });
+      
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -236,6 +272,16 @@ export const backendService = {
       promptId: data.promptId,
       message: data.message
     };
+  },
+
+  // Best-effort helper: fetch final clip URL for a completed prompt.
+  // Frontend can call this to resolve playable URLs instead of relying only on in-memory blobs.
+  async getVideoClipUrl(promptId: string): Promise<string | null> {
+    const status = await this.getVideoClipStatus(promptId);
+    if (status && status.success && status.clipUrl) {
+      return status.clipUrl;
+    }
+    return null;
   },
 
   async getVideoClipStatus(promptId: string): Promise<{
@@ -247,6 +293,8 @@ export const backendService = {
     progress?: number;
     status?: string;
     error?: string;
+    shotId?: string | null;
+    videoId?: number;
   }> {
     const response = await fetch(`${BACKEND_URL}/api/comfyui/video-status/${promptId}`);
     
@@ -267,6 +315,18 @@ export const backendService = {
     } catch (error) {
       console.error('Error getting video generation progress:', error);
       return { progress: 0, status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
+  async comfyPreflight(): Promise<{ ok: boolean; available: boolean; missingNodes: string[]; message?: string }> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/comfyui/preflight`);
+      if (!response.ok) {
+        return { ok: false, available: false, missingNodes: ['unknown'], message: `HTTP ${response.status}` };
+      }
+      return response.json();
+    } catch (e) {
+      return { ok: false, available: false, missingNodes: ['unknown'], message: e instanceof Error ? e.message : 'Network error' };
     }
   },
 

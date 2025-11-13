@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import {
   Step,
   SongAnalysis,
@@ -16,6 +16,26 @@ import {
 } from '../types';
 import * as aiService from '../services/aiService';
 import { backendService } from '../services/backendService';
+import { webSocketService } from '../services/webSocketService';
+
+function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
+  const combined = `${cameraMove} ${cinematicMotion}`.toLowerCase();
+  
+  if (combined.includes('zoom in') || combined.includes('zooming in') || combined.includes('dolly in')) {
+    return 'zoom_in';
+  }
+  if (combined.includes('zoom out') || combined.includes('zooming out') || combined.includes('dolly out') || combined.includes('pulling back')) {
+    return 'zoom_out';
+  }
+  if (combined.includes('pan left') || combined.includes('panning left')) {
+    return 'pan_left';
+  }
+  if (combined.includes('pan right') || combined.includes('panning right')) {
+    return 'pan_right';
+  }
+  
+  return 'static';
+}
 
 export interface PostProductionTasks {
     vfx: 'idle' | 'processing' | 'done';
@@ -26,6 +46,7 @@ export interface PostProductionTasks {
 type State = {
   currentStep: Step;
   songFile: File | null;
+  audioUrl?: string | null;
   singerGender: 'male' | 'female' | 'unspecified';
   modelTier: 'freemium' | 'premium';
   songAnalysis: SongAnalysis | null;
@@ -51,6 +72,7 @@ type Action =
   | { type: 'SET_API_ERROR'; payload: string }
   | { type: 'CLEAR_API_ERROR' }
   | { type: 'SET_SONG_FILE'; payload: File }
+  | { type: 'SET_AUDIO_URL'; payload: string }
   | { type: 'SET_SINGER_GENDER'; payload: 'male' | 'female' | 'unspecified' }
   | { type: 'SET_MODEL_TIER'; payload: 'freemium' | 'premium' }
   | { type: 'SET_ANALYSIS'; payload: SongAnalysis }
@@ -77,6 +99,7 @@ type Action =
 const initialState: State = {
   currentStep: Step.Upload,
   songFile: null,
+  audioUrl: null,
   singerGender: 'unspecified',
   modelTier: 'freemium',
   songAnalysis: null,
@@ -84,7 +107,7 @@ const initialState: State = {
     feel: '',
     style: '',
     mood: [],
-    videoType: 'Narrative',
+    videoType: 'Story Narrative',
     lyricsOverlay: true,
     user_notes: '',
     color_palette: [],
@@ -130,6 +153,8 @@ const reducer = (state: State, action: Action): State => {
         return { ...state, apiError: null };
     case 'SET_SONG_FILE':
         return { ...state, songFile: action.payload };
+    case 'SET_AUDIO_URL':
+        return { ...state, audioUrl: action.payload };
     case 'SET_SINGER_GENDER':
         return { ...state, singerGender: action.payload };
     case 'SET_MODEL_TIER':
@@ -181,7 +206,19 @@ const reducer = (state: State, action: Action): State => {
     case 'UPDATE_TOKEN_USAGE': {
         const updatedUsage = { ...state.tokenUsage };
         for (const key of Object.keys(action.payload) as Array<keyof TokenUsage>) {
-            updatedUsage[key] = (updatedUsage[key] || 0) + (action.payload[key] || 0);
+            const currentValue = updatedUsage[key];
+            const newValue = action.payload[key];
+            
+            if (key === 'performance') {
+                updatedUsage.performance = {
+                    ...(currentValue as TokenUsage['performance']),
+                    ...(newValue as TokenUsage['performance'])
+                };
+            } else if (typeof currentValue === 'number' && typeof newValue === 'number') {
+                (updatedUsage[key] as number) = currentValue + newValue;
+            } else if (newValue !== undefined) {
+                (updatedUsage[key] as any) = newValue;
+            }
         }
         return {
             ...state,
@@ -281,6 +318,49 @@ const reducer = (state: State, action: Action): State => {
 
 export const useMusicVideoGenerator = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const storyboardRef = useRef<Storyboard | null>(null);
+
+  useEffect(() => {
+    storyboardRef.current = state.storyboard;
+  }, [state.storyboard]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    const handleVideoGenerated = (data: any) => {
+        try {
+            const storyboard = storyboardRef.current;
+            if (!storyboard || !data?.url) return;
+            const shotIdentifier = data.shotId || data.id;
+            if (!shotIdentifier) return;
+
+            const shot = storyboard.scenes
+                .flatMap(scene => scene.shots || [])
+                .find(s => s.id === shotIdentifier);
+
+            if (!shot) return;
+
+            dispatch({
+                type: 'UPDATE_SHOT',
+                payload: {
+                    ...shot,
+                    clip_url: data.url,
+                    is_generating_clip: false,
+                    generation_progress: 100
+                }
+            });
+        } catch (err) {
+            console.error('Failed to handle video_generated event:', err);
+        }
+    };
+
+    webSocketService.on('video_generated', handleVideoGenerated);
+    return () => {
+        webSocketService.off('video_generated', handleVideoGenerated);
+    };
+  }, []);
   
   const clearApiError = useCallback(() => dispatch({ type: 'CLEAR_API_ERROR' }), []);
 
@@ -294,6 +374,14 @@ export const useMusicVideoGenerator = () => {
     dispatch({ type: 'SET_SINGER_GENDER', payload: data.singerGender});
     dispatch({ type: 'SET_MODEL_TIER', payload: data.modelTier });
     try {
+      // Upload audio for backend processing (lip-sync and export)
+      try {
+        const { audioUrl } = await backendService.uploadAudio(file);
+        dispatch({ type: 'SET_AUDIO_URL', payload: audioUrl });
+      } catch (e) {
+        console.warn('Audio upload failed; continuing without audio URL', e);
+      }
+
       const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.modelTier);
       dispatch({ type: 'SET_ANALYSIS', payload: analysis });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { analysis: tokenUsage } });
@@ -509,20 +597,28 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: true } });
       try {
           const duration = shot.end - shot.start;
-          const prompt = aiService.getPromptForClipShot(shot, state.creativeBrief);
+          const prompt = aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
           
-          // Start video generation and get promptId
+          const mappedCameraMotion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements.camera_motion);
+          
+          // Improved quality settings for both modes
+          // Draft: Better balanced settings for acceptable quality at faster speed
+          // High: Premium quality with HunyuanVideo
           const { promptId } = await backendService.generateVideoClip({
               imageUrl: shot.preview_image_url,
               prompt,
               duration,
               quality,
-              width: quality === 'high' ? 1280 : 512,
+              width: quality === 'high' ? 1280 : 768,
               height: quality === 'high' ? 720 : 512,
-              fps: quality === 'high' ? 24 : 8,
-              steps: quality === 'high' ? 30 : 20,
-              cfg: quality === 'high' ? 8.0 : 7.0,
-              camera_motion: shot.cinematic_enhancements.camera_motion
+              fps: quality === 'high' ? 24 : 16,
+              steps: quality === 'high' ? 30 : 25,
+              cfg: quality === 'high' ? 8.0 : 7.5,
+              denoise: quality === 'high' ? 0.85 : 0.8,
+              camera_motion: mappedCameraMotion,
+              lipSync: !!shot.lip_sync_hint,
+              audioUrl: state.audioUrl || undefined,
+              shotId: shot.id
           });
 
           // Poll for progress and completion
@@ -762,4 +858,3 @@ if (typeof window !== 'undefined') {
     // `window.__mvGen.setStep('Review')` from the page context.
     window.__mvGen = window.__mvGen || {};
 }
-
