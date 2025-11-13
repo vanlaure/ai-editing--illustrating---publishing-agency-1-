@@ -82,6 +82,8 @@ const App: React.FC = () => {
                         suggestAndApplyBeatSyncedVfx={musicVideoGenerator.suggestAndApplyBeatSyncedVfx}
                         onRegenerateBibleImage={musicVideoGenerator.regenerateBibleImage}
                         updateShotWithFileUpload={musicVideoGenerator.updateShotWithFileUpload}
+                        modelTier={musicVideoGenerator.modelTier}
+                        onModelTierChange={musicVideoGenerator.setModelTier}
                     />
                 );
             case Step.Review:

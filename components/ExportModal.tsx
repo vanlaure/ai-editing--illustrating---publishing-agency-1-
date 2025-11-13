@@ -483,12 +483,15 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, storyboard, 
             
             <div className="bg-black rounded-lg overflow-hidden">
               <video
-                src={previewVideoUrl}
                 controls
                 autoPlay
+                preload="metadata"
+                crossOrigin="anonymous"
                 className="w-full"
                 style={{ maxHeight: '70vh' }}
-              />
+              >
+                {previewVideoUrl && <source src={previewVideoUrl} type="video/mp4" />}
+              </video>
             </div>
             
             <p className="text-sm text-gray-400 mt-4 text-center">

@@ -248,6 +248,39 @@ export interface SongAnalysis {
         end: number;
     }[];
     beats: Beat[];
+    /**
+     * Detected vocalist roles for solo/duet scenarios.
+     * When present, guides character creation and shot planning.
+     */
+    vocals?: {
+        /** Total detected vocalists */
+        count: number; // 1 or 2 (duet), can be >2 for group but capped to 2 for now
+        /** Overall type of performance */
+        type: 'solo' | 'duet' | 'ensemble';
+        /** Duet pairing classification, if duet */
+        duet_pairing?: 'male_female' | 'male_male' | 'female_female' | 'unknown';
+        /** Per-vocalist info and where they sing */
+        vocalists: {
+            id: string;           // e.g., 'v1', 'v2'
+            display_name: string; // e.g., 'Singer A', 'Singer B'
+            gender: 'male' | 'female' | 'unknown';
+            role: 'lead' | 'co-lead' | 'backing';
+            /** Time segments (seconds) where this vocalist sings */
+            segments: { start: number; end: number }[];
+        }[];
+    };
+    lyric_analysis?: {
+        primary_themes: string[];           // e.g., "love", "loss", "celebration", "protest", "personal journey"
+        narrative_structure: 'first-person story' | 'observational' | 'abstract poetry' | 'character-driven' | 'anthemic';
+        imagery_style: 'literal' | 'metaphorical' | 'surreal' | 'symbolic';
+        emotional_arc: string;              // e.g., "builds from introspective to triumphant"
+        key_visual_elements: string[];     // Visual concepts mentioned in lyrics
+    };
+    recommended_video_types?: {
+        primary: VideoType;
+        alternatives: VideoType[];
+        reasoning: string;                  // Why these video types fit the song
+    };
 }
 
 export interface CreativeBrief {
@@ -260,7 +293,17 @@ export interface CreativeBrief {
     color_palette?: string[];
 }
 
-export type VideoType = 'Performance' | 'Narrative' | 'Abstract' | 'Concept';
+export type VideoType =
+  | 'Concert Performance'      // Live performance, singer(s) featured, stage/venue setting
+  | 'Story Narrative'          // Narrative-driven, characters and plot
+  | 'Hybrid Performance-Story' // Mix of performance and narrative elements
+  | 'Animated/Cartoon'         // Cartoon, animation, illustrated style
+  | 'Abstract/Experimental'    // Abstract visuals, conceptual, artistic
+  | 'Lyric Video'             // Focus on typography and lyric visualization
+  | 'Documentary Style'        // Behind-the-scenes, real-life footage style
+  | 'Cinematic Concept'       // High-concept, artistic cinematography
+  | 'Dance/Choreography'      // Dance-focused, choreographed movements
+  | 'Stop Motion/Claymation'; // Stop-motion animation style
 
 export interface TranscriptEntry {
     speaker: 'user' | 'ai';
@@ -359,6 +402,13 @@ export interface StoryboardShot {
     subject: string;
     location_ref: string;
     character_refs: string[];
+    /**
+     * Optional performers in frame (for performance/concert-style planning).
+     * Use vocalist ids or character names to indicate who is singing.
+     */
+    performer_refs?: string[];
+    /** Hint that this shot should align mouth motion to lyrics where possible. */
+    lip_sync_hint?: boolean;
     /** @deprecated Use lyric_overlay_v2 for advanced features */
     lyric_overlay?: {
         text: string;

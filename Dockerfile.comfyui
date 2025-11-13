@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     git \
     wget \
     curl \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -21,8 +24,26 @@ WORKDIR /app/ComfyUI
 RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Install custom nodes for video generation
+WORKDIR /app/ComfyUI/custom_nodes
+
+# AnimateDiff-Evolved (no requirements.txt needed)
+RUN git clone https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved.git
+
+# Video Helper Suite
+RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git && \
+    cd ComfyUI-VideoHelperSuite && \
+    (pip3 install --no-cache-dir -r requirements.txt || true)
+
+# HunyuanVideo Wrapper
+RUN git clone https://github.com/kijai/ComfyUI-HunyuanVideoWrapper.git && \
+    cd ComfyUI-HunyuanVideoWrapper && \
+    (pip3 install --no-cache-dir -r requirements.txt || true)
+
+WORKDIR /app/ComfyUI
+
 # Create model directories
-RUN mkdir -p models/checkpoints models/vae models/loras
+RUN mkdir -p models/checkpoints models/vae models/loras models/diffusion_models
 
 # Expose ComfyUI port
 EXPOSE 8188

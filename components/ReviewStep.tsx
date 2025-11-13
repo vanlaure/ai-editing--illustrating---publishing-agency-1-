@@ -165,6 +165,27 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
   };
   
    const renderPlayer = () => {
+      // Quick preview: if we have backend-generated clips, show the active one directly
+      const activeShot = allShots.find(s => s.id === activeShotId);
+      if (activeShot?.clip_url && previewState !== 'rendering') {
+        return (
+          <div className="w-full h-full flex flex-col">
+            <video
+              key={activeShot.clip_url}
+              controls
+              autoPlay
+              preload="metadata"
+              className="w-full h-full object-cover bg-black"
+            >
+              <source src={activeShot.clip_url} type="video/mp4" />
+            </video>
+            <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm">
+              Shot {activeShot.id}: {activeShot.subject}
+            </div>
+          </div>
+        );
+      }
+
       switch(previewState) {
         case 'rendering':
             return (
@@ -180,12 +201,15 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
             );
         case 'ready':
             return (
-                <video 
+                <video
                     ref={previewVideoRef}
-                    src={previewVideoUrl!}
                     controls
+                    preload="metadata"
+                    crossOrigin="anonymous"
                     className="w-full h-full object-cover bg-black"
-                />
+                >
+                    <source src={previewVideoUrl!} type="video/mp4" />
+                </video>
             );
         case 'error':
             return (

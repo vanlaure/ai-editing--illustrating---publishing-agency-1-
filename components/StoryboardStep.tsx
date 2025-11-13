@@ -7,6 +7,7 @@ import Spinner from './Spinner';
 import BiblesDisplay from './BiblesDisplay';
 import ImageEditorModal from './ImageEditorModal';
 import BeatTimelineVisualizer from './BeatTimelineVisualizer';
+import MediaLibraryModal from './MediaLibraryModal';
 
 declare global {
   interface Window {
@@ -34,6 +35,8 @@ interface StoryboardStepProps {
   suggestAndApplyBeatSyncedVfx: () => void;
   onRegenerateBibleImage: (item: { type: 'character' | 'location'; name: string }) => void;
   updateShotWithFileUpload: (shotId: string, mediaType: 'image' | 'video', file: File) => void;
+  modelTier: 'draft' | 'premium';
+  onModelTierChange: (tier: 'draft' | 'premium') => void;
 }
 
 const RegenerateIcon = () => (
@@ -118,7 +121,9 @@ const VideoPlayerModal: React.FC<{ url: string, onClose: () => void }> = ({ url,
                 className="bg-brand-dark p-4 rounded-lg shadow-2xl w-full max-w-4xl"
                 onClick={e => e.stopPropagation()}
             >
-                <video src={url} controls autoPlay muted className="w-full aspect-video rounded" />
+                <video controls autoPlay muted preload="metadata" crossOrigin="anonymous" className="w-full aspect-video rounded">
+                    <source src={url} type="video/mp4" />
+                </video>
                 <button 
                     onClick={onClose}
                     className="mt-4 w-full bg-brand-magenta text-white font-bold py-2 px-4 rounded-lg hover:opacity-80 transition-opacity"
@@ -219,8 +224,18 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
                 </div>
             </div>
             <div className="flex-grow">
-                <h4 className="font-bold text-white">
-                    Shot {shot.id.split('-')[1]} <span className="text-sm font-normal text-gray-400">({duration.toFixed(1)}s)</span>
+                <h4 className="font-bold text-white flex items-center flex-wrap gap-2">
+                    <span>Shot {shot.id.split('-')[1]}</span>
+                    <span className="text-sm font-normal text-gray-400">({duration.toFixed(1)}s)</span>
+                    {/* Vocalist / Duet badges */}
+                    {Array.isArray(shot.performer_refs) && shot.performer_refs.length > 0 && (
+                        <span className="ml-1 text-[11px] font-semibold bg-brand-dark border border-brand-light-gray text-white px-2 py-0.5 rounded-full">
+                            {shot.performer_refs.length > 1 ? `Duet: ${shot.performer_refs.join(' + ')}` : `Vocal: ${shot.performer_refs[0]}`}
+                        </span>
+                    )}
+                    {shot.lip_sync_hint && (
+                        <span className="text-[11px] font-semibold bg-purple-900/60 text-purple-200 px-2 py-0.5 rounded-full border border-purple-700">Lip-sync</span>
+                    )}
                 </h4>
                 {shot.lyric_overlay && (
                     <p className="text-lg text-brand-cyan italic my-2">"{shot.lyric_overlay.text}" <span className="text-xs not-italic text-gray-400">({shot.lyric_overlay.animation_style})</span></p>
@@ -315,7 +330,7 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
                              <div className="border-t border-brand-light-gray/20 my-2"></div>
                             <div>
                                 <h6 className="font-bold text-gray-400 mb-1">Video Prompt:</h6>
-                                <pre className="whitespace-pre-wrap text-gray-300 text-[11px] leading-relaxed">{aiService.getPromptForClipShot(shot, brief)}</pre>
+                                <pre className="whitespace-pre-wrap text-gray-300 text-[11px] leading-relaxed">{aiService.getPromptForClipShot(shot, bibles, brief)}</pre>
                             </div>
                         </div>
                     )}
@@ -340,18 +355,82 @@ const TransitionDisplay: React.FC<{ transition: Transition | null }> = ({ transi
     );
 }
 
-const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload }) => {
+import { webSocketService } from '../services/webSocketService';
+
+const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, modelTier, onModelTierChange }) => {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
   const [playingClipUrl, setPlayingClipUrl] = useState<string | null>(null);
   const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
   const [expandedPromptShotId, setExpandedPromptShotId] = useState<string | null>(null);
-  const [videoQuality, setVideoQuality] = useState<'draft' | 'high'>('draft');
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [selectedShotForMedia, setSelectedShotForMedia] = useState<string | null>(null);
+  const [generatingClipId, setGeneratingClipId] = useState<string | null>(null);
+  
+  // Subscribe to video generation events for specific shots
+  useEffect(() => {
+    // Track which clips are being generated for WebSocket updates
+    const handleVideoGenerated = (data: any) => {
+      if (data.id && data.url) {
+        // Update the UI to show that the video generation is complete
+        // We could also directly update the shot with the new video URL if we have mapping
+        console.log(`Video ${data.id} generated: ${data.url}`);
+      }
+    };
+    
+    webSocketService.on('video_generated', handleVideoGenerated);
+    
+    return () => {
+      webSocketService.off('video_generated', handleVideoGenerated);
+    };
+  }, []);
+  
+  // Track specific clip generation for WebSocket updates
+  useEffect(() => {
+    if (generatingClipId) {
+      // Subscribe to the specific video generation event for this shot
+      const handleSpecificVideoGenerated = (data: any) => {
+        if (data.id === generatingClipId) {
+          // Update the shot with the generated video URL
+          const updatedShots = storyboard.scenes.flatMap(s => s.shots).map(shot => {
+            if (shot.id === generatingClipId) {
+              return {
+                ...shot,
+                clip_url: data.url,
+                is_generating_clip: false,
+                generation_progress: 100
+              };
+            }
+            return shot;
+          });
+          
+          // Here we'd normally update the storyboard state, but since this is a component
+          // we might need to call a callback to update the parent state
+          
+          console.log(`Shot ${generatingClipId} clip updated: ${data.url}`);
+        }
+      };
+      
+      // Subscribe to specific video ID
+      webSocketService.on(`video_generated_${generatingClipId}`, handleSpecificVideoGenerated);
+      
+      return () => {
+        webSocketService.off(`video_generated_${generatingClipId}`, handleSpecificVideoGenerated);
+      };
+    }
+  }, [generatingClipId, storyboard]);
+  
+  // Override the onGenerateClip function to track which clip is being generated
+  const handleGenerateClip = (shotId: string, quality: 'draft' | 'high' = 'draft') => {
+    setGeneratingClipId(shotId);
+    onGenerateClip(shotId, quality);
+  };
 
   useEffect(() => {
     onGenerateAllImages();
-  }, [onGenerateAllImages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   if (!storyboard || !songAnalysis || !bibles || !creativeBrief) {
     return (
@@ -563,21 +642,42 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
         <div>
           <h2 className="text-2xl font-bold mb-2 text-white">Visualize & Generate Storyboard</h2>
           <p className="text-gray-400">Review each shot, regenerate images, and generate video clips one by one.</p>
+          {songAnalysis?.vocals?.type === 'duet' && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-dark border border-brand-light-gray">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-brand-cyan" viewBox="0 0 20 20" fill="currentColor"><path d="M13 7H7v6h6V7z" /><path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm3 6a3 3 0 116 0 3 3 0 01-6 0z" clipRule="evenodd" /></svg>
+              <span className="text-sm text-white font-semibold">Duet detected</span>
+              <span className="text-xs text-gray-400">{songAnalysis.vocals.duet_pairing || 'unknown'}</span>
+              {songAnalysis.vocals.vocalists?.length > 0 && (
+                <span className="text-xs text-gray-300">{songAnalysis.vocals.vocalists.map(v => v.display_name).slice(0,2).join(' + ')}</span>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-4">
           <div className="bg-brand-dark border border-brand-light-gray rounded-lg p-3">
-            <label htmlFor="video-quality" className="block text-xs font-medium text-gray-400 mb-2">Video Quality</label>
+            <label htmlFor="model-tier" className="block text-xs font-medium text-gray-400 mb-2">Model Tier</label>
             <select
-              id="video-quality"
-              value={videoQuality}
-              onChange={(e) => setVideoQuality(e.target.value as 'draft' | 'high')}
+              id="model-tier"
+              value={modelTier}
+              onChange={(e) => onModelTierChange(e.target.value as 'draft' | 'premium')}
               className="bg-brand-light-gray border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-brand-cyan focus:border-brand-cyan outline-none transition text-white"
             >
-              <option value="draft">Draft (AnimateDiff 512x512, ~30-60s)</option>
-              <option value="high">High Quality (HunyuanVideo 720p, ~2-3min)</option>
+              <option value="draft">Draft (AnimateDiff 512p@8fps, ~30-60s)</option>
+              <option value="premium">Premium (HunyuanVideo 720p@24fps, ~2-3min)</option>
             </select>
           </div>
+          
+          <button
+            onClick={() => setShowMediaLibrary(true)}
+            className="inline-flex items-center justify-center rounded-md border border-brand-light-gray shadow-sm px-4 py-2 bg-brand-dark text-sm font-medium text-gray-300 hover:bg-brand-light-gray focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-brand-gray focus:ring-brand-cyan transition-colors"
+            title="Browse media library"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Media Library
+          </button>
           
           <div className="relative inline-block text-left flex-shrink-0">
           <div>
@@ -663,11 +763,11 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
                         onTogglePrompt={() => setExpandedPromptShotId(prevId => prevId === shot.id ? null : shot.id)}
                         onRegenerate={() => onRegenerateImage(shot.id)}
                         onEdit={() => setEditingShot(shot)}
-                        onGenerate={() => onGenerateClip(shot.id, videoQuality)}
+                        onGenerate={() => handleGenerateClip(shot.id, modelTier === 'premium' ? 'high' : 'draft')}
                         onPlayClip={(url) => setPlayingClipUrl(url)}
                         onSetVfx={(vfx) => onSetVfx(shot.id, vfx)}
                         onFileUpload={(mediaType, file) => updateShotWithFileUpload(shot.id, mediaType, file)}
-                        quality={videoQuality}
+                        quality={modelTier === 'premium' ? 'high' : 'draft'}
                     />
                     <TransitionDisplay transition={scene.transitions[index]} />
                 </React.Fragment>
@@ -726,6 +826,34 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
                         <div className={`bg-brand-cyan h-2.5 rounded-full w-[${generatedPercent}%]`} />
                     </div>
       </div>
+      
+      {showMediaLibrary && (
+        <MediaLibraryModal
+          isOpen={showMediaLibrary}
+          onClose={() => {
+            setShowMediaLibrary(false);
+            setSelectedShotForMedia(null);
+          }}
+          onSelectMedia={async (url: string, type: 'image' | 'video') => {
+            try {
+              const response = await fetch(url);
+              const blob = await response.blob();
+              const filename = url.split('/').pop() || `media-${Date.now()}.${type === 'image' ? 'png' : 'mp4'}`;
+              const file = new File([blob], filename, { type: blob.type });
+              
+              if (selectedShotForMedia) {
+                updateShotWithFileUpload(selectedShotForMedia, type, file);
+              }
+              
+              setShowMediaLibrary(false);
+              setSelectedShotForMedia(null);
+            } catch (error) {
+              console.error('Failed to load media from library:', error);
+              alert('Failed to load media from library. Please try again.');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

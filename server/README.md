@@ -61,6 +61,13 @@ npm run dev
 - `POST /api/video/generate` - Generate video from storyboard scenes
   - Body: `{ scenes, audioUrl, title, artist }`
 
+- `POST /api/comfyui/generate-video-clip` - Generate an AI video clip from an image using ComfyUI (AnimateDiff/HunyuanVideo)
+  - Body: `{ imageUrl, prompt, duration, quality, width, height, fps, steps, cfg, seed, denoise, camera_motion, lipSync?, audioUrl? }`
+  - Returns `{ promptId }`. Poll status via `/api/comfyui/video-status/:promptId`.
+
+- `GET /api/comfyui/video-status/:promptId` - Check generation status or get final `{ clipUrl }` when complete
+- `GET /api/comfyui/progress/:promptId` - Approximate generation progress
+
 ### Health
 
 - `GET /api/health` - Check server status and FFmpeg availability
@@ -82,10 +89,18 @@ server/
 
 ## Environment Variables
 
-No environment variables required. Server uses default settings:
+Defaults:
 - Port: 3002
 - File upload limit: 100MB
 - CORS: Enabled for all origins
+
+Optional lip‑sync integration:
+- `LIPSYNC_ENGINE`: `wav2lip` | `sadtalker` (default: `wav2lip`).
+- `LIPSYNC_CMD`: Custom command template with placeholders `{video}`, `{audio}`, `{output}`, `{PWD}`. If set, overrides engine defaults.
+
+Examples:
+- Wav2Lip local: `python3 -m Wav2Lip --face "{video}" --audio "{audio}" --outfile "{output}"`
+- Wav2Lip Docker: `docker run --rm -v "{PWD}:/work" wav2lip:latest python3 -m Wav2Lip --face "/work/{video}" --audio "/work/{audio}" --outfile "/work/{output}"`
 
 ## Testing
 

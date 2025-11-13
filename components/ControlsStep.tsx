@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import type { CreativeBrief, StylePreset } from '../types';
 import { STYLE_PRESETS } from '../constants';
@@ -102,6 +102,22 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
   onGetDirectorSuggestions,
   isSuggestingBrief
 }) => {
+  const [preflight, setPreflight] = useState<{ ok: boolean; available: boolean; missingNodes: string[]; message?: string } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    // Lazy-load to avoid hammering backend; small delay for UX
+    const t = setTimeout(async () => {
+      try {
+        const mod = await import('../services/backendService');
+        const result = await mod.backendService.comfyPreflight();
+        if (mounted) setPreflight(result);
+      } catch (e) {
+        if (mounted) setPreflight({ ok: false, available: false, missingNodes: ['unknown'], message: e instanceof Error ? e.message : 'Failed to check ComfyUI' });
+      }
+    }, 300);
+    return () => { mounted = false; clearTimeout(t); };
+  }, []);
   const handlePresetSelect = (preset: StylePreset) => {
     onUpdateBrief(preset.settings);
   };
@@ -117,6 +133,42 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
       <p className="text-gray-400 mb-8">Set the creative direction for your music video.</p>
       
         <form onSubmit={handleSubmit} className="w-full max-w-4xl space-y-8">
+            {/* ComfyUI Preflight Banner */}
+            {preflight && (
+              <div className={`p-3 rounded-lg border ${preflight.ok ? 'border-green-700 bg-green-900/20' : 'border-yellow-700 bg-yellow-900/20'} flex items-start gap-3`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${preflight.ok ? 'text-green-400' : 'text-yellow-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-5.25a.75.75 0 001.5 0V9a.75.75 0 00-1.5 0v3.75zM10 7a1 1 0 110-2 1 1 0 010 2z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm">
+                  <div className="font-semibold text-white">ComfyUI Preflight {preflight.ok ? 'OK' : 'Needs Attention'}</div>
+                  {!preflight.available && (
+                    <div className="text-gray-300">Cannot reach ComfyUI. Check that it’s running at your configured URL.</div>
+                  )}
+                  {preflight.available && !preflight.ok && (
+                    <div className="text-gray-300">Missing nodes: <span className="font-mono">{preflight.missingNodes.join(', ')}</span>. See setup guides: COMFYUI_ANIMATEDIFF_SETUP.md and COMFYUI_HUNYUANVIDEO_SETUP.md</div>
+                  )}
+                  {preflight.message && <div className="text-gray-400">{preflight.message}</div>}
+                </div>
+              </div>
+            )}
+            <div>
+                <h3 className="text-lg font-semibold mb-3 text-brand-cyan">Quick Preset</h3>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        onClick={() => onUpdateBrief({
+                            videoType: 'Concert Performance',
+                            feel: brief.feel || 'Energetic, Live, Immersive',
+                            style: brief.style || 'Concert performance, stage lighting, dynamic audience',
+                            color_palette: brief.color_palette?.length ? brief.color_palette : ['#000000', '#1E90FF', '#FF0000', '#FFFFFF']
+                        })}
+                        className="px-4 py-2 rounded-lg border-2 border-brand-cyan text-white hover:bg-brand-cyan/10 transition"
+                        title="Focus on live performance with singers featured and stage visuals"
+                    >
+                        Concert Performance
+                    </button>
+                </div>
+            </div>
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-brand-cyan">1. Select a Style Preset (Optional)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -16,7 +16,7 @@ const isA1111Enabled = (): boolean => {
 
 // --- PROMPT GENERATION HELPERS (for UI display) ---
 
-// Enhanced prompt builder for A1111 with full bible details
+// Enhanced prompt builder for ComfyUI with ultra-realistic quality tags
 const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief): string => {
     console.log('=== getEnhancedPromptForA1111 CALLED ===');
     
@@ -32,8 +32,11 @@ const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: 
     const loc = bibles.locations.find(l => l.name === shot.location_ref);
     const locDesc = loc ? `${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}` : '';
     
-    // EXPLICIT prompt - character name first for emphasis
-    const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}, ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, cinematic photo, photorealistic, highly detailed`.trim();
+    // Ultra-realistic quality tags optimized for SDXL
+    const qualityTags = 'photorealistic, 8k uhd, high quality, film grain, Fujifilm XT3, sharp focus, professional photography, studio lighting, physically-based rendering, extreme detail description, raw photo, cinematic lighting';
+    
+    // EXPLICIT prompt with quality enhancement
+    const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}, ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, ${qualityTags}`.trim();
     
     console.log('=== OPTIMIZED COMFYUI PROMPT (length:', prompt.length, 'chars) ===');
     console.log(prompt);
@@ -67,9 +70,69 @@ A cinematic, 16:9 aspect ratio photo.
     return prompt.trim().replace(/^ +/gm, ''); // Tidy up for display
 };
 
-export const getPromptForClipShot = (shot: StoryboardShot, brief: CreativeBrief): string => {
-    const prompt = `Animate this image for a music video. Perform the following camera motion: ${shot.cinematic_enhancements.camera_motion}. The camera move is: ${shot.camera_move}. The subject is: ${shot.subject}. The clip should feel like this: ${brief.feel}, ${brief.style}. The clip should last approximately ${(shot.end - shot.start).toFixed(1)} seconds.`;
-    return prompt.trim();
+export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, useDetailedPrompt = false): string => {
+    // Build character descriptions from bible data
+    const characterDetails = shot.character_refs.map(ref => {
+        const char = bibles.characters.find(c => c.name === ref);
+        if (!char) return '';
+        
+        // Detailed character description for HunyuanVideo
+        if (useDetailedPrompt) {
+            return `Character "${char.name}": ${char.physical_appearance.gender_presentation}, ${char.physical_appearance.age_range} years old, ${char.physical_appearance.body_type} build, ${char.physical_appearance.key_facial_features}, ${char.physical_appearance.hair_style_and_color}. Wearing ${char.costuming_and_props.outfit_style}. Performance style: ${char.performance_and_demeanor.performance_style}.`;
+        }
+        
+        // Concise for AnimateDiff/CLIP (with weights for emphasis)
+        return `(${char.name}, ${char.physical_appearance.gender_presentation}, wearing ${char.costuming_and_props.outfit_style}:1.3)`;
+    }).filter(Boolean).join(', ');
+
+    // Build location description from bible data
+    const locationDetails = (() => {
+        const loc = bibles.locations.find(l => l.name === shot.location_ref);
+        if (!loc) return '';
+        
+        if (useDetailedPrompt) {
+            return `Location "${loc.name}": ${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}, ${loc.atmosphere_and_environment.weather} weather, ${loc.atmosphere_and_environment.dominant_mood} mood. Architecture: ${loc.architectural_and_natural_details.style}. Key features: ${loc.architectural_and_natural_details.key_features.join(', ')}.`;
+        }
+        
+        // Concise for CLIP (with weight)
+        return `(${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}:1.1)`;
+    })();
+
+    // Cinematic enhancements
+    const cinematics = `${shot.cinematic_enhancements.lighting_style} lighting, using ${shot.cinematic_enhancements.camera_lens}`;
+    
+    // Build final prompt based on detail level
+    if (useDetailedPrompt) {
+        // HunyuanVideo detailed prompt (up to ~8K tokens)
+        const parts = [
+            `Animate this scene for a music video.`,
+            characterDetails ? `Characters: ${characterDetails}` : '',
+            locationDetails ? `Setting: ${locationDetails}` : '',
+            `Action: ${shot.subject}`,
+            `Shot type: ${shot.shot_type}, ${shot.composition}`,
+            `Camera: ${shot.cinematic_enhancements.camera_motion} motion, ${shot.camera_move}`,
+            `Cinematography: ${cinematics}`,
+            `Visual style: ${brief.style}, ${brief.feel}`,
+            brief.color_palette ? `Color palette: ${brief.color_palette.join(', ')}` : '',
+            brief.videoType === 'Concert Performance' ? 'Live concert performance energy, stage lighting, audience atmosphere.' : '',
+            shot.lip_sync_hint ? 'Align mouth movements to implied singing (lip-synced look).' : '',
+            `Duration: ${(shot.end - shot.start).toFixed(1)} seconds`
+        ].filter(Boolean);
+        
+        return parts.join(' ');
+    } else {
+        // AnimateDiff concise prompt (~77 tokens for CLIP, with weighted syntax)
+        const parts = [
+            characterDetails || '(person:1.2)',
+            shot.subject,
+            locationDetails,
+            `(${shot.cinematic_enhancements.camera_motion}:1.2)`,
+            `(${brief.style}, ${brief.feel}:1.1)`,
+            `(high quality, cinematic:1.2)`
+        ].filter(Boolean);
+        
+        return parts.join(', ');
+    }
 };
 
 
@@ -81,16 +144,46 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
     const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
-      Analyze the following song lyrics and metadata to create a detailed musical analysis.
+      Analyze the following song lyrics and metadata to create a detailed musical and lyrical analysis.
       The output must be a valid JSON object.
+      
+      **MUSICAL ANALYSIS:**
       The analysis should include BPM, mood, genre, instrumentation, and a breakdown of the song structure (e.g., intro, verse, chorus).
       For the structure, provide estimated start and end timestamps in seconds.
       
-      **CRITICAL**: You must also generate a 'beats' array containing the timestamp for every beat in the song.
+      **BEATS ARRAY (CRITICAL):**
+      You must also generate a 'beats' array containing the timestamp for every beat in the song.
       - Calculate the time between beats using the formula: 60 / BPM.
       - The first beat is at time 0.
       - Continue adding beats until you reach the end of the song's total duration.
       - For each beat, assign an 'energy' score from 0.0 to 1.0. Beats within 'chorus' sections should have a higher energy (e.g., 0.8-1.0), while beats in verses or bridges should have a moderate energy (e.g., 0.5-0.7).
+      
+      **VOCALS (DUET DETECTION):**
+      Detect whether this is a solo or duet performance. If a duet, classify the pairing (male_female, male_male, female_female if possible) and provide vocalist entries with gender, role, and time segments where each vocalist sings.
+      
+      **LYRIC ANALYSIS (CRITICAL FOR CREATIVE VARIETY):**
+      Deeply analyze the lyrics to understand the song's meaning and visual potential:
+      - primary_themes: Array of 2-5 main thematic elements (e.g., "love", "heartbreak", "celebration", "social justice", "personal growth", "loneliness", "adventure", "rebellion", "spirituality", "nostalgia")
+      - narrative_structure: The storytelling approach - "linear story", "vignettes", "stream of consciousness", "dialogue-based", "metaphorical journey", "non-narrative/abstract", "testimonial", or "descriptive"
+      - imagery_style: How to interpret the lyrics visually - "literal" (show exactly what's said), "metaphorical" (symbolic interpretation), "surreal" (dreamlike/abstract), "symbolic" (deeper meaning), "mixed" (combination)
+      - emotional_arc: Describe how emotions progress through the song (e.g., "starts melancholic, builds to hopeful", "maintains energetic celebration throughout", "alternates between anger and reflection")
+      - key_visual_elements: Array of 3-7 specific visual concepts, symbols, or imagery mentioned in or suggested by the lyrics (e.g., "ocean waves", "city streets at night", "broken mirrors", "dancing figures", "mountain peaks", "vintage photographs")
+      
+      **VIDEO TYPE RECOMMENDATIONS (CRITICAL FOR CREATIVE DIVERSITY):**
+      Based on the lyric themes, emotional content, and song characteristics, recommend the most appropriate video format(s):
+      - primary: The single best-suited video type from these options:
+        * "Concert Performance" - Live performance footage, singer(s) featured prominently, stage setting, audience interaction
+        * "Story Narrative" - Plot-driven storyline with characters and scenes that tell a story related to the lyrics
+        * "Hybrid Performance-Story" - Combination of performance footage intercut with narrative scenes
+        * "Animated/Cartoon" - Animated characters and worlds, illustration style, motion graphics
+        * "Abstract/Experimental" - Non-literal visual interpretation, artistic imagery, conceptual visuals
+        * "Lyric Video" - Typography-focused, animated text, visual design around words
+        * "Documentary Style" - Real footage, interviews, behind-the-scenes, candid moments
+        * "Cinematic Concept" - High-production narrative with symbolic or metaphorical meaning
+        * "Dance/Choreography" - Dance-focused performance, movement as storytelling
+        * "Stop Motion/Claymation" - Frame-by-frame animation, tactile artistic style
+      - alternatives: Array of 2-3 other suitable video types that could also work well
+      - reasoning: 2-3 sentence explanation of why these video types fit the song's themes, lyrics, and emotional content
       
       Song Title: ${title || 'Untitled'}
       Artist: ${artist || 'Unknown'}
@@ -136,9 +229,61 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
                             },
                             required: ['time', 'energy'],
                         }
+                    },
+                    vocals: {
+                        type: Type.OBJECT,
+                        properties: {
+                            count: { type: Type.INTEGER },
+                            type: { type: Type.STRING },
+                            duet_pairing: { type: Type.STRING },
+                            vocalists: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        id: { type: Type.STRING },
+                                        display_name: { type: Type.STRING },
+                                        gender: { type: Type.STRING },
+                                        role: { type: Type.STRING },
+                                        segments: {
+                                            type: Type.ARRAY,
+                                            items: {
+                                                type: Type.OBJECT,
+                                                properties: {
+                                                    start: { type: Type.NUMBER },
+                                                    end: { type: Type.NUMBER },
+                                                },
+                                                required: ['start', 'end']
+                                            }
+                                        }
+                                    },
+                                    required: ['id', 'display_name', 'gender', 'role', 'segments']
+                                }
+                            }
+                        }
+                    },
+                    lyric_analysis: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary_themes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            narrative_structure: { type: Type.STRING },
+                            imagery_style: { type: Type.STRING },
+                            emotional_arc: { type: Type.STRING },
+                            key_visual_elements: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ['primary_themes', 'narrative_structure', 'imagery_style', 'emotional_arc', 'key_visual_elements']
+                    },
+                    recommended_video_types: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.STRING },
+                            alternatives: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            reasoning: { type: Type.STRING }
+                        },
+                        required: ['primary', 'alternatives', 'reasoning']
                     }
                 },
-                required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'beats'],
+                required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'beats', 'lyric_analysis', 'recommended_video_types'],
             }
         }
     });
@@ -654,7 +799,13 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
       - sensory_details: What textures and environmental effects are present (e.g., fog, dust, lens flare)?
       - cinematic_style: How should this location be filmed? Specify lighting, color palette, and camera perspectives.
       
-      Generate bibles for one main character and one primary location.
+      VOCALS-DRIVEN CHARACTERS:
+      - If analysis.vocals indicates a duet (vocals.count >= 2 or vocals.type == 'duet'), create TWO distinct main characters aligned to the detected vocalists (names, gender presentation, styling can differ). Otherwise, create ONE main character.
+      - Map vocalist genders to character gender_presentation when reasonable.
+      
+      LOCATIONS:
+      - Always include at least ONE primary location.
+      - If the Creative Brief videoType is "Concert Performance" or the styling implies a performance video, ensure one location is a performance venue (e.g., concert stage, club, festival) with lighting and crowd atmosphere details.
 
       Song Analysis:
       ${JSON.stringify(analysis, null, 2)}
@@ -789,9 +940,54 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       Act as an expert music video director and cinematographer. Create a complete storyboard based on the provided song analysis, creative brief, and visual bibles.
       The output must be a valid JSON object.
       
+      **CRITICAL VIDEO GENERATION CONSTRAINT**: ComfyUI generates video clips that are 6-8 seconds long. Each shot you create will result in ONE 6-8 second video clip.
+      
+      **COVERAGE REQUIREMENT**: The song is ${analysis.structure[analysis.structure.length - 1]?.end || 0} seconds long. You MUST create enough shots to cover the ENTIRE song duration.
+      - Target approximately ${Math.ceil((analysis.structure[analysis.structure.length - 1]?.end || 0) / 7)} shots total (song duration ÷ 7 seconds average clip length).
+      - Distribute shots evenly across ALL song sections to ensure complete coverage.
+      - Each section should have multiple shots based on its duration (longer sections need more shots).
+      
       **RHYTHM IS KEY**: Use the provided 'beats' data. The start and end times of your generated shots MUST align with the beat timestamps provided in the analysis. This is crucial for creating a rhythmically engaging video.
       
-      For each section in the song's structure, create a scene with 2-4 shots.
+      **LYRIC-DRIVEN CREATIVITY**: Pay close attention to the lyric_analysis in the song analysis. The primary themes, narrative structure, imagery style, emotional arc, and key visual elements should heavily influence your creative choices. Let the lyrics guide your visual storytelling.
+      
+      **VIDEO TYPE APPROACH**: The song analysis includes recommended_video_types with a primary recommendation and alternatives. Use this as your creative foundation:
+      - **Concert Performance**: Feature artist(s) performing live. Use dynamic stage lighting, crowd shots, close-ups of instruments/vocals, varying angles (front stage, side stage, crowd POV). Mix performance shots with audience reactions.
+      - **Story Narrative**: Tell a visual story that complements or interprets the lyrics. Create character arcs, plot progression, emotional journey. Use cinematic techniques like establishing shots, dialogue-free storytelling, visual metaphors.
+      - **Hybrid Performance-Story**: Intercut between performance footage and narrative scenes. The story should relate thematically to the song. Transition smoothly between the two worlds (performance venue and story location).
+      - **Animated/Cartoon**: Create stylized, illustrated visuals. Specify animation style (2D hand-drawn, motion graphics, rotoscope, etc.). Use exaggerated expressions, surreal environments, and vibrant color palettes.
+      - **Abstract/Experimental**: Focus on visual art, symbolism, and unconventional imagery. Use abstract shapes, color theory, avant-garde cinematography, visual effects, surreal compositions that evoke emotion without literal storytelling.
+      - **Lyric Video**: Typography-focused with creative text animations. Display lyrics as the primary visual element with supporting imagery, backgrounds, or motion graphics that enhance readability and mood.
+      - **Documentary Style**: Behind-the-scenes, interview-style, candid footage aesthetic. Use handheld camera work, natural lighting, real locations, authentic moments. Can include artist commentary or process footage.
+      - **Cinematic Concept**: High-production narrative with film-quality cinematography. Use dramatic lighting, carefully composed frames, color grading, and cinematic camera movements. Focus on visual storytelling with movie-like production values.
+      - **Dance/Choreography**: Feature choreographed movement as the primary focus. Wide shots to capture full body movement, rhythmic editing synchronized to beats, dynamic camera angles that enhance the dance, multiple dancers or solo performances.
+      - **Stop Motion/Claymation**: Frame-by-frame animation using physical objects. Specify materials (clay, paper, objects), tactile aesthetic, handcrafted look, creative set design with practical effects.
+      
+      **CREATIVE VARIETY**: Each video should feel unique and inspired by the specific song content. Vary your visual metaphors, shot compositions, color palettes, and storytelling approaches based on:
+      - The song's lyrical themes and narrative structure
+      - The recommended video type and its conventions
+      - The emotional arc and key visual elements from lyric analysis
+      - The creative brief's specified style, feel, and mood
+      
+      
+      **VOCALS / DUET GUIDANCE**:
+      - If analysis.vocals indicates a duet, clearly plan which vocalist is featured in each shot. Use alternating solos, harmonies, or split-screen when appropriate.
+      - Add performance-focused shots (close-ups on mouths/mics, expressive singing, crowd interaction) and set a lip sync hint on shots where vocals occur.
+      - Include a 'performer_refs' array on shots that feature one or both vocalists, using their names from the character bible.
+      
+      **CONCERT/PERFORMANCE STYLE**:
+      - If Creative Brief videoType is "Concert Performance", prioritize stage and audience shots, dynamic lights, and multi-angle coverage. Ensure most shots visibly feature the singer(s) and enable lip-sync hints where vocals occur.
+      
+      Avoid repetitive patterns. For example:
+      - If the song has themes of freedom, consider open landscapes, birds in flight, breaking chains, or expansive drone shots rather than generic imagery.
+      - If it's a love song, explore specific relationship dynamics from the lyrics rather than generic romantic tropes.
+      - For energetic songs, vary between fast-paced editing, dynamic camera moves, vibrant colors, and kinetic compositions.
+      - For melancholic songs, use slower pacing, muted colors, intimate close-ups, rain/weather effects, or solitary figure compositions.
+      
+      For each section in the song's structure, calculate how many shots are needed:
+      - Short sections (0-20s): 2-3 shots
+      - Medium sections (20-40s): 4-6 shots
+      - Long sections (40s+): 6-10 shots
       
       For EACH SHOT, provide ALL of the following details:
       - A detailed description for 'subject' and 'composition'.
@@ -848,6 +1044,8 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
                                             subject: { type: Type.STRING },
                                             location_ref: { type: Type.STRING },
                                             character_refs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                            performer_refs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Optional: which vocalist(s) are featured in this shot" },
+                                            lip_sync_hint: { type: Type.BOOLEAN, description: "Optional: true if this shot should be lip-synced" },
                                             preview_image_url: { type: Type.STRING, description: "Set to an empty string" },
                                             lyric_overlay: {
                                                 type: Type.OBJECT,
@@ -889,8 +1087,159 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
         },
     });
     const storyboard = JSON.parse(response.text) as Storyboard;
-    return { storyboard, tokenUsage: 4000 };
+
+    // Post-process to guarantee full coverage with 6–8s shots aligned to beats
+    const covered = ensureStoryboardCoverage(analysis, brief, bibles, storyboard);
+    return { storyboard: covered, tokenUsage: 4000 };
 };
+
+// === STORYBOARD COVERAGE ENFORCER ===
+function ensureStoryboardCoverage(
+    analysis: SongAnalysis,
+    brief: CreativeBrief,
+    bibles: Bibles,
+    sb: Storyboard
+): Storyboard {
+    try {
+        const totalDuration = analysis.structure?.[analysis.structure.length - 1]?.end || 0;
+        const expectedShots = Math.max(1, Math.ceil(totalDuration / 7));
+
+        // Helper: snap a time to the nearest beat within a window
+        const beats = (analysis.beats || []).map(b => b.time).sort((a,b)=>a-b);
+        const snapToBeat = (t: number): number => {
+            if (beats.length === 0) return Math.max(0, Math.min(totalDuration, t));
+            let lo = 0, hi = beats.length - 1, best = beats[0];
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                const bt = beats[mid];
+                if (Math.abs(bt - t) < Math.abs(best - t)) best = bt;
+                if (bt < t) lo = mid + 1; else hi = mid - 1;
+            }
+            return Math.max(0, Math.min(totalDuration, best));
+        };
+
+        // Build index: vocalist -> character name
+        const vocalistMap: Record<string,string> = {};
+        const vocalists = analysis.vocals?.vocalists || [];
+        for (let i=0; i<vocalists.length && i<bibles.characters.length; i++) {
+            vocalistMap[vocalists[i].id] = bibles.characters[i].name;
+        }
+
+        // Compute scenes by structure sections; ensure each has enough shots
+        const scenes = [...(sb.scenes || [])].map(s=>({ ...s, shots: [...(s.shots||[])], transitions: Array.isArray(s.transitions)? s.transitions: [] }));
+        const sectionMap = new Map<string, {start:number;end:number;name:string}>();
+        for (const sec of analysis.structure || []) sectionMap.set(sec.name + ':' + sec.start, {start: sec.start, end: sec.end, name: sec.name});
+
+        // Fill or create scenes per section
+        const ensureShotsForSection = (sectionName: string, start: number, end: number) => {
+            const duration = Math.max(0, end - start);
+            const target = Math.max(1, Math.ceil(duration / 7));
+            // Find existing scene or create
+            let scene = scenes.find(sc => sc.section === sectionName && Math.abs(sc.start - start) < 1.5);
+            if (!scene) {
+                scene = {
+                    id: `${sectionName}-${start.toFixed(1)}`,
+                    section: sectionName,
+                    start, end,
+                    shots: [],
+                    transitions: [],
+                    narrative_beats: [],
+                    description: ''
+                } as any;
+                scenes.push(scene);
+            }
+            // Add shots until target reached, enforcing 6–8s
+            const existing = scene.shots.sort((a,b)=>a.start-b.start);
+            let t = start;
+            // If existing shots, advance t
+            if (existing.length > 0) t = Math.max(t, existing[existing.length-1].end);
+            let shotIndex = existing.length;
+            while (shotIndex < target && t + 5.5 < end) {
+                const rawStart = snapToBeat(t);
+                const desired = 7; // seconds
+                const rawEnd = snapToBeat(Math.min(end, rawStart + desired));
+                const clipDur = Math.max(6, Math.min(8, rawEnd - rawStart || desired));
+                const finalEnd = snapToBeat(Math.min(end, rawStart + clipDur));
+
+                // Choose defaults
+                const primaryChar = bibles.characters[0]?.name;
+                const loc = bibles.locations[0]?.name;
+                const id = `${sectionName}-${Math.round(rawStart*10)}`;
+
+                // Determine performers and lip-sync hint
+                const performer_refs: string[] = [];
+                let lipSync = false;
+                for (const v of vocalists) {
+                    const hasOverlap = (v.segments||[]).some(seg => Math.max(seg.start, rawStart) < Math.min(seg.end, finalEnd));
+                    if (hasOverlap) {
+                        lipSync = true;
+                        const mapped = vocalistMap[v.id] || primaryChar;
+                        if (mapped) performer_refs.push(mapped);
+                    }
+                }
+
+                const newShot: StoryboardShot = {
+                    id,
+                    start: rawStart,
+                    end: finalEnd,
+                    shot_type: 'Performance close-up',
+                    camera_move: 'Subtle dolly-in',
+                    composition: 'Rule of thirds, shallow depth of field',
+                    subject: brief.videoType === 'Concert Performance' ? 'Singer performing on stage with dynamic lights' : 'Subject expressing lyric emotion',
+                    location_ref: loc || 'Primary Location',
+                    character_refs: primaryChar ? [primaryChar] : [],
+                    performer_refs: performer_refs.length ? performer_refs : undefined,
+                    lip_sync_hint: lipSync || undefined,
+                    preview_image_url: '',
+                    cinematic_enhancements: {
+                        lighting_style: 'Cinematic key light with soft fill',
+                        camera_lens: '85mm prime',
+                        camera_motion: 'Slow push-in'
+                    },
+                    design_agent_feedback: {
+                        sync_score: 8,
+                        cohesion_score: 8,
+                        placement: 'Aligned to beat grid',
+                        feedback: 'Auto-generated coverage shot aligned to music.'
+                    }
+                } as any;
+
+                scene.shots.push(newShot);
+                shotIndex++;
+                t = finalEnd + (60 / Math.max(60, analysis.bpm || 120));
+            }
+            // Ensure transitions array length
+            const shotCount = scene.shots.length;
+            if (!scene.transitions || scene.transitions.length !== Math.max(0, shotCount - 1)) {
+                scene.transitions = new Array(Math.max(0, shotCount - 1)).fill(null);
+            }
+        };
+
+        for (const sec of analysis.structure || []) {
+            ensureShotsForSection(sec.name, sec.start, sec.end);
+        }
+
+        // If global shot count still low, add more to longest sections
+        const flatShots = scenes.flatMap(s=>s.shots);
+        if (flatShots.length < expectedShots) {
+            const sectionsByDur = [...(analysis.structure||[])].sort((a,b)=>(b.end-b.start)-(a.end-a.start));
+            let idx = 0;
+            while (scenes.flatMap(s=>s.shots).length < expectedShots && idx < sectionsByDur.length) {
+                const sec = sectionsByDur[idx++];
+                ensureShotsForSection(sec.name, sec.start, sec.end);
+            }
+        }
+
+        // Sort scenes and shots
+        scenes.sort((a,b)=>a.start-b.start);
+        for (const s of scenes) s.shots.sort((a,b)=>a.start-b.start);
+
+        return { ...sb, scenes };
+    } catch (e) {
+        console.warn('ensureStoryboardCoverage failed, returning original storyboard', e);
+        return sb;
+    }
+}
 
 export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const prompt = getPromptForImageShot(shot, bibles, brief);
@@ -944,14 +1293,11 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             
             const params: any = {
                 prompt: enhancedPrompt,
-                negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, inconsistent lighting, unrealistic, bad proportions, duplicate, clone, no people, empty scene",
+                negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, inconsistent lighting, unrealistic, bad proportions, duplicate, clone, cartoon, anime, illustration, 3d render, painting",
                 width: 1024,
                 height: 576,
-                steps: 45,
-                cfg_scale: 8.5,
-                override_settings: {
-                    sd_model_checkpoint: "v1-5-pruned-emaonly.safetensors"
-                }
+                steps: 50,
+                cfg_scale: 7.5
             };
             
             // Add img2img parameters if reference image exists
@@ -1284,7 +1630,7 @@ export const generateClipForShot = async (
     const [header, base64Data] = image.split(',');
     const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
-    const prompt = getPromptForClipShot(shot, brief);
+    const prompt = getPromptForClipShot(shot, bibles, brief);
 
     let operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',

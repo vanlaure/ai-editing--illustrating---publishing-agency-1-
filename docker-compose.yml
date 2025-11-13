@@ -38,6 +38,7 @@ services:
       - ./models:/app/ComfyUI/models
       - ./outputs:/app/ComfyUI/output
       - ./server/data/images:/app/ComfyUI/input
+      - ./ComfyUI/custom_nodes:/app/ComfyUI/custom_nodes
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     deploy:
