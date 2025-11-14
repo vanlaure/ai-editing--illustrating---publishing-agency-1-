@@ -1014,6 +1014,28 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
   return workflow;
 }
 
+// Helper: Enhance prompt with camera motion instructions
+function enhancePromptWithMotion(prompt, cameraMotion) {
+  const motionDescriptions = {
+    'zoom_in': '(slow zoom in, gradual dolly forward, smooth camera push:1.3)',
+    'slow push-in': '(slow zoom in, gradual dolly forward, smooth camera push:1.3)', // Added mapping for storyboard term
+    'zoom_out': '(slow zoom out, gradual dolly back, smooth camera pull:1.3)',
+    'pan_left': '(smooth pan left, horizontal camera movement left, lateral tracking:1.3)',
+    'pan_right': '(smooth pan right, horizontal camera movement right, lateral tracking:1.3)',
+    'dynamic steadycam reveal': '(dynamic steadycam reveal, smooth camera movement, cinematic tracking shot:1.4)', // Added mapping for storyboard term
+    'static': '(static camera, locked off shot, no camera movement:1.2)'
+  };
+  
+  let motionDesc = motionDescriptions[cameraMotion.toLowerCase()] || motionDescriptions['static'];
+
+  // If the motion is not a standard camera move, assume it's a subject action and prepend it strongly.
+  if (!motionDescriptions[cameraMotion.toLowerCase()]) {
+    motionDesc = `(${cameraMotion}:1.5), ${motionDesc}`;
+  }
+
+  return `${prompt}, ${motionDesc}, cinematic video motion, professional camera work`;
+}
+
 // Helper: Create AnimateDiff video workflow
 function createAnimateDiffWorkflow({
   prompt,
@@ -1024,20 +1046,22 @@ function createAnimateDiffWorkflow({
   steps = 20,
   cfg = 7.0,
   seed = -1,
-  denoise = 0.8,
+  denoise = 0.55,
   frame_count = 16,
   fps = 8,
   motion_model = "mm_sd_v15_v2.ckpt",
   checkpoint = "realisticVisionV51_v51VAE.safetensors",
-  use_vhs = true
+  use_vhs = true,
+  camera_motion = 'static'
 }) {
+  const enhancedPrompt = enhancePromptWithMotion(prompt, camera_motion);
   const workflow = {
     "1": {
       inputs: { ckpt_name: checkpoint },
       class_type: "CheckpointLoaderSimple"
     },
     "2": {
-      inputs: { text: prompt, clip: ["1", 1] },
+      inputs: { text: enhancedPrompt, clip: ["1", 1] },
       class_type: "CLIPTextEncode"
     },
     "3": {
@@ -1156,10 +1180,11 @@ function createHunyuanVideoWorkflow({
   seed = -1,
   frame_count = 48,
   fps = 24,
-  denoise = 0.85,
+  denoise = 0.6,
   camera_motion = "static",
   use_vhs = true
 }) {
+  const enhancedPrompt = enhancePromptWithMotion(prompt, camera_motion);
   const workflow = {
     "1": {
       inputs: {
@@ -1201,7 +1226,7 @@ function createHunyuanVideoWorkflow({
       inputs: {
         clip: ["5", 0],
         clip_vision_output: ["4", 0],
-        prompt: prompt,
+        prompt: enhancedPrompt,
         image_interleave: 2
       },
       class_type: "TextEncodeHunyuanVideo_ImageToVideo"
@@ -1883,7 +1908,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
           seed: Number(seed) || -1,
           frame_count: frameCount,
           fps: videoFps,
-          denoise: Number(denoise) || 0.85,
+          denoise: Number(denoise) || 0.5,
           camera_motion: camera_motion || 'static',
           use_vhs: hasVHS
         });
@@ -1917,7 +1942,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
           steps: videoSteps,
           cfg: videoCfg,
           seed: Number(seed) || -1,
-          denoise: Number(denoise) || 0.8,
+          denoise: Number(denoise) || 0.45,
           frame_count: frameCount,
           fps: videoFps,
           checkpoint: "realisticVisionV51_v51VAE.safetensors", // Must be SD1.5 model

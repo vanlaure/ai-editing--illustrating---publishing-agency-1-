@@ -400,6 +400,8 @@ export interface StoryboardShot {
     camera_move: string;
     composition: string;
     subject: string;
+    /** What the character/subject is doing (e.g., "smiling radiantly", "looking at horizon", "turning head slowly") */
+    action: string;
     location_ref: string;
     character_refs: string[];
     /**

@@ -108,7 +108,8 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
             `Animate this scene for a music video.`,
             characterDetails ? `Characters: ${characterDetails}` : '',
             locationDetails ? `Setting: ${locationDetails}` : '',
-            `Action: ${shot.subject}`,
+            `Subject: ${shot.subject}`,
+            shot.action ? `Character Action: ${shot.action}` : '',
             `Shot type: ${shot.shot_type}, ${shot.composition}`,
             `Camera: ${shot.cinematic_enhancements.camera_motion} motion, ${shot.camera_move}`,
             `Cinematography: ${cinematics}`,
@@ -122,9 +123,10 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
         return parts.join(' ');
     } else {
         // AnimateDiff concise prompt (~77 tokens for CLIP, with weighted syntax)
+        const actionDesc = shot.action ? `${shot.subject}, ${shot.action}` : shot.subject;
         const parts = [
             characterDetails || '(person:1.2)',
-            shot.subject,
+            actionDesc,
             locationDetails,
             `(${shot.cinematic_enhancements.camera_motion}:1.2)`,
             `(${brief.style}, ${brief.feel}:1.1)`,
@@ -991,6 +993,7 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       
       For EACH SHOT, provide ALL of the following details:
       - A detailed description for 'subject' and 'composition'.
+      - **action**: CRITICAL - Specify exactly what the character/subject is doing (e.g., "smiling radiantly at camera", "looking pensively at horizon", "turning head slowly left", "dancing energetically"). This controls character behavior in the video.
       - Reference characters and locations from the bibles by name.
       - **cinematic_enhancements**: Be specific. Define a 'lighting_style' (e.g., "High-key, soft fill light"), a 'camera_lens' (e.g., "85mm prime lens", "Wide-angle 24mm"), and a 'camera_motion' (e.g., "Slow push-in on subject", "Static tripod shot").
       - **design_agent_feedback**: Provide a critical evaluation. The 'sync_score' (1-10) should reflect how well the shot matches the song's energy at that moment. The 'cohesion_score' (1-10) should reflect how well it fits the overall creative brief. Provide constructive 'feedback'.
@@ -1042,6 +1045,7 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
                                             camera_move: { type: Type.STRING },
                                             composition: { type: Type.STRING },
                                             subject: { type: Type.STRING },
+                                            action: { type: Type.STRING, description: "What the character/subject is doing (e.g., 'smiling radiantly', 'looking at horizon')" },
                                             location_ref: { type: Type.STRING },
                                             character_refs: { type: Type.ARRAY, items: { type: Type.STRING } },
                                             performer_refs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Optional: which vocalist(s) are featured in this shot" },
@@ -1074,7 +1078,7 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
                                                 required: ['sync_score', 'cohesion_score', 'placement', 'feedback']
                                             }
                                         },
-                                        required: ['id', 'start', 'end', 'shot_type', 'camera_move', 'composition', 'subject', 'location_ref', 'character_refs', 'preview_image_url', 'cinematic_enhancements', 'design_agent_feedback'],
+                                        required: ['id', 'start', 'end', 'shot_type', 'camera_move', 'composition', 'subject', 'action', 'location_ref', 'character_refs', 'preview_image_url', 'cinematic_enhancements', 'design_agent_feedback'],
                                     },
                                 },
                             },

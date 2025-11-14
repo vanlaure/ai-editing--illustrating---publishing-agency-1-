@@ -165,7 +165,7 @@ const DesignAgentFeedbackDisplay: React.FC<{ feedback: DesignAgentFeedback }> = 
     );
 };
 
-const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: CreativeBrief; isPromptExpanded: boolean; onTogglePrompt: () => void; onRegenerate: () => void; onEdit: () => void; onGenerate: () => void; onPlayClip: (url: string) => void; onSetVfx: (vfx: VFX_PRESET | 'None') => void; onFileUpload: (mediaType: 'image' | 'video', file: File) => void; quality: 'draft' | 'high'; }> = ({ shot, bibles, brief, isPromptExpanded, onTogglePrompt, onRegenerate, onEdit, onGenerate, onPlayClip, onSetVfx, onFileUpload, quality }) => {
+const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: CreativeBrief; isPromptExpanded: boolean; onTogglePrompt: () => void; onRegenerate: () => void; onEdit: () => void; onGenerate: () => void; onPlayClip: (url: string) => void; onSetVfx: (vfx: VFX_PRESET | 'None') => void; onFileUpload: (mediaType: 'image' | 'video', file: File) => void; quality: 'draft' | 'high'; generatingClipId: string | null; shotProgressMap: Record<string, number>; }> = ({ shot, bibles, brief, isPromptExpanded, onTogglePrompt, onRegenerate, onEdit, onGenerate, onPlayClip, onSetVfx, onFileUpload, quality, generatingClipId, shotProgressMap }) => {
     const duration = shot.end - shot.start;
     const isGeneratingImage = !shot.preview_image_url;
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -250,6 +250,7 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
                     <p className="text-gray-300"><strong className="font-semibold text-gray-400">Lens:</strong> {shot.cinematic_enhancements.camera_lens}</p>
                     <p className="text-gray-300 col-span-full"><strong className="font-semibold text-gray-400">Lighting:</strong> {shot.cinematic_enhancements.lighting_style}</p>
                     <p className="text-gray-300 col-span-full"><strong className="font-semibold text-gray-400">Subject:</strong> {shot.subject}</p>
+                    {shot.action && <p className="text-gray-300 col-span-full"><strong className="font-semibold text-brand-cyan">Action:</strong> {shot.action}</p>}
                 </div>
                 
                 {shot.design_agent_feedback && <DesignAgentFeedbackDisplay feedback={shot.design_agent_feedback} />}
@@ -268,16 +269,16 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
                         </select>
                     </div>
                     <div className="self-end w-full">
-                        {shot.is_generating_clip ? (
+                        {shot.is_generating_clip || generatingClipId === shot.id ? (
                             <div className="w-full">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm text-gray-300 font-medium">Generating {quality === 'high' ? 'HD' : 'Draft'} Clip...</span>
-                                    <span className="text-sm text-brand-cyan font-bold">{shot.generation_progress || 0}%</span>
+                                    <span className="text-sm text-brand-cyan font-bold">{shotProgressMap[shot.id] || shot.generation_progress || 0}%</span>
                                 </div>
                                 <div className="w-full bg-gray-700 rounded-full h-2.5">
                                     <div
                                         className="bg-brand-cyan h-2.5 rounded-full transition-all duration-300"
-                                        style={{ width: `${shot.generation_progress || 0}%` }}
+                                        style={{ width: `${shotProgressMap[shot.id] || shot.generation_progress || 0}%` }}
                                     />
                                 </div>
                             </div>
@@ -367,24 +368,49 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [selectedShotForMedia, setSelectedShotForMedia] = useState<string | null>(null);
   const [generatingClipId, setGeneratingClipId] = useState<string | null>(null);
+  const [shotProgressMap, setShotProgressMap] = useState<Record<string, number>>({});
   
-  // Subscribe to video generation events for specific shots
+  // Enhanced WebSocket handling for video generation events
   useEffect(() => {
-    // Track which clips are being generated for WebSocket updates
     const handleVideoGenerated = (data: any) => {
-      if (data.id && data.url) {
-        // Update the UI to show that the video generation is complete
-        // We could also directly update the shot with the new video URL if we have mapping
-        console.log(`Video ${data.id} generated: ${data.url}`);
+      console.log('🎬 Video generation event received:', data);
+      
+      const shotId = data.id || data.shotId;
+      const videoUrl = data.url;
+      
+      if (shotId && videoUrl) {
+        // Update progress map to 100%
+        setShotProgressMap(prev => ({
+          ...prev,
+          [shotId]: 100
+        }));
+        
+        // Update generating state
+        setGeneratingClipId(null);
+        
+        console.log(`✅ Shot ${shotId} completed. Video URL: ${videoUrl}`);
       }
     };
-    
+
+    // Listen for general video generation events
     webSocketService.on('video_generated', handleVideoGenerated);
+    
+    // Subscribe to shot-specific events for currently generating shots
+    const generatingShots = storyboard.scenes.flatMap(scene =>
+      scene.shots.filter(shot => shot.is_generating_clip)
+    );
+    
+    generatingShots.forEach(shot => {
+      webSocketService.on(`video_generated_${shot.id}`, handleVideoGenerated);
+    });
     
     return () => {
       webSocketService.off('video_generated', handleVideoGenerated);
+      generatingShots.forEach(shot => {
+        webSocketService.off(`video_generated_${shot.id}`, handleVideoGenerated);
+      });
     };
-  }, []);
+  }, [storyboard]);
   
   // Track specific clip generation for WebSocket updates
   useEffect(() => {
@@ -423,7 +449,31 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
   
   // Override the onGenerateClip function to track which clip is being generated
   const handleGenerateClip = (shotId: string, quality: 'draft' | 'high' = 'draft') => {
+    console.log(`🎬 Starting video generation for shot ${shotId} with ${quality} quality`);
+    
+    // Set generating state and reset progress
     setGeneratingClipId(shotId);
+    setShotProgressMap(prev => ({
+      ...prev,
+      [shotId]: 0
+    }));
+    
+    // Subscribe to specific video generation event
+    const handleSpecificVideoGenerated = (data: any) => {
+      if (data.id === shotId) {
+        console.log(`✅ Shot ${shotId} generation completed!`);
+        setShotProgressMap(prev => ({
+          ...prev,
+          [shotId]: 100
+        }));
+        setGeneratingClipId(null);
+        
+        // Clean up the event listener
+        webSocketService.off(`video_generated_${shotId}`, handleSpecificVideoGenerated);
+      }
+    };
+    
+    webSocketService.on(`video_generated_${shotId}`, handleSpecificVideoGenerated);
     onGenerateClip(shotId, quality);
   };
 
@@ -768,6 +818,8 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
                         onSetVfx={(vfx) => onSetVfx(shot.id, vfx)}
                         onFileUpload={(mediaType, file) => updateShotWithFileUpload(shot.id, mediaType, file)}
                         quality={modelTier === 'premium' ? 'high' : 'draft'}
+                        generatingClipId={generatingClipId}
+                        shotProgressMap={shotProgressMap}
                     />
                     <TransitionDisplay transition={scene.transitions[index]} />
                 </React.Fragment>
