@@ -1,0 +1,129 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "clip_l.safetensors",
+      "llava_name": "llava_llama3_fp8_scaled.safetensors"
+    },
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "DualCLIPLoader"
+    }
+  },
+  "2": {
+    "inputs": {
+      "unet_name": "hunyuan_video_t2v_720p_bf16.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    },
+    "class_type": "Load Diffusion Model",
+    "_meta": {
+      "title": "Load Diffusion Model (Portrait Optimized)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "hunyuan_video_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "Close-up portrait of professional woman, gentle head movement, direct eye contact with camera, natural skin texture, soft studio lighting, photorealistic, 8K quality, minimal motion",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Portrait Optimized)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "cartoon, anime, illustration, painting, artificial, blurry, low quality, distorted face, multiple faces, deformed, plastic skin, oversaturated",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Strong Negative for Realism)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "width": 720,
+      "height": 1280,
+      "length": 61,
+      "batch_size": 1
+    },
+    "class_type": "EmptyHunyuanLatentVideo",
+    "_meta": {
+      "title": "EmptyHunyuanLatentVideo (Portrait Aspect)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "seed": 999888,
+      "steps": 30,
+      "cfg": 6.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler (Portrait Fine-tuned)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "HunyuanVideo_Portrait_UltraReal_",
+      "fps": 25,
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine (Portrait)"
+    }
+  }
+}

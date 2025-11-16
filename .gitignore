@@ -64,6 +64,10 @@ logs/
 test_*.js
 *.test.js
 
+# n8n data
+n8n_data/
+n8n_data.backup*/
+
 # Temporary files
 *.tmp
 .cache/

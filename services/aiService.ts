@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat } from '../types';
+import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile } from '../types';
 import { VFX_PRESETS } from "../constants";
 import { backendService } from './backendService';
 
@@ -13,6 +13,67 @@ const isA1111Enabled = (): boolean => {
     }
     return process.env.USE_A1111 === 'true';
 };
+
+// --- VIDEO MODEL ROUTING HELPERS ---
+
+const stylizedRegex = /(anime|cel[- ]?shade|toon|cyber|neon|surreal|fantasy|dream|vapor|abstract|psychedelic)/i;
+const portraitRegex = /(close[- ]?up|portrait|headshot|bust|face|profile|medium close)/i;
+const widePlateRegex = /(wide|establishing|aerial|drone|landscape|cityscape|panorama)/i;
+
+function chooseVideoModel(
+    shot: StoryboardShot,
+    section: string,
+    brief: CreativeBrief
+): Pick<StoryboardShot, 'video_model' | 'render_profile' | 'video_model_reason' | 'workflow_hint'> {
+    const hasCharacter = Array.isArray(shot.character_refs) && shot.character_refs.length > 0;
+    const combinedText = `${shot.shot_type} ${shot.composition} ${shot.subject}`.toLowerCase();
+    const isPortrait = portraitRegex.test(combinedText);
+    const isPlate = widePlateRegex.test(combinedText) && !hasCharacter;
+    const hasMotion = /dance|running|spinning|chase|camera|dolly|pan|zoom/.test(combinedText) || /move|motion/i.test(shot.camera_move);
+    const isChorus = /chorus|drop|hook/.test(section.toLowerCase());
+    const isStylizedBrief = stylizedRegex.test(`${brief.style} ${brief.feel}`);
+
+    let video_model: VideoGenerationModel = 'waver';
+    let render_profile: RenderProfile = 'realism';
+    let workflow_hint = 'realistic';
+    let video_model_reason = 'Defaulting to Waver for balanced realism';
+
+    if (isPortrait && hasCharacter && !isStylizedBrief) {
+        video_model = 'step_video_ti2v';
+        render_profile = 'portrait';
+        workflow_hint = 'portrait';
+        video_model_reason = 'Portrait/face-driven shot -> Step-Video TI2V for facial consistency';
+    } else if (isPortrait && isStylizedBrief) {
+        video_model = 'wan2_2';
+        render_profile = 'stylized';
+        workflow_hint = 'stylized';
+        video_model_reason = 'Stylized close-up -> Wan2.2 for anime/surreal look';
+    } else if (isPlate) {
+        video_model = 'videocrafter2';
+        render_profile = 'plate';
+        workflow_hint = 'plate';
+        video_model_reason = 'Wide/establishing plate -> VideoCrafter2 for efficient backgrounds';
+    } else if (isChorus || hasMotion) {
+        video_model = isStylizedBrief ? 'wan2_2' : 'animatediff_v3';
+        render_profile = isStylizedBrief ? 'stylized' : 'realism';
+        workflow_hint = isStylizedBrief ? 'stylized' : 'realistic';
+        video_model_reason = isStylizedBrief
+            ? 'High-energy stylized section -> Wan2.2 for punchy motion'
+            : 'High-energy section -> AnimateDiff v3 for controlled motion';
+    } else if (isStylizedBrief) {
+        video_model = 'wan2_2';
+        render_profile = 'stylized';
+        workflow_hint = 'stylized';
+        video_model_reason = 'Stylized brief -> Wan2.2 aligns with art direction';
+    } else {
+        video_model = 'waver';
+        render_profile = 'realism';
+        workflow_hint = 'realistic';
+        video_model_reason = 'Realistic/narrative shot -> Waver for highest quality T2V/I2V';
+    }
+
+    return { video_model, render_profile, video_model_reason, workflow_hint };
+}
 
 // --- PROMPT GENERATION HELPERS (for UI display) ---
 
@@ -71,41 +132,45 @@ A cinematic, 16:9 aspect ratio photo.
 };
 
 export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, useDetailedPrompt = false): string => {
+    const model = shot.video_model;
+    const renderProfile = shot.render_profile;
+    const shouldUseDetailed = useDetailedPrompt || model === 'waver' || model === 'step_video_ti2v';
+    const isStylized = renderProfile === 'stylized' || model === 'wan2_2';
+    const isPortrait = renderProfile === 'portrait';
+
     // Build character descriptions from bible data
     const characterDetails = shot.character_refs.map(ref => {
         const char = bibles.characters.find(c => c.name === ref);
         if (!char) return '';
-        
-        // Detailed character description for HunyuanVideo
-        if (useDetailedPrompt) {
+
+        if (shouldUseDetailed) {
             return `Character "${char.name}": ${char.physical_appearance.gender_presentation}, ${char.physical_appearance.age_range} years old, ${char.physical_appearance.body_type} build, ${char.physical_appearance.key_facial_features}, ${char.physical_appearance.hair_style_and_color}. Wearing ${char.costuming_and_props.outfit_style}. Performance style: ${char.performance_and_demeanor.performance_style}.`;
         }
-        
-        // Concise for AnimateDiff/CLIP (with weights for emphasis)
-        return `(${char.name}, ${char.physical_appearance.gender_presentation}, wearing ${char.costuming_and_props.outfit_style}:1.3)`;
+
+        const emphasis = isPortrait ? ':1.4' : ':1.3';
+        return `(${char.name}, ${char.physical_appearance.gender_presentation}, wearing ${char.costuming_and_props.outfit_style}${emphasis})`;
     }).filter(Boolean).join(', ');
 
     // Build location description from bible data
     const locationDetails = (() => {
         const loc = bibles.locations.find(l => l.name === shot.location_ref);
         if (!loc) return '';
-        
-        if (useDetailedPrompt) {
+
+        if (shouldUseDetailed) {
             return `Location "${loc.name}": ${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}, ${loc.atmosphere_and_environment.weather} weather, ${loc.atmosphere_and_environment.dominant_mood} mood. Architecture: ${loc.architectural_and_natural_details.style}. Key features: ${loc.architectural_and_natural_details.key_features.join(', ')}.`;
         }
-        
-        // Concise for CLIP (with weight)
-        return `(${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}:1.1)`;
+
+        const weight = isStylized ? ':1.2' : ':1.1';
+        return `(${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}${weight})`;
     })();
 
-    // Cinematic enhancements
     const cinematics = `${shot.cinematic_enhancements.lighting_style} lighting, using ${shot.cinematic_enhancements.camera_lens}`;
-    
-    // Build final prompt based on detail level
-    if (useDetailedPrompt) {
-        // HunyuanVideo detailed prompt (up to ~8K tokens)
+    const pacing = `Duration: ${(shot.end - shot.start).toFixed(1)} seconds`;
+
+    if (shouldUseDetailed) {
+        // Waver / Step-Video detailed prompt
         const parts = [
-            `Animate this scene for a music video.`,
+            `Animate this ${isPortrait ? 'portrait-focused' : 'cinematic'} shot for a music video.`,
             characterDetails ? `Characters: ${characterDetails}` : '',
             locationDetails ? `Setting: ${locationDetails}` : '',
             `Subject: ${shot.subject}`,
@@ -117,24 +182,37 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
             brief.color_palette ? `Color palette: ${brief.color_palette.join(', ')}` : '',
             brief.videoType === 'Concert Performance' ? 'Live concert performance energy, stage lighting, audience atmosphere.' : '',
             shot.lip_sync_hint ? 'Align mouth movements to implied singing (lip-synced look).' : '',
-            `Duration: ${(shot.end - shot.start).toFixed(1)} seconds`
+            pacing
         ].filter(Boolean);
-        
+
         return parts.join(' ');
-    } else {
-        // AnimateDiff concise prompt (~77 tokens for CLIP, with weighted syntax)
-        const actionDesc = shot.action ? `${shot.subject}, ${shot.action}` : shot.subject;
-        const parts = [
-            characterDetails || '(person:1.2)',
-            actionDesc,
-            locationDetails,
-            `(${shot.cinematic_enhancements.camera_motion}:1.2)`,
-            `(${brief.style}, ${brief.feel}:1.1)`,
-            `(high quality, cinematic:1.2)`
-        ].filter(Boolean);
-        
-        return parts.join(', ');
     }
+
+    // Concise prompt for AnimateDiff / Wan / VideoCrafter2
+    const actionDesc = shot.action ? `${shot.subject}, ${shot.action}` : shot.subject;
+    const styleLine = isStylized ? `${brief.style}, ${brief.feel}, vibrant stylized look` : `${brief.style}, ${brief.feel}, cinematic realism`;
+    const modelTags =
+        model === 'wan2_2'
+            ? '(anime aesthetic, saturated neon, crisp line art:1.1)'
+            : model === 'animatediff_v3'
+                ? '(coherent motion, smooth camera move:1.2)'
+                : model === 'videocrafter2'
+                    ? '(environment plate, atmospheric depth:1.1)'
+                    : '(high quality:1.2)';
+    const consistencyTags = model === 'videocrafter2' ? '' : '(consistent face, identity lock, no morphing:1.2)';
+
+    const parts = [
+        characterDetails || '(figure:1.1)',
+        actionDesc,
+        locationDetails,
+        `(${shot.cinematic_enhancements.camera_motion}:1.2)`,
+        `(${styleLine})`,
+        modelTags,
+        consistencyTags,
+        pacing
+    ].filter(Boolean);
+
+    return parts.join(', ');
 };
 
 
@@ -1208,7 +1286,8 @@ function ensureStoryboardCoverage(
                     }
                 } as any;
 
-                scene.shots.push(newShot);
+                const shotWithModel = { ...newShot, ...chooseVideoModel(newShot, sectionName, brief) };
+                scene.shots.push(shotWithModel);
                 shotIndex++;
                 t = finalEnd + (60 / Math.max(60, analysis.bpm || 120));
             }
@@ -1238,7 +1317,15 @@ function ensureStoryboardCoverage(
         scenes.sort((a,b)=>a.start-b.start);
         for (const s of scenes) s.shots.sort((a,b)=>a.start-b.start);
 
-        return { ...sb, scenes };
+        const scenesWithModelHints = scenes.map(scene => ({
+            ...scene,
+            shots: scene.shots.map(shot => ({
+                ...shot,
+                ...(shot.video_model ? {} : chooseVideoModel(shot, scene.section || '', brief))
+            }))
+        }));
+
+        return { ...sb, scenes: scenesWithModelHints };
     } catch (e) {
         console.warn('ensureStoryboardCoverage failed, returning original storyboard', e);
         return sb;

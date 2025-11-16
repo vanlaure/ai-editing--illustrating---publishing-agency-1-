@@ -13,10 +13,12 @@ import {
   StoryboardScene,
   Transition,
   ExecutiveProducerFeedback,
+  VisualContinuityReport,
 } from '../types';
 import * as aiService from '../services/aiService';
 import { backendService } from '../services/backendService';
 import { webSocketService } from '../services/webSocketService';
+import { runVisualContinuityAudit } from '../services/visualAgentService';
 
 function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
   const combined = `${cameraMove} ${cinematicMotion}`.toLowerCase();
@@ -35,6 +37,72 @@ function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
   }
   
   return 'static';
+}
+
+function mapWorkflowFromShot(shot: StoryboardShot): string | undefined {
+  if (shot.workflow_hint) return shot.workflow_hint;
+  switch (shot.video_model) {
+    case 'step_video_ti2v':
+      return 'portrait';
+    case 'wan2_2':
+      return 'stylized';
+    case 'videocrafter2':
+      return 'plate';
+    case 'animatediff_v3':
+      return 'animatediff';
+    case 'waver':
+      return 'realistic';
+    default:
+      break;
+  }
+
+  if (shot.render_profile === 'stylized') return 'stylized';
+  if (shot.render_profile === 'portrait') return 'portrait';
+  if (shot.render_profile === 'plate') return 'plate';
+  return undefined;
+}
+
+function deriveModelGenerationPreferences(shot: StoryboardShot, duration: number): {
+  workflow?: string;
+  fps?: number;
+  negative_prompt?: string;
+} {
+  const workflow = mapWorkflowFromShot(shot);
+
+  const defaultFpsMap: Record<string, number> = {
+    waver: 24,
+    step_video_ti2v: 24,
+    animatediff_v3: 16,
+    wan2_2: 16,
+    videocrafter2: 16
+  };
+
+  const maxFramesMap: Record<string, number> = {
+    animatediff_v3: 32,
+    wan2_2: 48,
+    videocrafter2: 48,
+    waver: 96,
+    step_video_ti2v: 96
+  };
+
+  const negativePromptMap: Record<string, string> = {
+    waver: 'text, subtitles, watermark, logo, blurry, low quality, distorted face, extra limbs, duplicate faces',
+    step_video_ti2v: 'text, subtitles, watermark, logo, blurry, low quality, face distortion, extra limbs, duplicate faces',
+    animatediff_v3: 'text, subtitles, watermark, logo, flicker, warped limbs, bad hands, bad feet, multiple faces, face melting',
+    wan2_2: 'text, watermark, logo, low detail eyes, off-model face, flicker, extra limbs, bad hands',
+    videocrafter2: 'text, watermark, logo, muddy details, low contrast, overexposed, underexposed'
+  };
+
+  const modelKey = shot.video_model || 'waver';
+  const defaultFps = defaultFpsMap[modelKey] || 16;
+  const maxFrames = maxFramesMap[modelKey] || 48;
+  const cappedFps = Math.max(8, Math.min(defaultFps, Math.floor(maxFrames / Math.max(0.1, duration))));
+
+  return {
+    workflow,
+    fps: cappedFps,
+    negative_prompt: negativePromptMap[modelKey]
+  };
 }
 
 export interface PostProductionTasks {
@@ -64,6 +132,9 @@ type State = {
   // Executive Producer State
   isReviewing: boolean;
   executiveProducerFeedback: ExecutiveProducerFeedback | null;
+  // Visual QA Agent
+  isVisualReviewing: boolean;
+  visualContinuityReport: VisualContinuityReport | null;
 };
 
 type Action =
@@ -92,6 +163,8 @@ type Action =
   | { type: 'SET_TRANSITIONS_FOR_SCENE'; payload: { sceneId: string; transitions: (Transition | null)[] } }
   | { type: 'START_REVIEW' }
   | { type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK'; payload: ExecutiveProducerFeedback }
+  | { type: 'START_VISUAL_REVIEW' }
+  | { type: 'SET_VISUAL_REVIEW_RESULT'; payload: VisualContinuityReport | null }
   | { type: 'LOAD_PRODUCTION_FILE', payload: any }
   | { type: 'UPDATE_SHOT_MEDIA'; payload: { shotId: string; mediaType: 'image' | 'video'; url: string } }
   | { type: 'RESET' };
@@ -128,6 +201,7 @@ const initialState: State = {
     postProduction: 0,
     moodboardAnalysis: 0,
     executiveReview: 0,
+    visualReview: 0,
   },
   postProductionTasks: {
     vfx: 'idle',
@@ -139,6 +213,8 @@ const initialState: State = {
   isSuggestingBrief: false,
   isReviewing: false,
   executiveProducerFeedback: null,
+  isVisualReviewing: false,
+  visualContinuityReport: null,
 };
 
 const reducer = (state: State, action: Action): State => {
@@ -251,7 +327,7 @@ const reducer = (state: State, action: Action): State => {
             if (loc) loc.source_images = imageUrls;
         }
         return { ...state, bibles: newBibles };
-     case 'SET_TRANSITIONS_FOR_SCENE':
+    case 'SET_TRANSITIONS_FOR_SCENE':
         if (!state.storyboard) return state;
         return {
             ...state,
@@ -265,7 +341,14 @@ const reducer = (state: State, action: Action): State => {
             },
         };
     case 'START_REVIEW':
-        return { ...state, currentStep: Step.Review, isReviewing: true, executiveProducerFeedback: null };
+        return {
+            ...state,
+            currentStep: Step.Review,
+            isReviewing: true,
+            isVisualReviewing: true,
+            executiveProducerFeedback: null,
+            visualContinuityReport: null
+        };
     case 'SET_EXECUTIVE_PRODUCER_FEEDBACK':
         return {
             ...state,
@@ -273,6 +356,10 @@ const reducer = (state: State, action: Action): State => {
             executiveProducerFeedback: action.payload,
             storyboard: state.storyboard ? { ...state.storyboard, executive_producer_feedback: action.payload } : null
         };
+    case 'START_VISUAL_REVIEW':
+        return { ...state, isVisualReviewing: true, visualContinuityReport: null };
+    case 'SET_VISUAL_REVIEW_RESULT':
+        return { ...state, isVisualReviewing: false, visualContinuityReport: action.payload };
     case 'LOAD_PRODUCTION_FILE': {
         const payload = action.payload || {};
 
@@ -589,36 +676,34 @@ export const useMusicVideoGenerator = () => {
     }
   }, [state.storyboard, state.bibles, state.creativeBrief]);
 
-  const generateClip = useCallback(async (shotId: string, quality: 'draft' | 'high' = 'draft') => {
-      if (!state.storyboard || !state.creativeBrief) return;
+  const generateClip = useCallback(async (shotId: string, quality: 'draft' | 'high' = 'draft'): Promise<boolean> => {
+      if (!state.storyboard || !state.creativeBrief) return false;
       const shot = state.storyboard.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
-      if (!shot || !shot.preview_image_url || shot.preview_image_url === 'error') return;
+      if (!shot || !shot.preview_image_url || shot.preview_image_url === 'error') return false;
 
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: true } });
+      let success = false;
       try {
           const duration = shot.end - shot.start;
           const prompt = aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
           
           const mappedCameraMotion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements.camera_motion);
+          const modelPrefs = deriveModelGenerationPreferences(shot, duration);
           
-          // Improved quality settings for both modes
-          // Draft: Better balanced settings for acceptable quality at faster speed
-          // High: Premium quality with HunyuanVideo
           const { promptId } = await backendService.generateVideoClip({
               imageUrl: shot.preview_image_url,
               prompt,
               duration,
               quality,
-              width: quality === 'high' ? 1280 : 768,
-              height: quality === 'high' ? 720 : 512,
-              fps: quality === 'high' ? 24 : 16,
-              steps: quality === 'high' ? 30 : 25,
-              cfg: quality === 'high' ? 8.0 : 7.5,
-              denoise: quality === 'high' ? 0.85 : 0.8,
               camera_motion: mappedCameraMotion,
               lipSync: !!shot.lip_sync_hint,
               audioUrl: state.audioUrl || undefined,
-              shotId: shot.id
+              shotId: shot.id,
+              workflow: modelPrefs.workflow,
+              video_model: shot.video_model,
+              render_profile: shot.render_profile,
+              fps: modelPrefs.fps,
+              negative_prompt: modelPrefs.negative_prompt
           });
 
           // Poll for progress and completion
@@ -667,13 +752,52 @@ export const useMusicVideoGenerator = () => {
           if (!completed) {
               throw new Error('Video generation timed out');
           }
+          success = true;
       } catch (e) {
           console.error(e);
           dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: false } });
           const errorMessage = e instanceof Error ? e.message : 'Failed to generate clip.';
           dispatch({ type: 'SET_API_ERROR', payload: errorMessage });
       }
+      return success;
   }, [state.storyboard, state.creativeBrief]);
+
+  const generateStoryboardBatch = useCallback(async (quality: 'draft' | 'high' = 'high') => {
+      if (!state.storyboard || !state.creativeBrief) return;
+      
+      // Flatten and keep scene/shot order; fall back to start time if present.
+      const orderedShots = state.storyboard.scenes
+        .map((scene, sceneIndex) =>
+          scene.shots.map((shot, shotIndex) => ({ shot, sceneIndex, shotIndex }))
+        )
+        .flat()
+        .filter(({ shot }) => shot.preview_image_url && shot.preview_image_url !== 'error')
+        .sort((a, b) => {
+          const aStart = typeof a.shot.start === 'number' ? a.shot.start : 0;
+          const bStart = typeof b.shot.start === 'number' ? b.shot.start : 0;
+          if (aStart !== bStart) return aStart - bStart;
+          if (a.sceneIndex !== b.sceneIndex) return a.sceneIndex - b.sceneIndex;
+          if (a.shotIndex !== b.shotIndex) return a.shotIndex - b.shotIndex;
+          return a.shot.id.localeCompare(b.shot.id);
+        });
+
+      const failed: string[] = [];
+      for (const entry of orderedShots) {
+        const ok = await generateClip(entry.shot.id, quality);
+        if (!ok) failed.push(entry.shot.id);
+      }
+
+      if (failed.length) {
+        dispatch({
+          type: 'SET_API_ERROR',
+          payload: `Some clips failed to generate: ${failed.join(', ')}`
+        });
+      }
+  }, [state.storyboard, state.creativeBrief, generateClip]);
+
+  const regenerateClip = useCallback(async (shotId: string, quality: 'draft' | 'high' = 'high') => {
+      return generateClip(shotId, quality);
+  }, [generateClip]);
 
   const setVfxForShot = useCallback((shotId: string, vfx: VFX_PRESET | 'None') => {
       const shot = state.storyboard?.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
@@ -736,10 +860,34 @@ export const useMusicVideoGenerator = () => {
       }
   }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
 
+  const runVisualQaReview = useCallback(async () => {
+      if (!state.storyboard || !state.bibles) {
+          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+          return;
+      }
+      const hasAssets = state.storyboard.scenes.some(scene =>
+          scene.shots.some(shot => (shot.clip_url || shot.preview_image_url) && shot.preview_image_url !== 'error')
+      );
+      if (!hasAssets) {
+          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+          return;
+      }
+      dispatch({ type: 'START_VISUAL_REVIEW' });
+      try {
+          const { report, tokenUsage } = await runVisualContinuityAudit(state.storyboard, state.bibles, state.creativeBrief);
+          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: report });
+          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { visualReview: tokenUsage } });
+      } catch (e) {
+          dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Visual QA agent failed to review generated visuals.' });
+          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+      }
+  }, [state.storyboard, state.bibles, state.creativeBrief]);
+
   const goToReview = useCallback(() => {
     dispatch({ type: 'START_REVIEW' });
     runExecutiveProducerReview();
-  }, [runExecutiveProducerReview]);
+    runVisualQaReview();
+  }, [runExecutiveProducerReview, runVisualQaReview]);
 
   const restart = useCallback(() => dispatch({ type: 'RESET' }), []);
   
@@ -826,10 +974,13 @@ export const useMusicVideoGenerator = () => {
     regenerateImage,
     editImage,
     generateClip,
+    generateStoryboardBatch,
+    regenerateClip,
     setVfxForShot,
     applyPostProductionEnhancement,
     suggestAndApplyBeatSyncedVfx,
     goToReview,
+    runVisualQaReview,
     restart,
     loadProductionFile,
     updateCreativeBrief,

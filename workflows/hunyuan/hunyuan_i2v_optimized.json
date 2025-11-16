@@ -1,0 +1,169 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "clip_l.safetensors",
+      "llava_name": "llava_llama3_fp8_scaled.safetensors"
+    },
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "DualCLIPLoader"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_vision_name": "llava_llama3_vision.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "CLIPVisionLoader"
+    }
+  },
+  "3": {
+    "inputs": {
+      "unet_name": "hunyuan_video_v2_replace_image_to_video_720p_bf16.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    },
+    "class_type": "Load Diffusion Model",
+    "_meta": {
+      "title": "Load I2V Model (V2 Replace - Better Image Adherence)"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "hunyuan_video_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "5": {
+    "inputs": {
+      "image": "input_portrait.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Reference Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "Subtle head movement, natural breathing, maintaining eye contact, soft expression changes, photorealistic motion",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Motion Description (Concise)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "dramatic motion, fast movement, distorted face, blurry, artificial",
+      "clip": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "8": {
+    "inputs": {
+      "strength": 0.7,
+      "image": [
+        "5",
+        0
+      ],
+      "clip_vision": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "HyVideo I2V Encode",
+    "_meta": {
+      "title": "HyVideo I2V Encode (Moderate Strength)"
+    }
+  },
+  "9": {
+    "inputs": {
+      "width": 720,
+      "height": 1280,
+      "length": 73,
+      "batch_size": 1
+    },
+    "class_type": "EmptyHunyuanLatentVideo",
+    "_meta": {
+      "title": "EmptyHunyuanLatentVideo"
+    }
+  },
+  "10": {
+    "inputs": {
+      "seed": 555777,
+      "steps": 25,
+      "cfg": 6.5,
+      "flow_shift": 7.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "9",
+        0
+      ],
+      "image_cond": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler I2V (With Stability Settings)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "samples": [
+        "10",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "12": {
+    "inputs": {
+      "filename_prefix": "HunyuanVideo_I2V_Realistic_",
+      "fps": 24,
+      "images": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine I2V"
+    }
+  }
+}

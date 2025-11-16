@@ -6,6 +6,7 @@
     "Moodboard",
     "moodboard",
     "Hunyuan",
+    "hunyuan",
     "libx264",
     "Muxing",
     "Karras",
@@ -20,6 +21,7 @@
     "ckpt",
     "realvisxl",
     "dpmpp",
+    "dtype",
     "autoselect",
     "animatediff",
     "ANIMATEDIFF",
@@ -28,8 +30,10 @@
     "gifs",
     "lipsynced",
     "lipsync",
+    "llava",
     "HUNYUANVIDEO",
     "genai",
+    "oversaturated",
     "SDXL",
     "cinematics",
     "rotoscope",
@@ -37,6 +41,8 @@
     "Imagen",
     "imagen",
     "Pollinations",
-    "pollinations"
+    "pollinations",
+    "steadicam",
+    "unet"
   ]
 }

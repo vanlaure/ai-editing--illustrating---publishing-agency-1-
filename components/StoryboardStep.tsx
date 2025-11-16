@@ -26,6 +26,7 @@ interface StoryboardStepProps {
   onGenerateClip: (shotId: string, quality?: 'draft' | 'high') => void;
   onGoToReview: () => void;
   onGenerateAllImages: () => void;
+  onGenerateAllClips: (quality?: 'draft' | 'high') => Promise<void> | void;
   isProcessing: boolean;
   postProductionTasks: PostProductionTasks;
   onSetVfx: (shotId: string, vfx: VFX_PRESET | 'None') => void;
@@ -651,7 +652,8 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
   const allShots = scenes.flatMap(s => s.shots || []);
   const generatedClipsCount = allShots.filter(s => s.clip_url).length;
   const allClipsGenerated = allShots.length > 0 && generatedClipsCount === allShots.length;
-    const generatedPercent = allShots.length > 0 ? Math.min(100, Math.max(0, Math.round((generatedClipsCount / allShots.length) * 100))) : 0;
+  const generatedPercent = allShots.length > 0 ? Math.min(100, Math.max(0, Math.round((generatedClipsCount / allShots.length) * 100))) : 0;
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   
   const PostProductionButton: React.FC<{
       title: string;
@@ -727,6 +729,30 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             Media Library
+          </button>
+          
+          <button
+            onClick={async () => {
+              if (isBatchGenerating) return;
+              setIsBatchGenerating(true);
+              try {
+                const quality = modelTier === 'premium' ? 'high' : 'draft';
+                await onGenerateAllClips(quality);
+              } catch (err) {
+                console.error('Generate all clips failed', err);
+                alert('Failed to generate all clips. Please try again.');
+              } finally {
+                setIsBatchGenerating(false);
+              }
+            }}
+            disabled={isBatchGenerating || isProcessing || allClipsGenerated || allShots.length === 0}
+            className={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
+              isBatchGenerating
+                ? 'bg-gray-700 text-gray-300 cursor-wait'
+                : 'bg-brand-magenta text-white hover:opacity-85'
+            } disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed`}
+          >
+            {isBatchGenerating ? <><Spinner /> Generating all clips...</> : 'Generate All Clips'}
           </button>
           
           <div className="relative inline-block text-left flex-shrink-0">

@@ -872,6 +872,8 @@ app.post('/api/a1111/generate-batch', async (req, res) => {
 
 const COMFYUI_URL = process.env.COMFYUI_API_URL || 'http://localhost:8188';
 const COMFYUI_OUTPUT_DIR = process.env.COMFYUI_OUTPUT_DIR || '../outputs';
+const HUNYUAN_WORKFLOW_DIR = path.join(__dirname, '..', 'workflows', 'hunyuan');
+const HUNYUAN_WORKFLOW_CACHE = {};
 
 // Cache for ComfyUI node registry to avoid repeated calls
 let __comfyNodeCache = null;
@@ -1016,24 +1018,26 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
 
 // Helper: Enhance prompt with camera motion instructions
 function enhancePromptWithMotion(prompt, cameraMotion) {
+  // Concise tokens (LLaMA-3 8B optimal: <512 tokens total)
   const motionDescriptions = {
-    'zoom_in': '(slow zoom in, gradual dolly forward, smooth camera push:1.3)',
-    'slow push-in': '(slow zoom in, gradual dolly forward, smooth camera push:1.3)', // Added mapping for storyboard term
-    'zoom_out': '(slow zoom out, gradual dolly back, smooth camera pull:1.3)',
-    'pan_left': '(smooth pan left, horizontal camera movement left, lateral tracking:1.3)',
-    'pan_right': '(smooth pan right, horizontal camera movement right, lateral tracking:1.3)',
-    'dynamic steadycam reveal': '(dynamic steadycam reveal, smooth camera movement, cinematic tracking shot:1.4)', // Added mapping for storyboard term
-    'static': '(static camera, locked off shot, no camera movement:1.2)'
+    'zoom_in': 'zoom in:1.3',
+    'slow push-in': 'slow push in:1.3',
+    'zoom_out': 'zoom out:1.3',
+    'pan_left': 'pan left:1.3',
+    'pan_right': 'pan right:1.3',
+    'dynamic steadicam reveal': 'steadicam reveal:1.4',
+    'static': 'static camera:1.2'
   };
   
-  let motionDesc = motionDescriptions[cameraMotion.toLowerCase()] || motionDescriptions['static'];
+  let motionDesc = motionDescriptions[cameraMotion?.toLowerCase()] || motionDescriptions['static'];
 
-  // If the motion is not a standard camera move, assume it's a subject action and prepend it strongly.
-  if (!motionDescriptions[cameraMotion.toLowerCase()]) {
-    motionDesc = `(${cameraMotion}:1.5), ${motionDesc}`;
+  // Subject action takes priority
+  if (cameraMotion && !motionDescriptions[cameraMotion.toLowerCase()]) {
+    const truncatedAction = cameraMotion.length > 40 ? cameraMotion.substring(0, 37) + '...' : cameraMotion;
+    return `${truncatedAction}:1.5, ${prompt}, ${motionDesc}`;
   }
 
-  return `${prompt}, ${motionDesc}, cinematic video motion, professional camera work`;
+  return `${prompt}, ${motionDesc}`;
 }
 
 // Helper: Create AnimateDiff video workflow
@@ -1305,6 +1309,183 @@ function createHunyuanVideoWorkflow({
       class_type: "SaveImage"
     }
   };
+
+  return workflow;
+}
+
+async function loadHunyuanWorkflowPreset(fileName) {
+  const presetPath = path.join(HUNYUAN_WORKFLOW_DIR, fileName);
+  if (!HUNYUAN_WORKFLOW_CACHE[fileName]) {
+    const raw = await fs.readFile(presetPath, 'utf-8');
+    HUNYUAN_WORKFLOW_CACHE[fileName] = JSON.parse(raw);
+  }
+  // return deep clone so we don't mutate the cached version
+  return JSON.parse(JSON.stringify(HUNYUAN_WORKFLOW_CACHE[fileName]));
+}
+
+function addSaveImageFallback(workflow, decodeNodeId, nodeId, filenamePrefix) {
+  workflow[nodeId] = {
+    inputs: {
+      filename_prefix: filenamePrefix,
+      images: [decodeNodeId, 0]
+    },
+    class_type: "SaveImage"
+  };
+}
+
+function configureVhsOrFrames(workflow, {
+  vhsNodeId,
+  decodeNodeId,
+  hasVHS,
+  fps,
+  filenamePrefix,
+  framesNodeId
+}) {
+  if (hasVHS && workflow[vhsNodeId]) {
+    workflow[vhsNodeId].inputs.fps = fps;
+    workflow[vhsNodeId].inputs.filename_prefix = filenamePrefix;
+  } else {
+    // Remove VHS node if unavailable
+    if (workflow[vhsNodeId]) {
+      delete workflow[vhsNodeId];
+    }
+  }
+
+  // Always add a frames output for fallback
+  if (framesNodeId && !workflow[framesNodeId]) {
+    addSaveImageFallback(workflow, decodeNodeId, framesNodeId, `${filenamePrefix || 'hunyuan_frames'}`);
+  }
+}
+
+async function buildHunyuanPresetWorkflow({
+  preset,
+  prompt,
+  negative_prompt,
+  comfyImageName,
+  width,
+  height,
+  frameCount,
+  fps,
+  steps,
+  cfg,
+  seed,
+  flow_shift,
+  strength,
+  hasVHS,
+  filenamePrefix = 'HunyuanVideo'
+}) {
+  const presetFile = {
+    i2v: 'hunyuan_i2v_optimized.json',
+    portrait: 'hunyuan_portrait_ultra_realistic.json',
+    realistic: 'hunyuan_realistic_optimized.json'
+  }[preset];
+
+  if (!presetFile) {
+    throw new Error(`Unknown Hunyuan workflow preset: ${preset}`);
+  }
+
+  const workflow = await loadHunyuanWorkflowPreset(presetFile);
+
+  if (preset === 'i2v') {
+    if (!comfyImageName) {
+      throw new Error('I2V workflow requires a reference image');
+    }
+    // Load reference image
+    if (workflow["5"]?.inputs) {
+      workflow["5"].inputs.image = comfyImageName;
+    }
+    // Prompts
+    if (workflow["6"]?.inputs && prompt) {
+      workflow["6"].inputs.text = prompt;
+    }
+    if (workflow["7"]?.inputs && negative_prompt) {
+      workflow["7"].inputs.text = negative_prompt;
+    }
+    // Encode strength
+    if (workflow["8"]?.inputs && typeof strength === 'number') {
+      workflow["8"].inputs.strength = strength;
+    }
+    // Latent dims
+    if (workflow["9"]?.inputs) {
+      workflow["9"].inputs.width = width;
+      workflow["9"].inputs.height = height;
+      workflow["9"].inputs.length = frameCount;
+    }
+    // Sampler
+    if (workflow["10"]?.inputs) {
+      workflow["10"].inputs.seed = seed;
+      workflow["10"].inputs.steps = steps;
+      workflow["10"].inputs.cfg = cfg;
+      workflow["10"].inputs.sampler_name = "dpmpp_2m";
+      workflow["10"].inputs.scheduler = "karras";
+      workflow["10"].inputs.denoise = workflow["10"].inputs.denoise ?? 1.0;
+      if (typeof flow_shift === 'number') {
+        workflow["10"].inputs.flow_shift = flow_shift;
+      }
+    }
+    configureVhsOrFrames(workflow, {
+      vhsNodeId: "12",
+      decodeNodeId: "11",
+      hasVHS,
+      fps,
+      filenamePrefix: `${filenamePrefix}_I2V_`,
+      framesNodeId: "save_frames"
+    });
+  } else if (preset === 'portrait') {
+    if (workflow["4"]?.inputs && prompt) {
+      workflow["4"].inputs.text = prompt;
+    }
+    if (workflow["5"]?.inputs && negative_prompt) {
+      workflow["5"].inputs.text = negative_prompt;
+    }
+    if (workflow["6"]?.inputs) {
+      workflow["6"].inputs.width = width;
+      workflow["6"].inputs.height = height;
+      workflow["6"].inputs.length = frameCount;
+    }
+    if (workflow["7"]?.inputs) {
+      workflow["7"].inputs.seed = seed;
+      workflow["7"].inputs.steps = steps;
+      workflow["7"].inputs.cfg = cfg;
+      workflow["7"].inputs.sampler_name = "dpmpp_2m";
+      workflow["7"].inputs.scheduler = "karras";
+    }
+    configureVhsOrFrames(workflow, {
+      vhsNodeId: "9",
+      decodeNodeId: "8",
+      hasVHS,
+      fps,
+      filenamePrefix: `${filenamePrefix}_Portrait_`,
+      framesNodeId: "save_frames"
+    });
+  } else if (preset === 'realistic') {
+    if (workflow["4"]?.inputs && prompt) {
+      workflow["4"].inputs.text = prompt;
+    }
+    if (workflow["5"]?.inputs && negative_prompt) {
+      workflow["5"].inputs.text = negative_prompt;
+    }
+    if (workflow["6"]?.inputs) {
+      workflow["6"].inputs.width = width;
+      workflow["6"].inputs.height = height;
+      workflow["6"].inputs.length = frameCount;
+    }
+    if (workflow["7"]?.inputs) {
+      workflow["7"].inputs.seed = seed;
+      workflow["7"].inputs.steps = steps;
+      workflow["7"].inputs.cfg = cfg;
+      workflow["7"].inputs.sampler_name = "dpmpp_2m";
+      workflow["7"].inputs.scheduler = "karras";
+    }
+    configureVhsOrFrames(workflow, {
+      vhsNodeId: "9",
+      decodeNodeId: "8",
+      hasVHS,
+      fps,
+      filenamePrefix: `${filenamePrefix}_Realistic_`,
+      framesNodeId: "save_frames"
+    });
+  }
 
   return workflow;
 }
@@ -1763,27 +1944,47 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       camera_motion = 'static',
       lipSync = false,
       audioUrl,
-      shotId = null
+      shotId = null,
+      workflow: workflowHint = ''
     } = req.body;
 
-    if (!imageUrl || !prompt) {
-      return res.status(400).json({ error: 'Image URL and prompt are required' });
+    const workflowPresetInput = String(workflowHint || '').toLowerCase();
+    let workflowPreset = 'i2v';
+    if (workflowPresetInput.includes('portrait')) workflowPreset = 'portrait';
+    else if (['t2v', 'realistic'].includes(workflowPresetInput)) workflowPreset = 'realistic';
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+    // If no reference image is provided, fall back to T2V preset
+    if (!imageUrl && workflowPreset !== 'realistic') {
+      workflowPreset = 'realistic';
+    }
+    if (!imageUrl && workflowPreset !== 'realistic') {
+      return res.status(400).json({ error: 'Image URL is required for I2V/portrait workflows' });
     }
 
     const clipDuration = Math.max(0.5, Number(duration) || 3);
     
     // Set defaults based on quality level
     let videoWidth, videoHeight, videoFps, videoSteps, videoCfg, frameCount;
+    let presetDefaults = null;
     
     if (quality === 'high') {
-      // HunyuanVideo high-quality defaults (720p)
-      videoWidth = Number(width) || 1280;
-      videoHeight = Number(height) || 720;
-      videoFps = Number(fps) || 24;
-      videoSteps = Number(steps) || 30;
-      videoCfg = Number(cfg) || 8.0;
-      frameCount = Math.ceil(clipDuration * videoFps);
-      console.log(`ComfyUI HunyuanVideo: Generating ${clipDuration}s video (${frameCount} frames @ ${videoFps}fps, ${videoWidth}x${videoHeight})`);
+      const selectedDefaults = {
+        i2v: { width: 720, height: 1280, fps: 24, steps: 25, cfg: 6.5, maxFrames: 73, flow_shift: 7.0, strength: 0.7 },
+        portrait: { width: 720, height: 1280, fps: 25, steps: 30, cfg: 6.0, maxFrames: 61 },
+        realistic: { width: 720, height: 1280, fps: 24, steps: 25, cfg: 7.0, maxFrames: 73 }
+      }[workflowPreset] || { width: 720, height: 1280, fps: 24, steps: 25, cfg: 6.5, maxFrames: 73 };
+
+      presetDefaults = selectedDefaults;
+      videoWidth = Number(width) || selectedDefaults.width;
+      videoHeight = Number(height) || selectedDefaults.height;
+      videoFps = Number(fps) || selectedDefaults.fps;
+      videoSteps = Number(steps) || selectedDefaults.steps;
+      videoCfg = Number(cfg) || selectedDefaults.cfg;
+      frameCount = Math.min(selectedDefaults.maxFrames, Math.ceil(clipDuration * videoFps));
+      console.log(`ComfyUI HunyuanVideo (${workflowPreset}): Generating ${clipDuration}s video (${frameCount} frames @ ${videoFps}fps, ${videoWidth}x${videoHeight})`);
     } else {
       // AnimateDiff draft quality defaults - improved for better quality
       videoWidth = Number(width) || 768;
@@ -1813,60 +2014,66 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       console.log(`ComfyUI AnimateDiff: Generating ${clipDuration}s video (${frameCount} frames @ ${videoFps}fps)`);
     }
 
-    console.log(`Using image: ${imageUrl.substring(0, 100)}...`);
+    if (imageUrl) {
+      console.log(`Using image: ${imageUrl.substring(0, 100)}...`);
+    }
     console.log(`Prompt: ${prompt}`);
 
-    // Upload image to ComfyUI
-    let comfyImageName;
-    try {
-      if (imageUrl.startsWith('data:image')) {
-        comfyImageName = await uploadImageToComfyUI(imageUrl);
-    } else if (imageUrl.includes('localhost:8188/view')) {
-      // Handle ComfyUI view URL: http://localhost:8188/view?filename=X
-      const url = new URL(imageUrl);
-      const filename = url.searchParams.get('filename');
-      if (!filename) {
-        return res.status(400).json({ error: 'Invalid ComfyUI view URL: missing filename parameter' });
-      }
-      // Download image from ComfyUI
-      const imageResponse = await fetch(imageUrl);
-      if (!imageResponse.ok) {
-        return res.status(400).json({ error: `Failed to download image from ComfyUI: ${imageResponse.statusText}` });
-      }
-      const imageBuffer = await imageResponse.arrayBuffer();
-      const base64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
-      comfyImageName = await uploadImageToComfyUI(base64);
-    } else if (imageUrl.startsWith(`http://localhost:${PORT}/api/media/image/`)) {
-      // Handle database image URL
-      const imageId = imageUrl.split('/').pop();
-      const imageData = db.getImageBinary(parseInt(imageId));
-      if (!imageData?.binary_data) {
-        return res.status(404).json({ error: 'Image not found in database' });
-      }
-      const base64 = `data:${imageData.mime_type};base64,${imageData.binary_data.toString('base64')}`;
-      comfyImageName = await uploadImageToComfyUI(base64);
-    } else if (imageUrl.startsWith('http://localhost')) {
-      // Handle legacy local backend URL
-      const filename = imageUrl.split('/').pop();
-      const localPath = path.join('data/images', filename);
-      const imageBuffer = await fs.readFile(localPath);
-      const base64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-      comfyImageName = await uploadImageToComfyUI(base64);
-      } else {
-        return res.status(400).json({
-          error: 'Unsupported image URL format',
-          details: `Image URL must be a data URI, ComfyUI view URL, or localhost URL. Received: ${imageUrl.substring(0, 100)}`
+    // Upload image to ComfyUI (only when provided/required)
+    let comfyImageName = null;
+    if (imageUrl) {
+      try {
+        if (imageUrl.startsWith('data:image')) {
+          comfyImageName = await uploadImageToComfyUI(imageUrl);
+        } else if (imageUrl.includes('localhost:8188/view')) {
+          // Handle ComfyUI view URL: http://localhost:8188/view?filename=X
+          const url = new URL(imageUrl);
+          const filename = url.searchParams.get('filename');
+          if (!filename) {
+            return res.status(400).json({ error: 'Invalid ComfyUI view URL: missing filename parameter' });
+          }
+          // Download image from ComfyUI
+          const imageResponse = await fetch(imageUrl);
+          if (!imageResponse.ok) {
+            return res.status(400).json({ error: `Failed to download image from ComfyUI: ${imageResponse.statusText}` });
+          }
+          const imageBuffer = await imageResponse.arrayBuffer();
+          const base64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
+          comfyImageName = await uploadImageToComfyUI(base64);
+        } else if (imageUrl.startsWith(`http://localhost:${PORT}/api/media/image/`)) {
+          // Handle database image URL
+          const imageId = imageUrl.split('/').pop();
+          const imageData = db.getImageBinary(parseInt(imageId));
+          if (!imageData?.binary_data) {
+            return res.status(404).json({ error: 'Image not found in database' });
+          }
+          const base64 = `data:${imageData.mime_type};base64,${imageData.binary_data.toString('base64')}`;
+          comfyImageName = await uploadImageToComfyUI(base64);
+        } else if (imageUrl.startsWith('http://localhost')) {
+          // Handle legacy local backend URL
+          const filename = imageUrl.split('/').pop();
+          const localPath = path.join('data/images', filename);
+          const imageBuffer = await fs.readFile(localPath);
+          const base64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+          comfyImageName = await uploadImageToComfyUI(base64);
+        } else {
+          return res.status(400).json({
+            error: 'Unsupported image URL format',
+            details: `Image URL must be a data URI, ComfyUI view URL, or localhost URL. Received: ${imageUrl.substring(0, 100)}`
+          });
+        }
+      } catch (uploadError) {
+        console.error('ComfyUI: Image upload failed:', uploadError);
+        return res.status(500).json({
+          error: 'Failed to upload image to ComfyUI',
+          details: uploadError.message
         });
       }
-    } catch (uploadError) {
-      console.error('ComfyUI: Image upload failed:', uploadError);
-      return res.status(500).json({
-        error: 'Failed to upload image to ComfyUI',
-        details: uploadError.message
-      });
-    }
 
-    console.log(`ComfyUI: Image uploaded as ${comfyImageName}`);
+      console.log(`ComfyUI: Image uploaded as ${comfyImageName}`);
+    } else {
+      console.log('ComfyUI: Skipping image upload (text-to-video preset selected).');
+    }
 
     // Build workflow based on quality level
     let workflow;
@@ -1896,21 +2103,27 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
           });
         }
         
-        // HunyuanVideo high-quality workflow
-        workflow = createHunyuanVideoWorkflow({
+        const flowShift = presetDefaults?.flow_shift;
+        const strength = Number.isFinite(Number(req.body?.strength))
+          ? Number(req.body.strength)
+          : presetDefaults?.strength;
+
+        workflow = await buildHunyuanPresetWorkflow({
+          preset: workflowPreset,
           prompt,
           negative_prompt,
-          init_image: comfyImageName,
+          comfyImageName,
           width: videoWidth,
           height: videoHeight,
+          frameCount,
+          fps: videoFps,
           steps: videoSteps,
           cfg: videoCfg,
           seed: Number(seed) || -1,
-          frame_count: frameCount,
-          fps: videoFps,
-          denoise: Number(denoise) || 0.5,
-          camera_motion: camera_motion || 'static',
-          use_vhs: hasVHS
+          flow_shift: flowShift,
+          strength,
+          hasVHS,
+          filenamePrefix: 'HunyuanVideo'
         });
       } else {
         console.log('ComfyUI: Building AnimateDiff workflow...');
@@ -1958,7 +2171,8 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       console.log('ComfyUI: Workflow created successfully');
     } catch (workflowError) {
       console.error('ComfyUI: Workflow creation failed:', workflowError);
-      return res.status(500).json({
+      const statusCode = workflowError?.message?.includes('reference image') ? 400 : 500;
+      return res.status(statusCode).json({
         error: 'Failed to create ComfyUI workflow',
         details: workflowError.message,
         stage: 'workflow_creation'
@@ -2038,9 +2252,11 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
 
         if (!videoFilename) {
           console.warn(`ComfyUI: No video output found for prompt ${promptId}. Attempting frames fallback.`);
-          // Try to assemble frames into a video if SaveImage node produced images
-          const framesNode = (quality === 'high') ? '12' : '13';
-          const frames = outputs[framesNode]?.images || [];
+          // Try to assemble frames into a video if any SaveImage node produced images
+          const framesNode = Object.keys(outputs || {}).find(
+            (nodeId) => Array.isArray(outputs[nodeId]?.images) && outputs[nodeId].images.length > 0
+          );
+          const frames = framesNode ? (outputs[framesNode]?.images || []) : [];
           if (frames.length > 0) {
             const clipId = Date.now();
             const framesDir = path.join('data', 'videos', `frames_${clipId}`);

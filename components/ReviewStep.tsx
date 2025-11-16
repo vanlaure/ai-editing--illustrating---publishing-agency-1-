@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { Bibles, Storyboard, StoryboardShot, ExecutiveProducerFeedback } from '../types';
+import type { Bibles, Storyboard, StoryboardShot, ExecutiveProducerFeedback, VisualContinuityReport } from '../types';
 import Spinner from './Spinner';
 import ExportModal from './ExportModal';
 import ExecutiveProducerFeedbackDisplay from './ExecutiveProducerFeedbackDisplay';
@@ -13,6 +13,9 @@ interface ReviewStepProps {
   isProcessing: boolean;
   isReviewing: boolean;
   executiveProducerFeedback: ExecutiveProducerFeedback | null;
+  visualContinuityReport: VisualContinuityReport | null;
+  isVisualReviewing: boolean;
+  onRunVisualAudit: () => void;
 }
 
 const DownloadIcon = () => (
@@ -34,9 +37,112 @@ const RestartIcon = () => (
     </svg>
 );
 
-const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, onRestart, isProcessing, isReviewing, executiveProducerFeedback }) => {
+const severityStyles: Record<string, string> = {
+    note: 'text-gray-300 bg-brand-light-gray/30',
+    warn: 'text-amber-300 bg-amber-500/20',
+    fail: 'text-red-300 bg-red-500/20',
+};
+
+const VisualQaPanel: React.FC<{
+    report: VisualContinuityReport | null;
+    isRunning: boolean;
+    onRecheck: () => void;
+    hasAssets: boolean;
+}> = ({ report, isRunning, onRecheck, hasAssets }) => {
+    const checklist = report?.checklist || {
+        characterConsistency: 'Not evaluated',
+        styleConsistency: 'Not evaluated',
+        continuity: 'Not evaluated',
+        visualQuality: 'Not evaluated',
+    };
+
+    return (
+    <div className="p-6 bg-brand-dark/50 rounded-lg border border-brand-light-gray/40 shadow-lg">
+        <div className="flex items-start justify-between mb-3">
+            <div>
+                <h3 className="text-lg font-semibold text-white">AI Visual Agent</h3>
+                <p className="text-sm text-gray-400">Reviews generated images/videos for continuity before export.</p>
+            </div>
+            <button
+                onClick={onRecheck}
+                disabled={isRunning || !hasAssets}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${isRunning || !hasAssets ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-brand-magenta text-white hover:opacity-80'}`}
+            >
+                {isRunning ? 'Running...' : 'Re-run check'}
+            </button>
+        </div>
+
+        {isRunning ? (
+            <div className="flex items-center gap-3 text-gray-300">
+                <Spinner />
+                <div>
+                    <p className="font-semibold">Analyzing final visuals...</p>
+                    <p className="text-sm text-gray-400">Verifying appearance consistency, style, and continuity.</p>
+                </div>
+            </div>
+        ) : report ? (
+            <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-brand-light-gray/30 text-gray-200">
+                        Verdict: {report.overallVerdict?.toUpperCase()}
+                    </span>
+                    {typeof report.overallScore === 'number' && (
+                        <span className="text-sm text-gray-400">Score: {Math.round(report.overallScore)} / 100</span>
+                    )}
+                </div>
+                <p className="text-gray-200 text-sm">{report.summary}</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="bg-brand-light-gray/20 p-3 rounded">
+                        <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Characters</p>
+                        <p className="text-gray-200">{checklist.characterConsistency}</p>
+                    </div>
+                    <div className="bg-brand-light-gray/20 p-3 rounded">
+                        <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Style</p>
+                        <p className="text-gray-200">{checklist.styleConsistency}</p>
+                    </div>
+                    <div className="bg-brand-light-gray/20 p-3 rounded">
+                        <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Continuity</p>
+                        <p className="text-gray-200">{checklist.continuity}</p>
+                    </div>
+                    <div className="bg-brand-light-gray/20 p-3 rounded">
+                        <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Visual Quality</p>
+                        <p className="text-gray-200">{checklist.visualQuality}</p>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 className="text-sm font-semibold text-white mb-2">Flagged shots</h4>
+                    {report.issues && report.issues.length > 0 ? (
+                        <ul className="space-y-2">
+                            {report.issues.map((issue, idx) => (
+                                <li key={`${issue.shotId}-${idx}`} className="p-3 rounded-lg bg-brand-light-gray/10 border border-brand-light-gray/30">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <p className="font-semibold text-white">Shot {issue.shotId} - {issue.section}</p>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${severityStyles[issue.severity] || severityStyles.note}`}>
+                                            {issue.severity.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-200">{issue.finding}</p>
+                                    <p className="text-xs text-gray-400 mt-1">Suggestion: {issue.recommendation}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-sm text-gray-300">No continuity risks detected. Consider a manual skim before exporting.</p>
+                    )}
+                </div>
+            </div>
+        ) : (
+            <p className="text-sm text-gray-300">Waiting for generated visuals to review.</p>
+        )}
+    </div>
+    );
+};
+
+const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, onRestart, isProcessing, isReviewing, executiveProducerFeedback, visualContinuityReport, isVisualReviewing, onRunVisualAudit }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const allShots = storyboard?.scenes.flatMap(scene => scene.shots) || [];
+  const hasVisualAssets = allShots.some(shot => (shot.clip_url || shot.preview_image_url) && shot.preview_image_url !== 'error');
 
   const [previewState, setPreviewState] = useState<'idle' | 'rendering' | 'ready' | 'error'>('idle');
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -279,16 +385,24 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
         <h2 className="text-2xl font-bold mb-2 text-white">Final Review & Export</h2>
         <p className="text-gray-400 mb-8">Review the final sequence and the AI Executive Producer's notes.</p>
         
-        <div className="w-full max-w-7xl mx-auto mb-8">
-            {isReviewing ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-brand-dark/50 rounded-lg border border-brand-light-gray text-center min-h-[200px]">
-                    <Spinner />
-                    <h3 className="text-lg font-semibold mt-4">AI Executive Producer is reviewing your project...</h3>
-                    <p className="text-sm text-gray-400">This may take a moment.</p>
-                </div>
-            ) : executiveProducerFeedback ? (
-                <ExecutiveProducerFeedbackDisplay feedback={executiveProducerFeedback} />
-            ) : null}
+        <div className="w-full max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+                {isReviewing ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-brand-dark/50 rounded-lg border border-brand-light-gray text-center min-h-[200px]">
+                        <Spinner />
+                        <h3 className="text-lg font-semibold mt-4">AI Executive Producer is reviewing your project...</h3>
+                        <p className="text-sm text-gray-400">This may take a moment.</p>
+                    </div>
+                ) : executiveProducerFeedback ? (
+                    <ExecutiveProducerFeedbackDisplay feedback={executiveProducerFeedback} />
+                ) : null}
+            </div>
+            <VisualQaPanel
+                report={visualContinuityReport}
+                isRunning={isVisualReviewing}
+                onRecheck={onRunVisualAudit}
+                hasAssets={hasVisualAssets}
+            />
         </div>
 
 

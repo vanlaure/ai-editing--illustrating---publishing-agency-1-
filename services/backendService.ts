@@ -215,6 +215,7 @@ export const backendService = {
     prompt: string;
     duration: number;
     quality?: 'draft' | 'high';
+    workflow?: 'i2v' | 'portrait' | 'realistic' | 'stylized' | 'plate' | 'animatediff';
     negative_prompt?: string;
     width?: number;
     height?: number;
@@ -227,6 +228,8 @@ export const backendService = {
     lipSync?: boolean;
     audioUrl?: string;
     shotId?: string;
+    video_model?: string;
+    render_profile?: string;
   }): Promise<{ promptId: string; message: string }> {
     const response = await fetch(`${BACKEND_URL}/api/comfyui/generate-video-clip`, {
       method: 'POST',

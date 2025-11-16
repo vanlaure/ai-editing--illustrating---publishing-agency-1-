@@ -9,6 +9,21 @@ export enum Step {
 export type VFX_PRESET = 'Slow Motion' | 'Speed Ramp' | 'Lens Flare' | 'Glitch Effect' | 'Vintage Film Grain';
 
 /**
+ * Video generation model routing for ComfyUI backends.
+ */
+export type VideoGenerationModel =
+  | 'waver'
+  | 'step_video_ti2v'
+  | 'animatediff_v3'
+  | 'wan2_2'
+  | 'videocrafter2';
+
+/**
+ * High-level render intent hints to keep routing predictable.
+ */
+export type RenderProfile = 'realism' | 'stylized' | 'plate' | 'portrait';
+
+/**
  * Categories for advanced VFX effects
  */
 export type VFX_CATEGORY = 'motion' | 'stylization' | 'atmospheric' | 'transition';
@@ -185,6 +200,10 @@ export interface QualityReport {
 export interface StylePreset {
     name: string;
     description: string;
+    /** High-level grouping for dropdown filtering, e.g. 'Performance', 'Narrative', 'Visual FX' */
+    category?: string;
+    /** Optional substyle label for finer grouping */
+    substyle?: string;
     settings: {
         feel: string;
         style: string;
@@ -420,6 +439,14 @@ export interface StoryboardShot {
     lyric_overlay_v2?: LyricOverlay;
     preview_image_url: string; // URL or base64 string, or 'error'
     clip_url?: string; // URL to the generated video clip
+    /** Preferred video model for this shot (ComfyUI routing hint) */
+    video_model?: VideoGenerationModel;
+    /** Render intent that complements the model choice */
+    render_profile?: RenderProfile;
+    /** Human-readable explanation for why the model/profile were chosen */
+    video_model_reason?: string;
+    /** Optional workflow hint for the backend (e.g., 'realistic', 'portrait', 'stylized') */
+    workflow_hint?: string;
     /** @deprecated Use vfx_stack for multiple effects */
     vfx?: VFX_PRESET | 'None';
     /** Stack of VFX effects applied in sequence */
@@ -510,6 +537,8 @@ export interface TokenUsage {
         /** Bottleneck duration in seconds */
         bottleneck_duration_seconds?: number;
     };
+    /** Tokens spent on last-minute visual QA */
+    visualReview?: number;
 }
 
 export type TitleSequenceStyle = 'None' | 'Minimal Fade' | 'Kinetic Glitch' | 'Cinematic Reveal';
@@ -555,4 +584,30 @@ export interface ExportOptions {
     includeCredits: boolean;
     intro?: IntroOverlayConfig;
     outro?: OutroOverlayConfig;
+}
+
+export type VisualContinuitySeverity = 'note' | 'warn' | 'fail';
+
+export interface VisualContinuityIssue {
+    shotId: string;
+    sceneId: string;
+    section: string;
+    assetType: 'image' | 'video';
+    assetUrl: string;
+    severity: VisualContinuitySeverity;
+    finding: string;
+    recommendation: string;
+}
+
+export interface VisualContinuityReport {
+    summary: string;
+    overallVerdict: 'pass' | 'warn' | 'fail';
+    overallScore?: number;
+    checklist: {
+        characterConsistency: string;
+        styleConsistency: string;
+        continuity: string;
+        visualQuality: string;
+    };
+    issues: VisualContinuityIssue[];
 }

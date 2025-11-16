@@ -40,6 +40,7 @@ const TokenCounter: React.FC<TokenCounterProps> = ({ tokenUsage }) => {
         { label: 'Image Editing', value: tokenUsage.imageEditing },
         { label: 'Video Generation', value: tokenUsage.videoGeneration },
         { label: 'Executive Review', value: tokenUsage.executiveReview },
+        { label: 'Visual QA', value: tokenUsage.visualReview },
     ].filter(item => item.value > 0);
 
     return (

@@ -17,6 +17,81 @@ interface ControlsStepProps {
   isSuggestingBrief: boolean;
 }
 
+type QuickPreset = {
+  key: string;
+  label: string;
+  description: string;
+  settings: Partial<CreativeBrief>;
+};
+
+const QUICK_PRESETS: QuickPreset[] = [
+  {
+    key: 'concert',
+    label: 'Concert Performance',
+    description: 'Live energy, crowd shots, dramatic stage lighting.',
+    settings: {
+      videoType: 'Concert Performance',
+      feel: 'Electric, Immersive, Live',
+      style: 'Concert performance with stage lights, crowd energy, and close-ups of the singer',
+      mood: ['energetic', 'live', 'cinematic'],
+      color_palette: ['#0C1A2B', '#00FFC6', '#FF3B30', '#F8F8F8'],
+      lyricsOverlay: true,
+    },
+  },
+  {
+    key: 'hybrid',
+    label: 'Hybrid Performance + Story',
+    description: 'Mix live stage with narrative cutaways for emotional punch.',
+    settings: {
+      videoType: 'Hybrid Performance-Story',
+      feel: 'Emotional, Dynamic, Heroic',
+      style: 'Cinematic story moments woven between performance on stage',
+      mood: ['cinematic', 'emotional', 'uplifting'],
+      color_palette: ['#0F1115', '#D99A5A', '#5AC8FA', '#F2E8DC'],
+      lyricsOverlay: true,
+    },
+  },
+  {
+    key: 'dance',
+    label: 'Dance-Choreo Focus',
+    description: 'Choreographed movement, rhythmic cuts, and wide angles.',
+    settings: {
+      videoType: 'Dance/Choreography',
+      feel: 'Rhythmic, High-Energy, Precise',
+      style: 'Dance-focused visuals with synchronized lighting and wide lens choreography shots',
+      mood: ['energetic', 'stylized', 'rhythmic'],
+      color_palette: ['#0B0B0F', '#FF6B6B', '#7C3AED', '#FAD02C'],
+      lyricsOverlay: false,
+    },
+  },
+  {
+    key: 'cinematic',
+    label: 'Cinematic Concept',
+    description: 'Artful cinematography, moody lighting, and smooth camera moves.',
+    settings: {
+      videoType: 'Cinematic Concept',
+      feel: 'Moody, Elegant, Dramatic',
+      style: 'High-concept visuals with atmospheric lighting and shallow depth of field',
+      mood: ['dramatic', 'atmospheric', 'stylized'],
+      color_palette: ['#0A0A0A', '#1B263B', '#415A77', '#E0E1DD'],
+      lyricsOverlay: true,
+    },
+  },
+  {
+    key: 'documentary',
+    label: 'Documentary / BTS',
+    description: 'Raw, candid, behind-the-scenes vibe with handheld motion.',
+    settings: {
+      videoType: 'Documentary Style',
+      feel: 'Authentic, Intimate, Honest',
+      style: 'Candid handheld shots, rehearsal moments, crew interactions, and on-the-road details',
+      mood: ['intimate', 'raw', 'uplifting'],
+      color_palette: ['#0E1012', '#6C757D', '#C0C0C0', '#F5F5F5'],
+      lyricsOverlay: false,
+    },
+  },
+];
+
 const UploadIcon = () => (
     <svg className="w-10 h-10 mx-auto text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
         <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -103,6 +178,10 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
   isSuggestingBrief
 }) => {
   const [preflight, setPreflight] = useState<{ ok: boolean; available: boolean; missingNodes: string[]; message?: string } | null>(null);
+  const [selectedQuickPreset, setSelectedQuickPreset] = useState<string | null>(null);
+  const [prePresetBrief, setPrePresetBrief] = useState<CreativeBrief | null>(null);
+  const [styleCategory, setStyleCategory] = useState<string>('all');
+  const [selectedStyleName, setSelectedStyleName] = useState<string>('');
 
   useEffect(() => {
     let mounted = true;
@@ -118,8 +197,58 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
     }, 300);
     return () => { mounted = false; clearTimeout(t); };
   }, []);
+
+  useEffect(() => {
+    const matchingPreset = QUICK_PRESETS.find(preset => preset.settings.videoType === brief.videoType);
+    setSelectedQuickPreset(matchingPreset ? matchingPreset.key : null);
+  }, [brief.videoType]);
+
+  useEffect(() => {
+    const currentStylePreset = STYLE_PRESETS.find(preset => preset.settings.style === brief.style);
+    setSelectedStyleName(currentStylePreset?.name ?? '');
+    if (currentStylePreset?.category) {
+      setStyleCategory(currentStylePreset.category);
+    }
+  }, [brief.style]);
+
+  const styleCategories = useMemo(() => {
+    const unique = Array.from(new Set(STYLE_PRESETS.map(p => p.category || 'Other')));
+    return ['all', ...unique];
+  }, []);
+
+  const filteredStylePresets = useMemo(() => {
+    if (styleCategory === 'all') return STYLE_PRESETS;
+    return STYLE_PRESETS.filter(preset => preset.category === styleCategory);
+  }, [styleCategory]);
+
   const handlePresetSelect = (preset: StylePreset) => {
     onUpdateBrief(preset.settings);
+    setSelectedStyleName(preset.name);
+  };
+
+  const handleQuickPresetToggle = (preset: QuickPreset) => {
+    const isActive = selectedQuickPreset === preset.key;
+
+    if (isActive) {
+      const fallbackBrief = prePresetBrief ?? { ...brief, videoType: 'Story Narrative' };
+      onUpdateBrief(fallbackBrief);
+      setSelectedQuickPreset(null);
+      setPrePresetBrief(null);
+      return;
+    }
+
+    if (!selectedQuickPreset) {
+      setPrePresetBrief(brief);
+    }
+
+    setSelectedQuickPreset(preset.key);
+    onUpdateBrief({
+      ...brief,
+      ...preset.settings,
+      mood: preset.settings.mood ?? brief.mood,
+      color_palette: preset.settings.color_palette ?? brief.color_palette,
+      user_notes: preset.settings.user_notes ?? brief.user_notes,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -153,36 +282,69 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
             )}
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-brand-cyan">Quick Preset</h3>
-                <div className="flex flex-wrap gap-3">
-                    <button
-                        type="button"
-                        onClick={() => onUpdateBrief({
-                            videoType: 'Concert Performance',
-                            feel: brief.feel || 'Energetic, Live, Immersive',
-                            style: brief.style || 'Concert performance, stage lighting, dynamic audience',
-                            color_palette: brief.color_palette?.length ? brief.color_palette : ['#000000', '#1E90FF', '#FF0000', '#FFFFFF']
-                        })}
-                        className="px-4 py-2 rounded-lg border-2 border-brand-cyan text-white hover:bg-brand-cyan/10 transition"
-                        title="Focus on live performance with singers featured and stage visuals"
-                    >
-                        Concert Performance
-                    </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {QUICK_PRESETS.map(preset => {
+                      const isActive = selectedQuickPreset === preset.key;
+                      return (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          onClick={() => handleQuickPresetToggle(preset)}
+                          className={`p-4 text-left rounded-lg border-2 transition-all ${isActive ? 'border-brand-cyan bg-brand-cyan/10 shadow-lg' : 'border-brand-light-gray hover:border-brand-cyan hover:bg-brand-cyan/5'}`}
+                          title={preset.description}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white">{preset.label}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${isActive ? 'bg-brand-cyan/30 text-white border border-brand-cyan/60' : 'bg-brand-dark text-gray-300 border border-gray-700'}`}>
+                              {isActive ? 'Selected' : 'Tap to Apply'}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-gray-400">{preset.description}</p>
+                        </button>
+                      );
+                    })}
                 </div>
             </div>
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-brand-cyan">1. Select a Style Preset (Optional)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {STYLE_PRESETS.map(preset => (
-                        <button
-                            key={preset.name}
-                            type="button"
-                            onClick={() => handlePresetSelect(preset)}
-                            className={`p-4 border-2 rounded-lg text-left transition-all h-full ${brief.style === preset.settings.style ? 'border-brand-cyan bg-brand-cyan/10' : 'border-brand-light-gray hover:border-gray-600'}`}
-                        >
-                            <h4 className="font-bold text-white">{preset.name}</h4>
-                            <p className="text-sm text-gray-400 mt-1">{preset.description}</p>
-                        </button>
-                    ))}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Style Category</label>
+                    <select
+                      value={styleCategory}
+                      onChange={e => setStyleCategory(e.target.value)}
+                      className="w-full bg-brand-dark border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-brand-cyan focus:border-brand-cyan"
+                    >
+                      {styleCategories.map(cat => (
+                        <option key={cat} value={cat}>
+                          {cat === 'all' ? 'All styles' : cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Style / Substyle</label>
+                    <select
+                      value={selectedStyleName}
+                      onChange={e => {
+                        const preset = STYLE_PRESETS.find(p => p.name === e.target.value);
+                        if (preset) handlePresetSelect(preset);
+                      }}
+                      className="w-full bg-brand-dark border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-brand-cyan focus:border-brand-cyan"
+                    >
+                      <option value="">-- Choose a style --</option>
+                      {filteredStylePresets.map(preset => (
+                        <option key={preset.name} value={preset.name}>
+                          {preset.name} {preset.substyle ? `- ${preset.substyle}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedStyleName && (
+                      <div className="text-xs text-gray-400">
+                        {STYLE_PRESETS.find(p => p.name === selectedStyleName)?.description}
+                      </div>
+                    )}
+                  </div>
                 </div>
             </div>
 

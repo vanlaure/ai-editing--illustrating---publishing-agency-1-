@@ -71,6 +71,7 @@ const App: React.FC = () => {
                         onRegenerateImage={musicVideoGenerator.regenerateImage}
                         onEditImage={musicVideoGenerator.editImage}
                         onGenerateClip={musicVideoGenerator.generateClip}
+                        onGenerateAllClips={musicVideoGenerator.generateStoryboardBatch}
                         onGoToReview={musicVideoGenerator.goToReview}
                         onGenerateAllImages={musicVideoGenerator.generateAllImages}
                         isProcessing={isProcessing}
@@ -96,6 +97,9 @@ const App: React.FC = () => {
                         isProcessing={isProcessing}
                         isReviewing={musicVideoGenerator.isReviewing}
                         executiveProducerFeedback={musicVideoGenerator.executiveProducerFeedback}
+                        visualContinuityReport={musicVideoGenerator.visualContinuityReport}
+                        isVisualReviewing={musicVideoGenerator.isVisualReviewing}
+                        onRunVisualAudit={musicVideoGenerator.runVisualQaReview}
                     />
                 );
             default:
