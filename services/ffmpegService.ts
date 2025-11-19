@@ -1,6 +1,8 @@
 import type { Storyboard, ExportOptions, IntroOverlayConfig, OutroOverlayConfig } from '../types';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { toBlobURL } from '@ffmpeg/util';
+import coreJsUrl from '@ffmpeg/core?url';
+import coreWasmUrl from '@ffmpeg/core/wasm?url';
 import { backendService } from './backendService';
 import type { Scene } from './backendService';
 
@@ -8,6 +10,20 @@ let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
 let useBackend = true;
+const LOCAL_MEDIA_ERROR_PREFIX = 'LOCAL_MEDIA_UNAVAILABLE:';
+const CDN_FFMPEG_BASE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+type FFmpegAssetSource = 'local' | 'cdn';
+
+const loadFFmpegAssets = async (source: FFmpegAssetSource) => {
+    const label = source === 'local' ? 'local bundle' : 'jsDelivr CDN';
+    const jsSource = source === 'local' ? coreJsUrl : `${CDN_FFMPEG_BASE}/ffmpeg-core.js`;
+    const wasmSource = source === 'local' ? coreWasmUrl : `${CDN_FFMPEG_BASE}/ffmpeg-core.wasm`;
+
+    const coreURL = await toBlobURL(jsSource, 'text/javascript');
+    const wasmURL = await toBlobURL(wasmSource, 'application/wasm');
+
+    return { coreURL, wasmURL, label };
+};
 
 // Add a function to check if FFmpeg libraries are available
 export const isFFmpegAvailable = (): boolean => {
@@ -55,35 +71,41 @@ export const waitForFFmpeg = async (timeout = 30000): Promise<boolean> => {
 };
 
 const loadFFmpeg = async (progressCallback: (message: string) => void) => {
-    if (ffmpegLoaded) return ffmpeg;
+    if (ffmpegLoaded && ffmpeg) {
+        return ffmpeg;
+    }
 
-    progressCallback('Loading FFmpeg Core...');
+    // Always start with a fresh FFmpeg instance so failed loads don't poison retries.
     ffmpeg = new FFmpeg();
+    ffmpegLoaded = false;
 
     ffmpeg.on('log', ({ message }: { message: string }) => {
         console.log('[FFmpeg]', message);
     });
 
-    progressCallback('Fetching FFmpeg WASM files from CDN...');
-    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
-    
-    try {
-        const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-        progressCallback('Core JS loaded, fetching WASM...');
-        
-        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-        progressCallback('WASM loaded, initializing FFmpeg...');
-        
-        await ffmpeg.load({ coreURL, wasmURL });
-        progressCallback('FFmpeg initialized successfully');
-        
-        ffmpegLoaded = true;
-        return ffmpeg;
-    } catch (error) {
-        console.error('Error loading FFmpeg:', error);
-        ffmpegLoading = false;
-        throw error;
+    const sources: FFmpegAssetSource[] = ['local', 'cdn'];
+    let lastError: unknown;
+
+    for (const source of sources) {
+        try {
+            const { coreURL, wasmURL, label } = await loadFFmpegAssets(source);
+            progressCallback(`Loading FFmpeg core (${label})...`);
+            await ffmpeg.load({ coreURL, wasmURL });
+            progressCallback(`FFmpeg initialized using ${label}`);
+            ffmpegLoaded = true;
+            return ffmpeg;
+        } catch (error) {
+            lastError = error;
+            const label = source === 'local' ? 'local bundle' : 'jsDelivr CDN';
+            console.warn(`Failed to load FFmpeg from ${label}`, error);
+            progressCallback(`FFmpeg ${label} load failed, trying alternate source...`);
+        }
     }
+
+    ffmpeg = null;
+    throw lastError instanceof Error
+        ? lastError
+        : new Error('Unable to initialize FFmpeg from any source');
 };
 
 export function generateIntroOverlayFilter(config: IntroOverlayConfig): string {
@@ -216,9 +238,26 @@ export const renderVideo = async (
 ): Promise<Blob> => {
     if (useBackend) {
         try {
-            return await renderVideoWithBackend(storyboard, songFile, resolution, progressCallback, introConfig, outroConfig);
+            return await renderVideoWithBackend(
+                storyboard,
+                songFile,
+                resolution,
+                progressCallback,
+                introConfig,
+                outroConfig
+            );
         } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown backend error';
+            // Some errors (like missing local blobs) should not fall back to WASM because
+            // there is no accessible media in the browser either. Surface those immediately.
+            if (message.startsWith(LOCAL_MEDIA_ERROR_PREFIX)) {
+                throw new Error(message.replace(LOCAL_MEDIA_ERROR_PREFIX, '').trim());
+            }
             console.error('Backend video generation failed, falling back to WASM:', error);
+            progressCallback({
+                progress: 0,
+                message: `Backend render failed (${message}). Falling back to local renderer...`
+            });
             useBackend = false;
         }
     }
@@ -390,6 +429,8 @@ const renderVideoWithBackend = async (
         });
     };
 
+    const unresolvedShots: string[] = [];
+
     for (let i = 0; i < allShots.length; i++) {
         const shot = allShots[i];
         const duration = shot.end - shot.start;
@@ -397,7 +438,7 @@ const renderVideoWithBackend = async (
         let imageUrl = shot.preview_image_url || '';
         let videoUrl = shot.clip_url || '';
 
-        if (!imageUrl) continue;
+        if (!imageUrl && !videoUrl) continue;
 
         // If the image comes from a browser blob: URL, upload it to backend first
         // so the server can access it (blob: URLs are not reachable by the server).
@@ -410,9 +451,24 @@ const renderVideoWithBackend = async (
                 const b64 = imageUrl.substring(comma + 1);
                 const mime = header.substring(header.indexOf(':') + 1, header.indexOf(';')) || 'image/png';
                 const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-                const file = new File([bytes], `scene_${i}.${mime.includes('jpeg') ? 'jpg' : mime.includes('png') ? 'png' : 'png'}`, { type: mime });
+                const ext = mime.includes('jpeg') ? 'jpg' : mime.includes('png') ? 'png' : 'png';
+                const file = new File([bytes], `scene_${i}.${ext}`, { type: mime });
                 const upload = await backendService.uploadImage(file);
                 imageUrl = upload.imageUrl || imageUrl;
+            } else if (imageUrl.startsWith('blob:')) {
+                // Convert blob-backed image URLs to a File and upload
+                try {
+                    const blob = await blobFromObjectURL(imageUrl);
+                    const mime = blob.type || 'image/png';
+                    const ext = mime.includes('jpeg') ? 'jpg' : mime.includes('png') ? 'png' : 'png';
+                    const file = new File([blob], `scene_${i}.${ext}`, { type: mime });
+                    const upload = await backendService.uploadImage(file);
+                    imageUrl = upload.imageUrl || imageUrl;
+                } catch (blobErr) {
+                    console.warn('Failed to upload blob image for scene', i, blobErr);
+                    imageUrl = '';
+                    unresolvedShots.push(`Shot ${shot.id || i + 1} (image)`);
+                }
             }
 
             // If we have a video clip, normalize it to a backend URL
@@ -433,6 +489,7 @@ const renderVideoWithBackend = async (
                     } catch (e) {
                         console.warn('Failed to upload blob video for scene', i, e);
                         videoUrl = '';
+                        unresolvedShots.push(`Shot ${shot.id || i + 1} (video)`);
                     }
                 } else if (videoUrl.startsWith('data:video')) {
                     try {
@@ -448,6 +505,7 @@ const renderVideoWithBackend = async (
                     } catch (e) {
                         console.warn('Failed to normalize data video for scene', i, e);
                         videoUrl = '';
+                        unresolvedShots.push(`Shot ${shot.id || i + 1} (video)`);
                     }
                 } else if (videoUrl.startsWith('http')) {
                     // keep as-is
@@ -463,6 +521,13 @@ const renderVideoWithBackend = async (
             }
         } catch (e) {
             console.warn('Failed to normalize image for scene', i, e);
+            unresolvedShots.push(`Shot ${shot.id || i + 1} (image)`);
+            continue;
+        }
+
+        // Skip scene if we have neither a valid image nor video after processing
+        if (!imageUrl && !videoUrl) {
+            console.warn(`Skipping scene ${i} - no valid media after processing`);
             continue;
         }
 
@@ -476,6 +541,13 @@ const renderVideoWithBackend = async (
 
         const progress = 0.3 + (i / allShots.length) * 0.3;
         progressCallback({ progress, message: `Processing scene ${i + 1}/${allShots.length}...` });
+    }
+
+    if (scenes.length === 0) {
+        const detail = unresolvedShots.length
+            ? `Could not access local media for ${unresolvedShots.length} scene(s): ${unresolvedShots.join(', ')}.`
+            : 'No valid media found in scenes.';
+        throw new Error(`${LOCAL_MEDIA_ERROR_PREFIX} ${detail} Please re-upload or regenerate those assets before exporting.`);
     }
     
     progressCallback({ progress: 0.6, message: 'Generating video on backend...' });

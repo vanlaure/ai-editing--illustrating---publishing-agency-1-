@@ -88,7 +88,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, storyboard, 
         setFinalVideoUrl(url);
         setRenderState('done');
     } catch (err) {
-        console.error("Failed to render video with FFmpeg", err);
+        console.error("Failed to render video", err);
         const message = err instanceof Error ? err.message : "An unknown error occurred during rendering.";
         setError(message);
         setRenderState('error');

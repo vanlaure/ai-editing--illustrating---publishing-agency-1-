@@ -478,6 +478,8 @@ export interface StoryboardShot {
     };
     /** Multi-camera editing configuration */
     multi_cam_edit?: MultiCamEdit;
+    /** Visual agent refinement suggestions from continuity audit */
+    refinement_prompt?: string;
 }
 
 export interface StoryboardScene {

@@ -172,10 +172,14 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
     const imageInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, mediaType: 'image' | 'video') => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, mediaType: 'image' | 'video') => {
         const file = event.target.files?.[0];
         if (file) {
-            onFileUpload(mediaType, file);
+            try {
+                await onFileUpload(mediaType, file);
+            } catch (e) {
+                console.error('Upload failed', e);
+            }
         }
         event.target.value = '';
     };
@@ -194,8 +198,30 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
                      <div className="w-full h-full object-cover rounded bg-red-900/50 flex items-center justify-center text-center p-2">
                         <p className="text-xs text-red-300">Image generation failed</p>
                     </div>
-                ) : (
-                    <img src={shot.preview_image_url} alt={`Preview for ${shot.subject}`} className="w-full h-full object-cover rounded" />
+                ) : shot.clip_url ? (
+                      <video
+                        src={shot.clip_url}
+                        poster={shot.preview_image_url}
+                        crossOrigin="anonymous"
+                        className="w-full h-full object-cover rounded cursor-pointer"
+                        muted
+                        loop
+                        playsInline
+                        preload="auto"
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.pause();
+                          e.currentTarget.currentTime = 0;
+                        }}
+                        onClick={() => onPlayClip(shot.clip_url!)}
+                        title="Hover to preview video, click to play full"
+                      />
+                    ) : (
+                      <img
+                        src={shot.preview_image_url}
+                        alt={`Preview for ${shot.subject}`}
+                        className="w-full h-full object-cover rounded"
+                      />
                 )}
                 <div className="absolute top-2 right-2 flex space-x-2">
                     <button 
@@ -359,7 +385,7 @@ const TransitionDisplay: React.FC<{ transition: Transition | null }> = ({ transi
 
 import { webSocketService } from '../services/webSocketService';
 
-const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, modelTier, onModelTierChange }) => {
+const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGenerateAllClips, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, modelTier, onModelTierChange }) => {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');

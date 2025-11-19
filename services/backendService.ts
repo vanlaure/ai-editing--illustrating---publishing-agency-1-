@@ -124,10 +124,19 @@ export const backendService = {
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to generate video');
+      const detailParts = [
+        error.error || 'Failed to generate video',
+        error.details,
+        error.stack
+      ].filter(Boolean);
+      throw new Error(detailParts.join(': '));
     }
     
-    return response.json();
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Video generation failed');
+    }
+    return data;
   },
 
   async uploadVideo(file: File): Promise<{ videoUrl: string, filename?: string }> {

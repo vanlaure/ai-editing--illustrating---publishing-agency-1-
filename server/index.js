@@ -9,12 +9,31 @@ import { promisify } from "util";
 import http from "http";
 import https from "https";
 import { WebSocketServer } from "ws";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import * as db from "./db.js";
 
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Ensure FFmpeg binary is resolvable even when not installed globally.
+try {
+  const bundledFfmpeg = ffmpegInstaller?.path;
+  if (bundledFfmpeg) {
+    const ffmpegDir = path.dirname(bundledFfmpeg);
+    const existingPath = process.env.PATH ? process.env.PATH.split(path.delimiter) : [];
+    if (!existingPath.includes(ffmpegDir)) {
+      process.env.PATH = [ffmpegDir, ...existingPath].filter(Boolean).join(path.delimiter);
+    }
+    process.env.FFMPEG_PATH = bundledFfmpeg;
+    console.log(`[backend] Using bundled FFmpeg binary at ${bundledFfmpeg}`);
+  } else {
+    console.warn("[backend] @ffmpeg-installer/ffmpeg did not resolve a binary. Falling back to system FFmpeg.");
+  }
+} catch (ffmpegError) {
+  console.warn("[backend] Failed to configure bundled FFmpeg binary:", ffmpegError);
+}
 
 // Serve generated videos statically before other routes
 const tmpApp = express();

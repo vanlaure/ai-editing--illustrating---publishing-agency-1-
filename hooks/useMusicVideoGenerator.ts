@@ -371,7 +371,11 @@ const reducer = (state: State, action: Action): State => {
                 ...storyboard,
                 scenes: storyboard.scenes.filter(Boolean).map((scene: any) => ({
                     ...(scene || {}),
-                    shots: Array.isArray(scene.shots) ? scene.shots : [],
+                    shots: Array.isArray(scene.shots) ? scene.shots.map((shot: any) => ({
+                        ...shot,
+                        preview_image_url: shot.preview_image_url?.startsWith('blob:') ? undefined : shot.preview_image_url,
+                        clip_url: shot.clip_url?.startsWith('blob:') ? undefined : shot.clip_url,
+                    })) : [],
                     transitions: Array.isArray(scene.transitions) ? scene.transitions : [],
                 }))
             }
@@ -699,7 +703,7 @@ export const useMusicVideoGenerator = () => {
               lipSync: !!shot.lip_sync_hint,
               audioUrl: state.audioUrl || undefined,
               shotId: shot.id,
-              workflow: modelPrefs.workflow,
+              workflow: modelPrefs.workflow as "portrait" | "stylized" | "plate" | "animatediff" | "realistic" | "i2v",
               video_model: shot.video_model,
               render_profile: shot.render_profile,
               fps: modelPrefs.fps,
@@ -937,35 +941,87 @@ export const useMusicVideoGenerator = () => {
       reader.readAsText(file);
   }, []);
   
-  const updateShotWithFileUpload = useCallback((shotId: string, mediaType: 'image' | 'video', file: File) => {
-    if (mediaType === 'image') {
+  const generateVideoThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      canvas.width = 320;
+      canvas.height = 180;
+      const videoUrl = URL.createObjectURL(file);
+      video.src = videoUrl;
+      video.muted = true;
+      video.preload = 'metadata';
+      video.onloadeddata = () => {
+        video.currentTime = Math.min(1, video.duration * 0.1);
+      };
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(videoUrl);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(videoUrl);
+        reject(new Error('Failed to generate video thumbnail'));
+      };
+      video.load();
+    });
+  };
+
+  const updateShotWithFileUpload = useCallback(async (shotId: string, mediaType: 'image' | 'video', file: File) => {
+    try {
+      if (mediaType === 'image') {
         const reader = new FileReader();
         reader.onload = (event) => {
-            const url = event.target?.result as string;
-            if (url) {
-                dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType, url } });
-            }
+          const url = event.target?.result as string;
+          if (url) {
+            dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'image', url } });
+          }
         };
         reader.readAsDataURL(file);
-    } else { // video
-        const url = URL.createObjectURL(file);
-        dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType, url } });
+      } else { // video
+        // Generate thumbnail first
+        const previewUrl = await generateVideoThumbnail(file);
+        dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'image', url: previewUrl } });
+        // Then set clip URL as blob (client-side preview, export needs file handling)
+        const clipUrl = URL.createObjectURL(file);
+        dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'video', url: clipUrl } });
+      }
+    } catch (e) {
+      console.error('Failed to process custom media upload for shot', shotId, e);
     }
-}, []);
-  
-    if (typeof window !== 'undefined') {
-        // Populate the dev helper with closures that can dispatch actions and
-        // call hook methods. This is only used for development automation tests.
-        window.__mvGen = {
-            setSongFile: (file: File) => dispatch({ type: 'SET_SONG_FILE', payload: file }),
-            setStep: (step: Step) => dispatch({ type: 'SET_STEP', payload: step }),
-            processSongUpload,
-            loadProductionFile,
-            getState: () => state,
-        };
-    }
+  }, [dispatch]);
 
-    return {
+const regenerateFlaggedShots = useCallback((report: VisualContinuityReport) => {
+  if (!state.storyboard || !report.issues) return;
+
+  const highCritIssues = report.issues.filter(issue => issue.severity && ['HIGH', 'CRITICAL'].includes(issue.severity.toUpperCase()));
+
+  highCritIssues.forEach(issue => {
+    const shot = state.storyboard!.scenes.flatMap(scene => scene.shots).find(s => s.id === issue.shotId);
+    if (shot) {
+      dispatch({
+        type: 'UPDATE_SHOT',
+        payload: {
+          ...shot,
+          refinement_note: issue.finding || 'Flagged for regeneration due to visual continuity issue'
+        }
+      });
+    }
+  });
+  }, [state.storyboard, dispatch]);
+
+  if (typeof window !== 'undefined') {
+    window.__mvGen = {
+      setSongFile: (file: File) => dispatch({ type: 'SET_SONG_FILE', payload: file }),
+      setStep: (step: Step) => dispatch({ type: 'SET_STEP', payload: step }),
+      processSongUpload,
+      loadProductionFile,
+      getState: () => state,
+    };
+  }
+
+  return {
     ...state,
     processSongUpload,
     setModelTier,

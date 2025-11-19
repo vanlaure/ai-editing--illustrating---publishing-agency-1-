@@ -108,7 +108,7 @@ const App: React.FC = () => {
     };
     
     const getFullStateForDownload = async () => {
-        const { ...stateToSave } = musicVideoGenerator;
+        const stateToSave = { ...musicVideoGenerator };
         
         let songFileData = null;
         if (stateToSave.songFile) {
@@ -133,6 +133,45 @@ const App: React.FC = () => {
             }
         }
         
+        const blobToBase64 = async (blobUrl: string): Promise<string> => {
+            const response = await fetch(blobUrl);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        };
+
+        let serializedStoryboard = {
+            ...(stateToSave.storyboard || {}),
+            shots: await Promise.all(
+                (stateToSave.storyboard?.shots || []).map(async (shot) => {
+                    const serializedShot = { ...shot };
+                        
+                        if (shot.clip_url?.startsWith('blob:')) {
+                            try {
+                                serializedShot.clip_url = await blobToBase64(shot.clip_url);
+                            } catch (e) {
+                                console.error('Failed to encode video clip:', e);
+                                serializedShot.clip_url = undefined;
+                            }
+                        }
+                        
+                        if (shot.preview_image_url?.startsWith('blob:')) {
+                            try {
+                                serializedShot.preview_image_url = await blobToBase64(shot.preview_image_url);
+                            } catch (e) {
+                                console.error('Failed to encode preview image:', e);
+                            }
+                        }
+                        
+                        return serializedShot;
+                    })
+                )
+            };
+        
         const serializableState = {
             currentStep: stateToSave.currentStep,
             singerGender: stateToSave.singerGender,
@@ -140,7 +179,7 @@ const App: React.FC = () => {
             songAnalysis: stateToSave.songAnalysis,
             creativeBrief: stateToSave.creativeBrief,
             bibles: stateToSave.bibles,
-            storyboard: stateToSave.storyboard,
+            storyboard: serializedStoryboard,
             tokenUsage: stateToSave.tokenUsage,
             modelTier: stateToSave.modelTier,
         };

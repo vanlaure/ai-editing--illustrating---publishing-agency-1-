@@ -3,7 +3,7 @@ import type { Bibles, Storyboard, StoryboardShot, ExecutiveProducerFeedback, Vis
 import Spinner from './Spinner';
 import ExportModal from './ExportModal';
 import ExecutiveProducerFeedbackDisplay from './ExecutiveProducerFeedbackDisplay';
-import { renderVideo, waitForFFmpeg, isFFmpegAvailable } from '../services/ffmpegService';
+import { renderVideo } from '../services/ffmpegService';
 
 interface ReviewStepProps {
   songFile: File | null;
@@ -151,27 +151,10 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
   const [renderError, setRenderError] = useState<string | null>(null);
   const [activeShotId, setActiveShotId] = useState<string | null>(allShots[0]?.id || null);
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
-  const [ffmpegReady, setFfmpegReady] = useState(false);
-
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
 
   // Check FFmpeg availability on mount
-  useEffect(() => {
-    const checkFFmpeg = async () => {
-      if (isFFmpegAvailable()) {
-        setFfmpegReady(true);
-      } else {
-        const available = await waitForFFmpeg(); // Wait up to 30 seconds (default)
-        setFfmpegReady(available);
-        if (!available) {
-          console.warn('FFmpeg libraries did not load within timeout period');
-        }
-      }
-    };
-    checkFFmpeg();
-  }, []);
-  
   const handleAudioFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -189,13 +172,6 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
     if (!audioFile) {
       setPreviewState('error');
       setRenderError('Audio file not available. Production files loaded from JSON do not include the original audio file. Please upload the original audio file to generate a preview.');
-      return;
-    }
-
-    // Check if FFmpeg is ready
-    if (!ffmpegReady) {
-      setPreviewState('error');
-      setRenderError('FFmpeg libraries are still loading. Please wait a moment and try again, or refresh the page if this persists.');
       return;
     }
 
@@ -221,7 +197,7 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
         setRenderError(message);
         setPreviewState('error');
     }
-  }, [songFile, storyboard, uploadedAudioFile, ffmpegReady]);
+  }, [songFile, storyboard, uploadedAudioFile]);
 
   useEffect(() => {
     if (storyboard && previewState === 'idle') {
@@ -278,9 +254,10 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
           <div className="w-full h-full flex flex-col">
             <video
               key={activeShot.clip_url}
+              crossOrigin="anonymous"
               controls
               autoPlay
-              preload="metadata"
+              preload="auto"
               className="w-full h-full object-cover bg-black"
             >
               <source src={activeShot.clip_url} type="video/mp4" />

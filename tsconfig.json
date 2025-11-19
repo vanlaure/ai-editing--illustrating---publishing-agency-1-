@@ -26,5 +26,10 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "global.d.ts"
+  ]
 }

@@ -43,6 +43,15 @@
     "Pollinations",
     "pollinations",
     "steadicam",
-    "unet"
+    "unet",
+    "drawtext",
+    "setpts",
+    "STARTPTS",
+    "outv",
+    "videocrafter",
+    "prefs",
+    "substyle",
+    "anthemic",
+    "flac"
   ]
 }
