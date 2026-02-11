@@ -1,0 +1,5 @@
+{
+  "name": "StitchStream",
+  "description": "A client-side video stitching application that allows users to merge clips into a single video file, featuring AI-powered montage summaries.",
+  "requestFramePermissions": []
+}

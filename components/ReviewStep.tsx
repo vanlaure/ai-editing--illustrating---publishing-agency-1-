@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { Bibles, Storyboard, StoryboardShot, ExecutiveProducerFeedback, VisualContinuityReport } from '../types';
+import type { Bibles, CreativeBrief, SongAnalysis, Storyboard, StoryboardShot, ExecutiveProducerFeedback, VisualContinuityReport } from '../types';
 import Spinner from './Spinner';
 import ExportModal from './ExportModal';
 import ExecutiveProducerFeedbackDisplay from './ExecutiveProducerFeedbackDisplay';
 import { renderVideo } from '../services/ffmpegService';
+import { STITCHSTREAM_URL } from '../services/backendService';
+const GEMINI_KEY = (import.meta as any)?.env?.VITE_GEMINI_API_KEY || (import.meta as any)?.env?.GEMINI_API_KEY;
 
 interface ReviewStepProps {
   songFile: File | null;
+  audioUrl?: string | null;
   storyboard: Storyboard | null;
   bibles: Bibles | null;
+  creativeBrief?: CreativeBrief | null;
+  songAnalysis?: SongAnalysis | null;
   onRestart: () => void;
   isProcessing: boolean;
   isReviewing: boolean;
@@ -139,7 +144,7 @@ const VisualQaPanel: React.FC<{
     );
 };
 
-const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, onRestart, isProcessing, isReviewing, executiveProducerFeedback, visualContinuityReport, isVisualReviewing, onRunVisualAudit }) => {
+const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, audioUrl, storyboard, bibles, creativeBrief, songAnalysis, onRestart, isProcessing, isReviewing, executiveProducerFeedback, visualContinuityReport, isVisualReviewing, onRunVisualAudit }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const allShots = storyboard?.scenes.flatMap(scene => scene.shots) || [];
   const hasVisualAssets = allShots.some(shot => (shot.clip_url || shot.preview_image_url) && shot.preview_image_url !== 'error');
@@ -151,8 +156,10 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
   const [renderError, setRenderError] = useState<string | null>(null);
   const [activeShotId, setActiveShotId] = useState<string | null>(allShots[0]?.id || null);
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null);
+  const previewMode: 'stitch' = 'stitch';
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
+  const stitchFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Check FFmpeg availability on mount
   const handleAudioFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,12 +207,43 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
   }, [songFile, storyboard, uploadedAudioFile]);
 
   useEffect(() => {
-    if (storyboard && previewState === 'idle') {
-      // Always attempt to generate preview when in idle state
-      // generatePreviewVideo will handle the case when songFile is null
-      generatePreviewVideo();
+    // FFmpeg preview is disabled by default; StitchStream is the primary preview/export surface.
+    // If FFmpeg preview is re-enabled in the future, ensure this effect triggers conditionally.
+  }, [storyboard]);
+
+  // Push clips into the embedded StitchStream instance whenever storyboard updates
+  const syncClipsToStitchStream = useCallback(() => {
+    if (!stitchFrameRef.current || !storyboard) return;
+
+    if (GEMINI_KEY) {
+      stitchFrameRef.current.contentWindow?.postMessage(
+        { type: 'MVG_SYNC_CONFIG', geminiApiKey: GEMINI_KEY },
+        '*'
+      );
     }
-  }, [storyboard, previewState, generatePreviewVideo]);
+
+    const orderedShots = [...storyboard.scenes.flatMap(scene => scene.shots)].sort((a, b) => a.start - b.start);
+    const clips = orderedShots
+      .filter(shot => !!shot.clip_url)
+      .map(shot => ({
+        id: shot.id,
+        url: shot.clip_url!,
+        thumbnail: shot.preview_image_url,
+        duration: Math.max(1, Math.round((shot.end ?? 0) - (shot.start ?? 0) || 1)),
+        name: shot.subject || `Shot ${shot.id}`
+      }));
+
+    if (clips.length === 0) return;
+
+    stitchFrameRef.current.contentWindow?.postMessage(
+      { type: 'MVG_SYNC_CLIPS', clips },
+      '*'
+    );
+  }, [storyboard]);
+
+  useEffect(() => {
+    syncClipsToStitchStream();
+  }, [syncClipsToStitchStream]);
   
   useEffect(() => {
     const video = previewVideoRef.current;
@@ -357,12 +395,15 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
         onClose={() => setIsExportModalOpen(false)}
         storyboard={storyboard}
         songFile={uploadedAudioFile || songFile}
+        audioUrl={audioUrl}
+        creativeBrief={creativeBrief}
+        songAnalysis={songAnalysis}
       />
       <div className="flex flex-col items-center">
         <h2 className="text-2xl font-bold mb-2 text-white">Final Review & Export</h2>
         <p className="text-gray-400 mb-8">Review the final sequence and the AI Executive Producer's notes.</p>
         
-        <div className="w-full max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="w-full max-w-7xl mx-auto mb-8 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
             <div>
                 {isReviewing ? (
                     <div className="flex flex-col items-center justify-center p-8 bg-brand-dark/50 rounded-lg border border-brand-light-gray text-center min-h-[200px]">
@@ -384,7 +425,7 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
 
 
         <div className="w-full flex flex-col lg:flex-row gap-8">
-            <div className="flex-1">
+            <div className="flex-[3] min-w-0">
                 {/* Always-visible audio upload bar to avoid getting stuck */}
                 <div className="flex items-center justify-between mb-3 bg-brand-dark/60 border border-brand-light-gray/30 rounded-lg p-3">
                   <div className="text-sm text-gray-300">
@@ -413,8 +454,20 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, storyboard, bibles, o
                   </div>
                 </div>
 
-                <div className="w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl shadow-black/50 sticky top-4">
-                  {renderPlayer()}
+                <div className="w-full min-h-[820px] h-[820px] bg-black rounded-lg overflow-hidden shadow-2xl shadow-black/50 sticky top-2">
+                  <div className="w-full h-full bg-brand-dark flex flex-col">
+                    <iframe
+                      title="StitchStream Studio"
+                      src={`${STITCHSTREAM_URL}${GEMINI_KEY ? `?geminiKey=${encodeURIComponent(GEMINI_KEY)}` : ''}`}
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                      ref={stitchFrameRef}
+                      onLoad={syncClipsToStitchStream}
+                    />
+                    <div className="bg-brand-dark/80 text-gray-300 text-xs px-3 py-2 border-t border-brand-light-gray/30">
+                      StitchStream runs at {STITCHSTREAM_URL}. Assemble, trim, and export your final video here. (FFmpeg preview is disabled.)
+                    </div>
+                  </div>
                 </div>
             </div>
             <div className="w-full lg:w-1/3 max-h-[70vh] overflow-y-auto pr-2">

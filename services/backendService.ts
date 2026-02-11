@@ -1,10 +1,11 @@
 // Prefer environment-provided backend URL (set via Vite env)
-// Prefer environment-provided backend URL (set via Vite env)
-// with a fallback to the correct port to ensure consistency
+// with a fallback to the backend server port (3002) so health checks hit the API instead of the frontend dev server.
 export const BACKEND_URL = (import.meta as any)?.env?.VITE_BACKEND_URL || 'http://localhost:3002';
+export const STITCHSTREAM_URL = (import.meta as any)?.env?.VITE_STITCHSTREAM_URL || 'http://localhost:4100';
 
 // Add debug logging to confirm which URL is being used
 console.log('Backend URL initialized to:', BACKEND_URL);
+console.log('StitchStream URL initialized to:', STITCHSTREAM_URL);
 
 import type { IntroOverlayConfig, OutroOverlayConfig } from '../types';
 
@@ -48,33 +49,33 @@ export const backendService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to save production: ${response.statusText}`);
     }
-    
+
     return response.json();
   },
 
   async loadProduction(id: string): Promise<ProductionData> {
     const response = await fetch(`${BACKEND_URL}/api/productions/${id}`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to load production: ${response.statusText}`);
     }
-    
+
     return response.json();
   },
 
   async uploadImage(file: File): Promise<{ imageUrl: string, filename?: string }> {
     const formData = new FormData();
     formData.append('image', file);
-    
+
     const response = await fetch(`${BACKEND_URL}/api/images/upload`, {
       method: 'POST',
       body: formData
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to upload image: ${response.statusText}`);
     }
@@ -85,12 +86,12 @@ export const backendService = {
   async uploadImages(files: File[]): Promise<{ imageUrls: string[] }> {
     const formData = new FormData();
     files.forEach(file => formData.append('images', file));
-    
+
     const response = await fetch(`${BACKEND_URL}/api/images/upload-batch`, {
       method: 'POST',
       body: formData
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to upload images: ${response.statusText}`);
     }
@@ -102,12 +103,12 @@ export const backendService = {
   async uploadAudio(file: File): Promise<{ audioUrl: string, filename?: string }> {
     const formData = new FormData();
     formData.append('audio', file);
-    
+
     const response = await fetch(`${BACKEND_URL}/api/audio/upload`, {
       method: 'POST',
       body: formData
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to upload audio: ${response.statusText}`);
     }
@@ -121,7 +122,7 @@ export const backendService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)
     });
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));
       const detailParts = [
@@ -131,7 +132,7 @@ export const backendService = {
       ].filter(Boolean);
       throw new Error(detailParts.join(': '));
     }
-    
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.error || 'Video generation failed');
@@ -150,11 +151,31 @@ export const backendService = {
     return { videoUrl: json.url, filename: json.filename };
   },
 
-  async checkA1111Health(): Promise<{ available: boolean }> {
+  async checkComfyUIHealth(): Promise<{ available: boolean }> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/comfyui/health`);
       const data = await response.json();
       return { available: data.available || false };
+    } catch {
+      return { available: false };
+    }
+  },
+
+  async checkStitchStreamHealth(): Promise<{ available: boolean }> {
+    // Ping StitchStream studio (configurable via VITE_STITCHSTREAM_URL) to see if it is reachable
+    try {
+      const response = await fetch(`${STITCHSTREAM_URL}/health`);
+      if (response.ok) {
+        return { available: true };
+      }
+    } catch {
+      // ignored, falls through to secondary probe
+    }
+
+    // Secondary probe: try hitting root; some setups may not expose /health
+    try {
+      const response = await fetch(STITCHSTREAM_URL, { method: 'HEAD' });
+      return { available: response.ok };
     } catch {
       return { available: false };
     }
@@ -251,7 +272,7 @@ export const backendService = {
         error: response.statusText,
         details: `HTTP ${response.status}`
       }));
-      
+
       // Build detailed error message
       let errorMessage = error.error || 'Failed to generate video clip';
       if (error.details) {
@@ -266,7 +287,7 @@ export const backendService = {
       if (error.suggestion) {
         errorMessage += `\n\nSuggestion: ${error.suggestion}`;
       }
-      
+
       console.error('Video generation API error:', {
         status: response.status,
         error: error.error,
@@ -275,7 +296,7 @@ export const backendService = {
         instructions: error.instructions,
         suggestion: error.suggestion
       });
-      
+
       throw new Error(errorMessage);
     }
 
@@ -309,11 +330,11 @@ export const backendService = {
     videoId?: number;
   }> {
     const response = await fetch(`${BACKEND_URL}/api/comfyui/video-status/${promptId}`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to get video status: ${response.statusText}`);
     }
-    
+
     return response.json();
   },
 

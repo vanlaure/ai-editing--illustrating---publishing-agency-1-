@@ -22,7 +22,7 @@ import { runVisualContinuityAudit } from '../services/visualAgentService';
 
 function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
   const combined = `${cameraMove} ${cinematicMotion}`.toLowerCase();
-  
+
   if (combined.includes('zoom in') || combined.includes('zooming in') || combined.includes('dolly in')) {
     return 'zoom_in';
   }
@@ -35,7 +35,7 @@ function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
   if (combined.includes('pan right') || combined.includes('panning right')) {
     return 'pan_right';
   }
-  
+
   return 'static';
 }
 
@@ -101,14 +101,23 @@ function deriveModelGenerationPreferences(shot: StoryboardShot, duration: number
   return {
     workflow,
     fps: cappedFps,
-    negative_prompt: negativePromptMap[modelKey]
+    negative_prompt: [
+      negativePromptMap[modelKey],
+      'multiple people',
+      'duet',
+      'two singers',
+      'group shot',
+      'extra faces',
+      'inconsistent skin tone',
+      'body duplication'
+    ].filter(Boolean).join(', ')
   };
 }
 
 export interface PostProductionTasks {
-    vfx: 'idle' | 'processing' | 'done';
-    color: 'idle' | 'processing' | 'done';
-    stabilization: 'idle' | 'processing' | 'done';
+  vfx: 'idle' | 'processing' | 'done';
+  color: 'idle' | 'processing' | 'done';
+  stabilization: 'idle' | 'processing' | 'done';
 }
 
 type State = {
@@ -226,15 +235,15 @@ const reducer = (state: State, action: Action): State => {
     case 'SET_API_ERROR':
       return { ...state, isProcessing: false, apiError: action.payload };
     case 'CLEAR_API_ERROR':
-        return { ...state, apiError: null };
+      return { ...state, apiError: null };
     case 'SET_SONG_FILE':
-        return { ...state, songFile: action.payload };
+      return { ...state, songFile: action.payload };
     case 'SET_AUDIO_URL':
-        return { ...state, audioUrl: action.payload };
+      return { ...state, audioUrl: action.payload };
     case 'SET_SINGER_GENDER':
-        return { ...state, singerGender: action.payload };
+      return { ...state, singerGender: action.payload };
     case 'SET_MODEL_TIER':
-        return { ...state, modelTier: action.payload };
+      return { ...state, modelTier: action.payload };
     case 'SET_ANALYSIS':
       return { ...state, songAnalysis: action.payload, currentStep: Step.Controls, isProcessing: false };
     case 'UPDATE_CREATIVE_BRIEF':
@@ -256,151 +265,151 @@ const reducer = (state: State, action: Action): State => {
         },
       };
     case 'UPDATE_SHOT_MEDIA': {
-        if (!state.storyboard) return state;
-        const { shotId, mediaType, url } = action.payload;
-        return {
-            ...state,
-            storyboard: {
-                ...state.storyboard,
-                scenes: state.storyboard.scenes.map(scene => ({
-                    ...scene,
-                    shots: scene.shots.map(shot => {
-                        if (shot.id !== shotId) return shot;
-                        if (mediaType === 'image') {
-                            // If we upload a new image, the old clip is invalid.
-                            return { ...shot, preview_image_url: url, clip_url: undefined, is_generating_clip: false };
-                        }
-                        if (mediaType === 'video') {
-                            return { ...shot, clip_url: url };
-                        }
-                        return shot;
-                    }),
-                })),
-            },
-        };
+      if (!state.storyboard) return state;
+      const { shotId, mediaType, url } = action.payload;
+      return {
+        ...state,
+        storyboard: {
+          ...state.storyboard,
+          scenes: state.storyboard.scenes.map(scene => ({
+            ...scene,
+            shots: scene.shots.map(shot => {
+              if (shot.id !== shotId) return shot;
+              if (mediaType === 'image') {
+                // If we upload a new image, the old clip is invalid.
+                return { ...shot, preview_image_url: url, clip_url: undefined, is_generating_clip: false };
+              }
+              if (mediaType === 'video') {
+                return { ...shot, clip_url: url };
+              }
+              return shot;
+            }),
+          })),
+        },
+      };
     }
     case 'UPDATE_TOKEN_USAGE': {
-        const updatedUsage = { ...state.tokenUsage };
-        for (const key of Object.keys(action.payload) as Array<keyof TokenUsage>) {
-            const currentValue = updatedUsage[key];
-            const newValue = action.payload[key];
-            
-            if (key === 'performance') {
-                updatedUsage.performance = {
-                    ...(currentValue as TokenUsage['performance']),
-                    ...(newValue as TokenUsage['performance'])
-                };
-            } else if (typeof currentValue === 'number' && typeof newValue === 'number') {
-                (updatedUsage[key] as number) = currentValue + newValue;
-            } else if (newValue !== undefined) {
-                (updatedUsage[key] as any) = newValue;
-            }
+      const updatedUsage = { ...state.tokenUsage };
+      for (const key of Object.keys(action.payload) as Array<keyof TokenUsage>) {
+        const currentValue = updatedUsage[key];
+        const newValue = action.payload[key];
+
+        if (key === 'performance') {
+          updatedUsage.performance = {
+            ...(currentValue as TokenUsage['performance']),
+            ...(newValue as TokenUsage['performance'])
+          };
+        } else if (typeof currentValue === 'number' && typeof newValue === 'number') {
+          (updatedUsage[key] as number) = currentValue + newValue;
+        } else if (newValue !== undefined) {
+          (updatedUsage[key] as any) = newValue;
         }
-        return {
-            ...state,
-            tokenUsage: updatedUsage,
-        };
+      }
+      return {
+        ...state,
+        tokenUsage: updatedUsage,
+      };
     }
     case 'SET_STEP':
       return { ...state, currentStep: action.payload };
     case 'SET_POST_PRODUCTION_STATUS':
-        return { ...state, postProductionTasks: { ...state.postProductionTasks, [action.payload.task]: action.payload.status } };
+      return { ...state, postProductionTasks: { ...state.postProductionTasks, [action.payload.task]: action.payload.status } };
     case 'SET_MOODBOARD_IMAGES':
-        return { ...state, moodboardImages: action.payload };
+      return { ...state, moodboardImages: action.payload };
     case 'START_MOODBOARD_ANALYSIS':
-        return { ...state, isAnalyzingMoodboard: true };
+      return { ...state, isAnalyzingMoodboard: true };
     case 'FINISH_MOODBOARD_ANALYSIS':
-        return { ...state, isAnalyzingMoodboard: false };
+      return { ...state, isAnalyzingMoodboard: false };
     case 'START_BRIEF_SUGGESTION':
-        return { ...state, isSuggestingBrief: true };
+      return { ...state, isSuggestingBrief: true };
     case 'FINISH_BRIEF_SUGGESTION':
-        return { ...state, isSuggestingBrief: false };
+      return { ...state, isSuggestingBrief: false };
     case 'SET_BIBLE_ITEM_IMAGES':
-        if (!state.bibles) return state;
-        const newBibles = JSON.parse(JSON.stringify(state.bibles));
-        const { type, name, imageUrls } = action.payload;
-        if (type === 'character') {
-            const char = newBibles.characters.find((c: CharacterBible) => c.name === name);
-            if (char) char.source_images = imageUrls;
-        } else {
-            const loc = newBibles.locations.find((l: LocationBible) => l.name === name);
-            if (loc) loc.source_images = imageUrls;
-        }
-        return { ...state, bibles: newBibles };
+      if (!state.bibles) return state;
+      const newBibles = JSON.parse(JSON.stringify(state.bibles));
+      const { type, name, imageUrls } = action.payload;
+      if (type === 'character') {
+        const char = newBibles.characters.find((c: CharacterBible) => c.name === name);
+        if (char) char.source_images = imageUrls;
+      } else {
+        const loc = newBibles.locations.find((l: LocationBible) => l.name === name);
+        if (loc) loc.source_images = imageUrls;
+      }
+      return { ...state, bibles: newBibles };
     case 'SET_TRANSITIONS_FOR_SCENE':
-        if (!state.storyboard) return state;
-        return {
-            ...state,
-            storyboard: {
-                ...state.storyboard,
-                scenes: state.storyboard.scenes.map(scene =>
-                    scene.id === action.payload.sceneId
-                        ? { ...scene, transitions: action.payload.transitions }
-                        : scene
-                ),
-            },
-        };
+      if (!state.storyboard) return state;
+      return {
+        ...state,
+        storyboard: {
+          ...state.storyboard,
+          scenes: state.storyboard.scenes.map(scene =>
+            scene.id === action.payload.sceneId
+              ? { ...scene, transitions: action.payload.transitions }
+              : scene
+          ),
+        },
+      };
     case 'START_REVIEW':
-        return {
-            ...state,
-            currentStep: Step.Review,
-            isReviewing: true,
-            isVisualReviewing: true,
-            executiveProducerFeedback: null,
-            visualContinuityReport: null
-        };
+      return {
+        ...state,
+        currentStep: Step.Review,
+        isReviewing: true,
+        isVisualReviewing: true,
+        executiveProducerFeedback: null,
+        visualContinuityReport: null
+      };
     case 'SET_EXECUTIVE_PRODUCER_FEEDBACK':
-        return {
-            ...state,
-            isReviewing: false,
-            executiveProducerFeedback: action.payload,
-            storyboard: state.storyboard ? { ...state.storyboard, executive_producer_feedback: action.payload } : null
-        };
+      return {
+        ...state,
+        isReviewing: false,
+        executiveProducerFeedback: action.payload,
+        storyboard: state.storyboard ? { ...state.storyboard, executive_producer_feedback: action.payload } : null
+      };
     case 'START_VISUAL_REVIEW':
-        return { ...state, isVisualReviewing: true, visualContinuityReport: null };
+      return { ...state, isVisualReviewing: true, visualContinuityReport: null };
     case 'SET_VISUAL_REVIEW_RESULT':
-        return { ...state, isVisualReviewing: false, visualContinuityReport: action.payload };
+      return { ...state, isVisualReviewing: false, visualContinuityReport: action.payload };
     case 'LOAD_PRODUCTION_FILE': {
-        const payload = action.payload || {};
+      const payload = action.payload || {};
 
-        // Defensively hydrate the state from the payload to prevent crashes from
-        // malformed or incomplete JSON files, which can cause render errors (blank screen).
-        const storyboard = payload.storyboard;
-        const hydratedStoryboard = (storyboard && Array.isArray(storyboard.scenes))
-            ? {
-                ...storyboard,
-                scenes: storyboard.scenes.filter(Boolean).map((scene: any) => ({
-                    ...(scene || {}),
-                    shots: Array.isArray(scene.shots) ? scene.shots.map((shot: any) => ({
-                        ...shot,
-                        preview_image_url: shot.preview_image_url?.startsWith('blob:') ? undefined : shot.preview_image_url,
-                        clip_url: shot.clip_url?.startsWith('blob:') ? undefined : shot.clip_url,
-                    })) : [],
-                    transitions: Array.isArray(scene.transitions) ? scene.transitions : [],
-                }))
-            }
-            : null;
+      // Defensively hydrate the state from the payload to prevent crashes from
+      // malformed or incomplete JSON files, which can cause render errors (blank screen).
+      const storyboard = payload.storyboard;
+      const hydratedStoryboard = (storyboard && Array.isArray(storyboard.scenes))
+        ? {
+          ...storyboard,
+          scenes: storyboard.scenes.filter(Boolean).map((scene: any) => ({
+            ...(scene || {}),
+            shots: Array.isArray(scene.shots) ? scene.shots.map((shot: any) => ({
+              ...shot,
+              preview_image_url: shot.preview_image_url,
+              clip_url: shot.clip_url,
+            })) : [],
+            transitions: Array.isArray(scene.transitions) ? scene.transitions : [],
+          }))
+        }
+        : null;
 
-        const bibles = payload.bibles;
-        const hydratedBibles = (bibles && Array.isArray(bibles.characters) && Array.isArray(bibles.locations))
-            ? bibles
-            : null;
+      const bibles = payload.bibles;
+      const hydratedBibles = (bibles && Array.isArray(bibles.characters) && Array.isArray(bibles.locations))
+        ? bibles
+        : null;
 
-        return {
-            ...initialState,
-            currentStep: payload.currentStep || Step.Upload,
-            songFile: payload.songFile || null,
-            singerGender: payload.singerGender || 'unspecified',
-            songAnalysis: payload.songAnalysis || null,
-            creativeBrief: payload.creativeBrief ? { ...initialState.creativeBrief, ...payload.creativeBrief } : initialState.creativeBrief,
-            bibles: hydratedBibles,
-            storyboard: hydratedStoryboard,
-            tokenUsage: payload.tokenUsage ? { ...initialState.tokenUsage, ...payload.tokenUsage } : initialState.tokenUsage,
-            modelTier: payload.modelTier || 'freemium',
-        };
+      return {
+        ...initialState,
+        currentStep: payload.currentStep || Step.Upload,
+        songFile: payload.songFile || null,
+        singerGender: payload.singerGender || 'unspecified',
+        songAnalysis: payload.songAnalysis || null,
+        creativeBrief: payload.creativeBrief ? { ...initialState.creativeBrief, ...payload.creativeBrief } : initialState.creativeBrief,
+        bibles: hydratedBibles,
+        storyboard: hydratedStoryboard,
+        tokenUsage: payload.tokenUsage ? { ...initialState.tokenUsage, ...payload.tokenUsage } : initialState.tokenUsage,
+        modelTier: payload.modelTier || 'freemium',
+      };
     }
     case 'RESET':
-        return JSON.parse(JSON.stringify(initialState));
+      return JSON.parse(JSON.stringify(initialState));
     default:
       return state;
   }
@@ -417,42 +426,42 @@ export const useMusicVideoGenerator = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') {
-        return;
+      return;
     }
 
     const handleVideoGenerated = (data: any) => {
-        try {
-            const storyboard = storyboardRef.current;
-            if (!storyboard || !data?.url) return;
-            const shotIdentifier = data.shotId || data.id;
-            if (!shotIdentifier) return;
+      try {
+        const storyboard = storyboardRef.current;
+        if (!storyboard || !data?.url) return;
+        const shotIdentifier = data.shotId || data.id;
+        if (!shotIdentifier) return;
 
-            const shot = storyboard.scenes
-                .flatMap(scene => scene.shots || [])
-                .find(s => s.id === shotIdentifier);
+        const shot = storyboard.scenes
+          .flatMap(scene => scene.shots || [])
+          .find(s => s.id === shotIdentifier);
 
-            if (!shot) return;
+        if (!shot) return;
 
-            dispatch({
-                type: 'UPDATE_SHOT',
-                payload: {
-                    ...shot,
-                    clip_url: data.url,
-                    is_generating_clip: false,
-                    generation_progress: 100
-                }
-            });
-        } catch (err) {
-            console.error('Failed to handle video_generated event:', err);
-        }
+        dispatch({
+          type: 'UPDATE_SHOT',
+          payload: {
+            ...shot,
+            clip_url: data.url,
+            is_generating_clip: false,
+            generation_progress: 100
+          }
+        });
+      } catch (err) {
+        console.error('Failed to handle video_generated event:', err);
+      }
     };
 
     webSocketService.on('video_generated', handleVideoGenerated);
     return () => {
-        webSocketService.off('video_generated', handleVideoGenerated);
+      webSocketService.off('video_generated', handleVideoGenerated);
     };
   }, []);
-  
+
   const clearApiError = useCallback(() => dispatch({ type: 'CLEAR_API_ERROR' }), []);
 
   const setModelTier = useCallback((tier: 'freemium' | 'premium') => {
@@ -462,7 +471,7 @@ export const useMusicVideoGenerator = () => {
   const processSongUpload = useCallback(async (file: File, data: { lyrics: string; title?: string; artist?: string, singerGender: 'male' | 'female' | 'unspecified', modelTier: 'freemium' | 'premium' }) => {
     dispatch({ type: 'START_PROCESSING' });
     dispatch({ type: 'SET_SONG_FILE', payload: file });
-    dispatch({ type: 'SET_SINGER_GENDER', payload: data.singerGender});
+    dispatch({ type: 'SET_SINGER_GENDER', payload: data.singerGender });
     dispatch({ type: 'SET_MODEL_TIER', payload: data.modelTier });
     try {
       // Upload audio for backend processing (lip-sync and export)
@@ -473,7 +482,7 @@ export const useMusicVideoGenerator = () => {
         console.warn('Audio upload failed; continuing without audio URL', e);
       }
 
-      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.modelTier);
+      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.singerGender, data.modelTier);
       dispatch({ type: 'SET_ANALYSIS', payload: analysis });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { analysis: tokenUsage } });
     } catch (e) {
@@ -491,111 +500,111 @@ export const useMusicVideoGenerator = () => {
 
   const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = (error) => reject(error);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = (error) => reject(error);
     });
 
   const analyzeMoodboard = useCallback(async () => {
     if (state.moodboardImages.length === 0) return;
     dispatch({ type: 'START_MOODBOARD_ANALYSIS' });
     try {
-        const imagePayloads = await Promise.all(
-            state.moodboardImages.map(async (file) => ({
-                mimeType: file.type,
-                data: await fileToBase64(file),
-            }))
-        );
-        const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, state.modelTier);
-        dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: briefUpdate });
-        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { moodboardAnalysis: tokenUsage } });
+      const imagePayloads = await Promise.all(
+        state.moodboardImages.map(async (file) => ({
+          mimeType: file.type,
+          data: await fileToBase64(file),
+        }))
+      );
+      const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, state.modelTier);
+      dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: briefUpdate });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { moodboardAnalysis: tokenUsage } });
     } catch (e) {
-        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to analyze moodboard.' });
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to analyze moodboard.' });
     } finally {
-        dispatch({ type: 'FINISH_MOODBOARD_ANALYSIS' });
+      dispatch({ type: 'FINISH_MOODBOARD_ANALYSIS' });
     }
   }, [state.moodboardImages, state.modelTier]);
-  
+
   const getDirectorSuggestions = useCallback(async () => {
-      if (!state.songAnalysis) return;
-      dispatch({ type: 'START_BRIEF_SUGGESTION' });
-      try {
-          const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, state.modelTier);
-          dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: suggestions });
-          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: tokenUsage } }); // Using 'bibles' category for this for now
-      } catch (e) {
-          dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get AI Director suggestions.' });
-      } finally {
-          dispatch({ type: 'FINISH_BRIEF_SUGGESTION' });
-      }
+    if (!state.songAnalysis) return;
+    dispatch({ type: 'START_BRIEF_SUGGESTION' });
+    try {
+      const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, state.modelTier);
+      dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: suggestions });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: tokenUsage } }); // Using 'bibles' category for this for now
+    } catch (e) {
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get AI Director suggestions.' });
+    } finally {
+      dispatch({ type: 'FINISH_BRIEF_SUGGESTION' });
+    }
   }, [state.songAnalysis, state.creativeBrief, state.modelTier]);
 
   const generateBibleImages = useCallback(async (bibles: Bibles, brief: CreativeBrief) => {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
     for (const character of bibles.characters) {
-        try {
-            const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief, state.modelTier);
-            dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: [imageUrl] } });
-            dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
-        } catch (e) {
-            console.error(`Failed to generate image for character ${character.name}`, e);
-            dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: ['error'] } });
-            dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for character: ${character.name}.` });
-        }
-        await delay(1500); // Wait between requests to avoid rate limiting
+      try {
+        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief, state.modelTier);
+        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: [imageUrl] } });
+        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
+      } catch (e) {
+        console.error(`Failed to generate image for character ${character.name}`, e);
+        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: ['error'] } });
+        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for character: ${character.name}.` });
+      }
+      await delay(1500); // Wait between requests to avoid rate limiting
     }
     for (const location of bibles.locations) {
-        try {
-            const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief, state.modelTier);
-            dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: [imageUrl] } });
-            dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
-        } catch (e) {
-            console.error(`Failed to generate image for location ${location.name}`, e);
-            dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: ['error'] } });
-            dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for location: ${location.name}.` });
-        }
-        await delay(1500);
+      try {
+        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief, state.modelTier);
+        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: [imageUrl] } });
+        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
+      } catch (e) {
+        console.error(`Failed to generate image for location ${location.name}`, e);
+        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: ['error'] } });
+        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for location: ${location.name}.` });
+      }
+      await delay(1500);
     }
   }, []);
 
   const generateAllTransitions = useCallback(async (storyboard: Storyboard) => {
     if (!state.bibles || !state.creativeBrief) return;
     for (const scene of storyboard.scenes) {
-        try {
-            const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, state.modelTier);
-            dispatch({ type: 'SET_TRANSITIONS_FOR_SCENE', payload: { sceneId: scene.id, transitions } });
-            dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { transitions: tokenUsage } });
-        } catch (e) {
-            console.error(`Failed to generate transitions for scene ${scene.id}`, e);
-            dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Transition generation failed for scene ${scene.id}.` });
-        }
+      try {
+        const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, state.modelTier);
+        dispatch({ type: 'SET_TRANSITIONS_FOR_SCENE', payload: { sceneId: scene.id, transitions } });
+        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { transitions: tokenUsage } });
+      } catch (e) {
+        console.error(`Failed to generate transitions for scene ${scene.id}`, e);
+        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Transition generation failed for scene ${scene.id}.` });
+      }
     }
   }, [state.bibles, state.creativeBrief, state.modelTier]);
 
   const generateCreativeAssets = useCallback(async () => {
-      if (!state.songAnalysis || !state.creativeBrief || !state.singerGender) return;
-      dispatch({ type: 'START_PROCESSING' });
-      dispatch({ type: 'SET_STEP', payload: Step.Plan });
-      
-      try {
-          const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier);
-          dispatch({ type: 'SET_BIBLES', payload: bibles });
-          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: biblesTokens } });
-          
-          generateBibleImages(bibles, state.creativeBrief);
-          
-          const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, state.modelTier);
-          dispatch({ type: 'SET_STORYBOARD', payload: storyboard });
-          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { storyboard: storyboardTokens } });
+    if (!state.songAnalysis || !state.creativeBrief || !state.singerGender) return;
+    dispatch({ type: 'START_PROCESSING' });
+    dispatch({ type: 'SET_STEP', payload: Step.Plan });
 
-          generateAllTransitions(storyboard);
+    try {
+      const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier);
+      dispatch({ type: 'SET_BIBLES', payload: bibles });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: biblesTokens } });
 
-      } catch (e) {
-          dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to generate creative assets.' });
-          dispatch({ type: 'SET_STEP', payload: Step.Controls }); // Go back on error
-      }
+      generateBibleImages(bibles, state.creativeBrief);
+
+      const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, state.modelTier);
+      dispatch({ type: 'SET_STORYBOARD', payload: storyboard });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { storyboard: storyboardTokens } });
+
+      generateAllTransitions(storyboard);
+
+    } catch (e) {
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to generate creative assets.' });
+      dispatch({ type: 'SET_STEP', payload: Step.Controls }); // Go back on error
+    }
   }, [state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier, generateBibleImages, generateAllTransitions]);
 
   const generateAllImages = useCallback(async () => {
@@ -604,17 +613,17 @@ export const useMusicVideoGenerator = () => {
     const allShots = state.storyboard.scenes.flatMap(s => s.shots);
 
     for (const shot of allShots) {
-        if (shot.preview_image_url) continue; // Skip if already generated or generating
-        try {
-            const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
-            dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
-            dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
-        } catch (e) {
-            console.error(`Failed to generate image for shot ${shot.id}`, e);
-            dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
-            dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for shot ${shot.id}.` });
-        }
-        await delay(1500); // Wait to avoid rate limiting
+      if (shot.preview_image_url) continue; // Skip if already generated or generating
+      try {
+        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
+        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
+        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
+      } catch (e) {
+        console.error(`Failed to generate image for shot ${shot.id}`, e);
+        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
+        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for shot ${shot.id}.` });
+      }
+      await delay(1500); // Wait to avoid rate limiting
     }
   }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
 
@@ -626,188 +635,199 @@ export const useMusicVideoGenerator = () => {
 
     dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: '' } }); // Set to loading state
     try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
-        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
-        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
+      const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
     } catch (e) {
-        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
-        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to regenerate image.' });
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to regenerate image.' });
     }
   }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
-  
+
   const regenerateBibleImage = useCallback(async (item: { type: 'character' | 'location', name: string }) => {
     if (!state.bibles || !state.creativeBrief) return;
-    
+
     const { type, name } = item;
-    
+
     dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: [] } }); // Set loading state
 
     try {
-        let imageUrl, tokenUsage;
-        if (type === 'character') {
-            const character = state.bibles.characters.find(c => c.name === name);
-            if (!character) return;
-            ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief, state.modelTier));
-        } else {
-            const location = state.bibles.locations.find(l => l.name === name);
-            if (!location) return;
-            ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, state.creativeBrief, state.modelTier));
-        }
-        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
-        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: [imageUrl] } });
-    } catch(e) {
-        console.error(`Failed to regenerate image for ${type} ${name}`, e);
-        dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: ['error'] } });
-        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Failed to regenerate image for ${type} ${name}.` });
+      let imageUrl, tokenUsage;
+      if (type === 'character') {
+        const character = state.bibles.characters.find(c => c.name === name);
+        if (!character) return;
+        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief, state.modelTier));
+      } else {
+        const location = state.bibles.locations.find(l => l.name === name);
+        if (!location) return;
+        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, state.creativeBrief, state.modelTier));
+      }
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
+      dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: [imageUrl] } });
+    } catch (e) {
+      console.error(`Failed to regenerate image for ${type} ${name}`, e);
+      dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: ['error'] } });
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Failed to regenerate image for ${type} ${name}.` });
     }
-}, [state.bibles, state.creativeBrief]);
+  }, [state.bibles, state.creativeBrief]);
 
   const editImage = useCallback(async (shotId: string, prompt: string) => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
     const shot = state.storyboard.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
     if (!shot) return;
-    
+
     const originalUrl = shot.preview_image_url;
-    dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: '' }}); 
+    dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: '' } });
     try {
-        const { imageUrl, tokenUsage } = await aiService.editImageForShot(shot, state.bibles, state.creativeBrief, prompt);
-        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
-        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageEditing: tokenUsage } });
+      const { imageUrl, tokenUsage } = await aiService.editImageForShot(shot, state.bibles, state.creativeBrief, prompt);
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageEditing: tokenUsage } });
     } catch (e) {
-        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: originalUrl } });
-        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to edit image.' });
-        console.error(e);
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: originalUrl } });
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to edit image.' });
+      console.error(e);
     }
   }, [state.storyboard, state.bibles, state.creativeBrief]);
 
   const generateClip = useCallback(async (shotId: string, quality: 'draft' | 'high' = 'draft'): Promise<boolean> => {
-      if (!state.storyboard || !state.creativeBrief) return false;
-      const shot = state.storyboard.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
-      if (!shot || !shot.preview_image_url || shot.preview_image_url === 'error') return false;
+    if (!state.storyboard || !state.creativeBrief) return false;
+    const shot = state.storyboard.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
+    if (!shot || !shot.preview_image_url || shot.preview_image_url === 'error') return false;
 
-      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: true } });
-      let success = false;
-      try {
-          const duration = shot.end - shot.start;
-          const prompt = aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
-          
-          const mappedCameraMotion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements.camera_motion);
-          const modelPrefs = deriveModelGenerationPreferences(shot, duration);
-          
-          const { promptId } = await backendService.generateVideoClip({
-              imageUrl: shot.preview_image_url,
-              prompt,
-              duration,
-              quality,
-              camera_motion: mappedCameraMotion,
-              lipSync: !!shot.lip_sync_hint,
-              audioUrl: state.audioUrl || undefined,
-              shotId: shot.id,
-              workflow: modelPrefs.workflow as "portrait" | "stylized" | "plate" | "animatediff" | "realistic" | "i2v",
-              video_model: shot.video_model,
-              render_profile: shot.render_profile,
-              fps: modelPrefs.fps,
-              negative_prompt: modelPrefs.negative_prompt
-          });
+    dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: true } });
+    let success = false;
+    try {
+      // Clamp duration to a beat-friendly, short range for stability
+      const rawDuration = (typeof shot.end === 'number' ? shot.end : 0) - (typeof shot.start === 'number' ? shot.start : 0);
+      const duration = Math.max(6, Math.min(8, rawDuration || 6));
 
-          // Poll for progress and completion
-          let completed = false;
-          let pollAttempts = 0;
-          const maxPollAttempts = 300; // 5 minutes max (300 * 1 second)
-          
-          while (!completed && pollAttempts < maxPollAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
-              pollAttempts++;
-              
-              try {
-                  const status = await backendService.getVideoClipStatus(promptId);
-                  
-                  // Update progress if available
-                  if (typeof status.progress === 'number') {
-                      dispatch({
-                          type: 'UPDATE_SHOT',
-                          payload: { ...shot, generation_progress: status.progress }
-                      });
-                  }
-                  
-                  // Check if completed
-                  if (status.success && status.clipUrl) {
-                      dispatch({
-                          type: 'UPDATE_SHOT',
-                          payload: {
-                              ...shot,
-                              clip_url: status.clipUrl,
-                              is_generating_clip: false,
-                              generation_progress: 100
-                          }
-                      });
-                      completed = true;
-                  } else if (status.error) {
-                      throw new Error(status.error);
-                  }
-              } catch (pollError) {
-                  console.error(`Error polling video status (attempt ${pollAttempts}):`, pollError);
-                  if (pollAttempts >= maxPollAttempts) {
-                      throw new Error(`Video generation timed out after ${maxPollAttempts} attempts`);
-                  }
+      const prompt = aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
+
+      const mappedCameraMotion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements.camera_motion);
+      const modelPrefs = deriveModelGenerationPreferences(shot, duration);
+      const bpm = state.songAnalysis?.bpm || 120;
+      const beatFps = Math.max(12, Math.min(24, Math.round(bpm / 6))); // favor fps aligned to beat cadence
+      const fps = Math.max(12, Math.min(24, modelPrefs.fps ?? beatFps));
+      const width = 1280;
+      const height = 720;
+      const lipSync = !!(shot.lip_sync_hint || shot.lyric_overlay?.text);
+
+      const { promptId } = await backendService.generateVideoClip({
+        imageUrl: shot.preview_image_url,
+        prompt,
+        duration,
+        quality,
+        camera_motion: mappedCameraMotion,
+        lipSync,
+        audioUrl: state.audioUrl || undefined,
+        shotId: shot.id,
+        workflow: modelPrefs.workflow as "portrait" | "stylized" | "plate" | "animatediff" | "realistic" | "i2v",
+        video_model: shot.video_model,
+        render_profile: shot.render_profile,
+        fps,
+        width,
+        height,
+        negative_prompt: modelPrefs.negative_prompt
+      });
+
+      // Poll for progress and completion
+      let completed = false;
+      let pollAttempts = 0;
+      const maxPollAttempts = 300; // 5 minutes max (300 * 1 second)
+
+      while (!completed && pollAttempts < maxPollAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
+        pollAttempts++;
+
+        try {
+          const status = await backendService.getVideoClipStatus(promptId);
+
+          // Update progress if available
+          if (typeof status.progress === 'number') {
+            dispatch({
+              type: 'UPDATE_SHOT',
+              payload: { ...shot, generation_progress: status.progress }
+            });
+          }
+
+          // Check if completed
+          if (status.success && status.clipUrl) {
+            dispatch({
+              type: 'UPDATE_SHOT',
+              payload: {
+                ...shot,
+                clip_url: status.clipUrl,
+                is_generating_clip: false,
+                generation_progress: 100
               }
+            });
+            completed = true;
+          } else if (status.error) {
+            throw new Error(status.error);
           }
-          
-          if (!completed) {
-              throw new Error('Video generation timed out');
+        } catch (pollError) {
+          console.error(`Error polling video status (attempt ${pollAttempts}):`, pollError);
+          if (pollAttempts >= maxPollAttempts) {
+            throw new Error(`Video generation timed out after ${maxPollAttempts} attempts`);
           }
-          success = true;
-      } catch (e) {
-          console.error(e);
-          dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: false } });
-          const errorMessage = e instanceof Error ? e.message : 'Failed to generate clip.';
-          dispatch({ type: 'SET_API_ERROR', payload: errorMessage });
+        }
       }
-      return success;
+
+      if (!completed) {
+        throw new Error('Video generation timed out');
+      }
+      success = true;
+    } catch (e) {
+      console.error(e);
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: false } });
+      const errorMessage = e instanceof Error ? e.message : 'Failed to generate clip.';
+      dispatch({ type: 'SET_API_ERROR', payload: errorMessage });
+    }
+    return success;
   }, [state.storyboard, state.creativeBrief]);
 
   const generateStoryboardBatch = useCallback(async (quality: 'draft' | 'high' = 'high') => {
-      if (!state.storyboard || !state.creativeBrief) return;
-      
-      // Flatten and keep scene/shot order; fall back to start time if present.
-      const orderedShots = state.storyboard.scenes
-        .map((scene, sceneIndex) =>
-          scene.shots.map((shot, shotIndex) => ({ shot, sceneIndex, shotIndex }))
-        )
-        .flat()
-        .filter(({ shot }) => shot.preview_image_url && shot.preview_image_url !== 'error')
-        .sort((a, b) => {
-          const aStart = typeof a.shot.start === 'number' ? a.shot.start : 0;
-          const bStart = typeof b.shot.start === 'number' ? b.shot.start : 0;
-          if (aStart !== bStart) return aStart - bStart;
-          if (a.sceneIndex !== b.sceneIndex) return a.sceneIndex - b.sceneIndex;
-          if (a.shotIndex !== b.shotIndex) return a.shotIndex - b.shotIndex;
-          return a.shot.id.localeCompare(b.shot.id);
-        });
+    if (!state.storyboard || !state.creativeBrief) return;
 
-      const failed: string[] = [];
-      for (const entry of orderedShots) {
-        const ok = await generateClip(entry.shot.id, quality);
-        if (!ok) failed.push(entry.shot.id);
-      }
+    // Flatten and keep scene/shot order; fall back to start time if present.
+    const orderedShots = state.storyboard.scenes
+      .map((scene, sceneIndex) =>
+        scene.shots.map((shot, shotIndex) => ({ shot, sceneIndex, shotIndex }))
+      )
+      .flat()
+      .filter(({ shot }) => shot.preview_image_url && shot.preview_image_url !== 'error')
+      .sort((a, b) => {
+        const aStart = typeof a.shot.start === 'number' ? a.shot.start : 0;
+        const bStart = typeof b.shot.start === 'number' ? b.shot.start : 0;
+        if (aStart !== bStart) return aStart - bStart;
+        if (a.sceneIndex !== b.sceneIndex) return a.sceneIndex - b.sceneIndex;
+        if (a.shotIndex !== b.shotIndex) return a.shotIndex - b.shotIndex;
+        return a.shot.id.localeCompare(b.shot.id);
+      });
 
-      if (failed.length) {
-        dispatch({
-          type: 'SET_API_ERROR',
-          payload: `Some clips failed to generate: ${failed.join(', ')}`
-        });
-      }
+    const failed: string[] = [];
+    for (const entry of orderedShots) {
+      const ok = await generateClip(entry.shot.id, quality);
+      if (!ok) failed.push(entry.shot.id);
+    }
+
+    if (failed.length) {
+      dispatch({
+        type: 'SET_API_ERROR',
+        payload: `Some clips failed to generate: ${failed.join(', ')}`
+      });
+    }
   }, [state.storyboard, state.creativeBrief, generateClip]);
 
   const regenerateClip = useCallback(async (shotId: string, quality: 'draft' | 'high' = 'high') => {
-      return generateClip(shotId, quality);
+    return generateClip(shotId, quality);
   }, [generateClip]);
 
   const setVfxForShot = useCallback((shotId: string, vfx: VFX_PRESET | 'None') => {
-      const shot = state.storyboard?.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
-      if (shot) {
-          dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, vfx }});
-      }
+    const shot = state.storyboard?.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
+    if (shot) {
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, vfx } });
+    }
   }, [state.storyboard]);
 
   const applyPostProductionEnhancement = useCallback(async (task: keyof Omit<PostProductionTasks, 'vfx'>) => {
@@ -817,74 +837,74 @@ export const useMusicVideoGenerator = () => {
 
     const allShots = state.storyboard.scenes.flatMap(s => s.shots);
     for (const shot of allShots) {
-        const updatedEnhancements = { ...(shot.post_production_enhancements || {}) };
-        if (task === 'color') {
-            updatedEnhancements.color_corrected = true;
-        } else if (task === 'stabilization') {
-            updatedEnhancements.stabilized = true;
-        }
-        dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, post_production_enhancements: updatedEnhancements } });
+      const updatedEnhancements = { ...(shot.post_production_enhancements || {}) };
+      if (task === 'color') {
+        updatedEnhancements.color_corrected = true;
+      } else if (task === 'stabilization') {
+        updatedEnhancements.stabilized = true;
+      }
+      dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, post_production_enhancements: updatedEnhancements } });
     }
 
     dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task, status: 'done' } });
   }, [state.storyboard]);
-  
+
   const suggestAndApplyBeatSyncedVfx = useCallback(async () => {
     if (!state.songAnalysis || !state.storyboard) return;
     dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'processing' } });
     try {
-        const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, state.modelTier);
-        
-        const allShotsMap = new Map(state.storyboard.scenes.flatMap(s => s.shots).map(shot => [shot.id, shot]));
+      const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, state.modelTier);
 
-        for (const suggestion of suggestions) {
-            const shotToUpdate = allShotsMap.get(suggestion.shotId);
-            if (shotToUpdate) {
-                // FIX: Use Object.assign to prevent "Spread types may only be created from object types" error.
-                dispatch({ type: 'UPDATE_SHOT', payload: Object.assign({}, shotToUpdate, { vfx: suggestion.vfx }) });
-            }
+      const allShotsMap = new Map(state.storyboard.scenes.flatMap(s => s.shots).map(shot => [shot.id, shot]));
+
+      for (const suggestion of suggestions) {
+        const shotToUpdate = allShotsMap.get(suggestion.shotId);
+        if (shotToUpdate) {
+          // FIX: Use Object.assign to prevent "Spread types may only be created from object types" error.
+          dispatch({ type: 'UPDATE_SHOT', payload: Object.assign({}, shotToUpdate, { vfx: suggestion.vfx }) });
         }
-        dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { postProduction: tokenUsage } });
-        dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'done' } });
+      }
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { postProduction: tokenUsage } });
+      dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'done' } });
     } catch (e) {
-        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get VFX suggestions.' });
-        dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'idle' } });
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get VFX suggestions.' });
+      dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'idle' } });
     }
   }, [state.songAnalysis, state.storyboard, state.modelTier]);
-  
+
   const runExecutiveProducerReview = useCallback(async () => {
-      if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
-      try {
-          const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, state.modelTier);
-          dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: feedback });
-          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { executiveReview: tokenUsage } });
-      } catch (e) {
-          dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get executive producer feedback.' });
-          dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: { pacing_score: 0, narrative_score: 0, consistency_score: 0, final_notes: "Error generating feedback." } });
-      }
+    if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
+    try {
+      const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, state.modelTier);
+      dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: feedback });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { executiveReview: tokenUsage } });
+    } catch (e) {
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get executive producer feedback.' });
+      dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: { pacing_score: 0, narrative_score: 0, consistency_score: 0, final_notes: "Error generating feedback." } });
+    }
   }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
 
   const runVisualQaReview = useCallback(async () => {
-      if (!state.storyboard || !state.bibles) {
-          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
-          return;
-      }
-      const hasAssets = state.storyboard.scenes.some(scene =>
-          scene.shots.some(shot => (shot.clip_url || shot.preview_image_url) && shot.preview_image_url !== 'error')
-      );
-      if (!hasAssets) {
-          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
-          return;
-      }
-      dispatch({ type: 'START_VISUAL_REVIEW' });
-      try {
-          const { report, tokenUsage } = await runVisualContinuityAudit(state.storyboard, state.bibles, state.creativeBrief);
-          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: report });
-          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { visualReview: tokenUsage } });
-      } catch (e) {
-          dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Visual QA agent failed to review generated visuals.' });
-          dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
-      }
+    if (!state.storyboard || !state.bibles) {
+      dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+      return;
+    }
+    const hasAssets = state.storyboard.scenes.some(scene =>
+      scene.shots.some(shot => (shot.clip_url || shot.preview_image_url) && shot.preview_image_url !== 'error')
+    );
+    if (!hasAssets) {
+      dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+      return;
+    }
+    dispatch({ type: 'START_VISUAL_REVIEW' });
+    try {
+      const { report, tokenUsage } = await runVisualContinuityAudit(state.storyboard, state.bibles, state.creativeBrief);
+      dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: report });
+      dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { visualReview: tokenUsage } });
+    } catch (e) {
+      dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Visual QA agent failed to review generated visuals.' });
+      dispatch({ type: 'SET_VISUAL_REVIEW_RESULT', payload: null });
+    }
   }, [state.storyboard, state.bibles, state.creativeBrief]);
 
   const goToReview = useCallback(() => {
@@ -894,53 +914,103 @@ export const useMusicVideoGenerator = () => {
   }, [runExecutiveProducerReview, runVisualQaReview]);
 
   const restart = useCallback(() => dispatch({ type: 'RESET' }), []);
-  
+
   const loadProductionFile = useCallback((file: File) => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-          try {
-              const result = event.target?.result;
-              if (typeof result !== 'string') {
-                  throw new Error("File could not be read as text.");
-              }
-              const loadedState = JSON.parse(result);
-              if (typeof loadedState !== 'object' || loadedState === null) {
-                  throw new Error("JSON file is not a valid state object.");
-              }
-              
-              let reconstructedSongFile: File | null = null;
-              if (loadedState.songFileData) {
-                  try {
-                      const { name, type, base64Data } = loadedState.songFileData;
-                      const byteCharacters = atob(base64Data);
-                      const byteNumbers = new Array(byteCharacters.length);
-                      for (let i = 0; i < byteCharacters.length; i++) {
-                          byteNumbers[i] = byteCharacters.charCodeAt(i);
-                      }
-                      const byteArray = new Uint8Array(byteNumbers);
-                      reconstructedSongFile = new File([byteArray], name, { type });
-                      console.log('Successfully reconstructed audio file from production JSON');
-                  } catch (e) {
-                      console.error('Failed to reconstruct audio file:', e);
-                  }
-              } else {
-                  console.warn('Production file does not contain audio data (songFileData field missing). This file was likely saved before audio encoding was implemented. You will need to manually upload the original audio file.');
-              }
-              
-              dispatch({
-                  type: 'LOAD_PRODUCTION_FILE',
-                  payload: { ...loadedState, songFile: reconstructedSongFile }
-              });
-          } catch(e) {
-              dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Invalid or corrupt production file.' });
+    const dataUrlToObjectUrl = async (dataUrl: string): Promise<string> => {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    };
+
+    const hydrateStoryboardMedia = async (storyboard: any) => {
+      if (!storyboard || !Array.isArray(storyboard.scenes)) return storyboard;
+
+      const scenes = await Promise.all(storyboard.scenes.map(async (scene: any) => {
+        const shots = await Promise.all((scene?.shots || []).map(async (shot: any) => {
+          let clip_url = shot?.clip_url;
+          let preview_image_url = shot?.preview_image_url;
+
+          // Rehydrate data URLs to blob/object URLs so <video>/<img> can load them
+          if (typeof clip_url === 'string' && clip_url.startsWith('data:')) {
+            try {
+              clip_url = await dataUrlToObjectUrl(clip_url);
+            } catch (err) {
+              console.error('Failed to rehydrate clip from data URL', err);
+              clip_url = undefined;
+            }
           }
-      };
-      reader.onerror = () => {
-          dispatch({ type: 'SET_API_ERROR', payload: 'Error reading the production file.' });
-      };
-      reader.readAsText(file);
+          if (typeof preview_image_url === 'string' && preview_image_url.startsWith('data:')) {
+            try {
+              preview_image_url = await dataUrlToObjectUrl(preview_image_url);
+            } catch (err) {
+              console.error('Failed to rehydrate preview image from data URL', err);
+            }
+          }
+
+          return {
+            ...shot,
+            clip_url,
+            preview_image_url,
+          };
+        }));
+
+        return {
+          ...scene,
+          shots,
+          transitions: Array.isArray(scene?.transitions) ? scene.transitions : [],
+        };
+      }));
+
+      return { ...storyboard, scenes };
+    };
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const result = event.target?.result;
+        if (typeof result !== 'string') {
+          throw new Error("File could not be read as text.");
+        }
+        const loadedState = JSON.parse(result);
+        if (typeof loadedState !== 'object' || loadedState === null) {
+          throw new Error("JSON file is not a valid state object.");
+        }
+
+        let reconstructedSongFile: File | null = null;
+        if (loadedState.songFileData) {
+          try {
+            const { name, type, base64Data } = loadedState.songFileData;
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            reconstructedSongFile = new File([byteArray], name, { type });
+            console.log('Successfully reconstructed audio file from production JSON');
+          } catch (e) {
+            console.error('Failed to reconstruct audio file:', e);
+          }
+        } else {
+          console.warn('Production file does not contain audio data (songFileData field missing). This file was likely saved before audio encoding was implemented. You will need to manually upload the original audio file.');
+        }
+
+        const hydratedStoryboard = await hydrateStoryboardMedia(loadedState.storyboard);
+
+        dispatch({
+          type: 'LOAD_PRODUCTION_FILE',
+          payload: { ...loadedState, songFile: reconstructedSongFile, storyboard: hydratedStoryboard }
+        });
+      } catch (e) {
+        dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Invalid or corrupt production file.' });
+      }
+    };
+    reader.onerror = () => {
+      dispatch({ type: 'SET_API_ERROR', payload: 'Error reading the production file.' });
+    };
+    reader.readAsText(file);
   }, []);
-  
+
   const generateVideoThumbnail = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
@@ -980,35 +1050,41 @@ export const useMusicVideoGenerator = () => {
         };
         reader.readAsDataURL(file);
       } else { // video
-        // Generate thumbnail first
         const previewUrl = await generateVideoThumbnail(file);
         dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'image', url: previewUrl } });
-        // Then set clip URL as blob (client-side preview, export needs file handling)
-        const clipUrl = URL.createObjectURL(file);
-        dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'video', url: clipUrl } });
+
+        // Persist video to backend so it appears in media library and JSON uses a stable URL
+        try {
+          const { videoUrl } = await backendService.uploadVideo(file);
+          dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'video', url: videoUrl } });
+        } catch (uploadErr) {
+          console.error('Failed to upload video to backend, falling back to local blob URL', uploadErr);
+          const clipUrl = URL.createObjectURL(file);
+          dispatch({ type: 'UPDATE_SHOT_MEDIA', payload: { shotId, mediaType: 'video', url: clipUrl } });
+        }
       }
     } catch (e) {
       console.error('Failed to process custom media upload for shot', shotId, e);
     }
   }, [dispatch]);
 
-const regenerateFlaggedShots = useCallback((report: VisualContinuityReport) => {
-  if (!state.storyboard || !report.issues) return;
+  const regenerateFlaggedShots = useCallback((report: VisualContinuityReport) => {
+    if (!state.storyboard || !report.issues) return;
 
-  const highCritIssues = report.issues.filter(issue => issue.severity && ['HIGH', 'CRITICAL'].includes(issue.severity.toUpperCase()));
+    const highCritIssues = report.issues.filter(issue => issue.severity && ['HIGH', 'CRITICAL'].includes(issue.severity.toUpperCase()));
 
-  highCritIssues.forEach(issue => {
-    const shot = state.storyboard!.scenes.flatMap(scene => scene.shots).find(s => s.id === issue.shotId);
-    if (shot) {
-      dispatch({
-        type: 'UPDATE_SHOT',
-        payload: {
-          ...shot,
-          refinement_note: issue.finding || 'Flagged for regeneration due to visual continuity issue'
-        }
-      });
-    }
-  });
+    highCritIssues.forEach(issue => {
+      const shot = state.storyboard!.scenes.flatMap(scene => scene.shots).find(s => s.id === issue.shotId);
+      if (shot) {
+        dispatch({
+          type: 'UPDATE_SHOT',
+          payload: {
+            ...shot,
+            refinement_note: issue.finding || 'Flagged for regeneration due to visual continuity issue'
+          }
+        });
+      }
+    });
   }, [state.storyboard, dispatch]);
 
   if (typeof window !== 'undefined') {
@@ -1054,14 +1130,14 @@ const regenerateFlaggedShots = useCallback((report: VisualContinuityReport) => {
 // This is intentionally minimal and only assigns functions when running in the
 // browser so it won't affect server-side renders.
 declare global {
-    interface Window { __mvGen?: any }
+  interface Window { __mvGen?: any }
 }
 
 if (typeof window !== 'undefined') {
-    // The hook runs inside React components; attaching a small helper that other
-    // scripts can call is safe for local development and testing.
-    // We do not call the hook here — the hook will set these up when executed.
-    // Consumers can call `window.__mvGen.setSongFile(file)` and
-    // `window.__mvGen.setStep('Review')` from the page context.
-    window.__mvGen = window.__mvGen || {};
+  // The hook runs inside React components; attaching a small helper that other
+  // scripts can call is safe for local development and testing.
+  // We do not call the hook here — the hook will set these up when executed.
+  // Consumers can call `window.__mvGen.setSongFile(file)` and
+  // `window.__mvGen.setStep('Review')` from the page context.
+  window.__mvGen = window.__mvGen || {};
 }

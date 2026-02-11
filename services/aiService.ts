@@ -80,29 +80,29 @@ function chooseVideoModel(
 // Enhanced prompt builder for ComfyUI with ultra-realistic quality tags
 const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief): string => {
     console.log('=== getEnhancedPromptForA1111 CALLED ===');
-    
+
     const characterRef = shot.character_refs[0];
     const char = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
-    
+
     // CRITICAL: Include character NAME and physical traits
     const charDesc = char
         ? `${char.name}, a ${char.physical_appearance.age_range.split('-')[0]}yo ${char.physical_appearance.gender_presentation.toLowerCase()} man`
         : 'person';
-    
+
     // Location: Just setting type and time of day
     const loc = bibles.locations.find(l => l.name === shot.location_ref);
     const locDesc = loc ? `${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}` : '';
-    
+
     // Ultra-realistic quality tags optimized for SDXL
     const qualityTags = 'photorealistic, 8k uhd, high quality, film grain, Fujifilm XT3, sharp focus, professional photography, studio lighting, physically-based rendering, extreme detail description, raw photo, cinematic lighting';
-    
+
     // EXPLICIT prompt with quality enhancement
     const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}, ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, ${qualityTags}`.trim();
-    
+
     console.log('=== OPTIMIZED COMFYUI PROMPT (length:', prompt.length, 'chars) ===');
     console.log(prompt);
     console.log('=== END COMFYUI PROMPT ===');
-    
+
     return prompt;
 };
 
@@ -218,13 +218,33 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
 
 // --- API FUNCTIONS ---
 
-export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, modelTier: 'freemium' | 'premium'): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
-    console.log(`AI Service: Analyzing song with ${modelTier} tier...`, { title, artist });
+// Helper to convert File to Base64
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            if (typeof reader.result === 'string') {
+                resolve(reader.result.split(',')[1]);
+            } else {
+                reject(new Error('Failed to convert file to base64'));
+            }
+        };
+        reader.onerror = error => reject(error);
+    });
+};
+
+export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, singerGender: string, modelTier: 'freemium' | 'premium'): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
+    console.log(`AI Service: Analyzing song with ${modelTier} tier...`, { title, artist, singerGender });
     const ai = getAiClient();
     const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
+    // Convert audio file to base64 for Gemini "listening"
+    const audioBase64 = await fileToBase64(file);
+
     const prompt = `
-      Analyze the following song lyrics and metadata to create a detailed musical and lyrical analysis.
+      Analyze the following song lyrics, metadata, and the attached AUDIO FILE to create a detailed musical and lyrical analysis.
+      You must LISTEN to the audio to determine the mood, energy, instrumentation, and vocal style accurately.
       The output must be a valid JSON object.
       
       **MUSICAL ANALYSIS:**
@@ -238,8 +258,11 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
       - Continue adding beats until you reach the end of the song's total duration.
       - For each beat, assign an 'energy' score from 0.0 to 1.0. Beats within 'chorus' sections should have a higher energy (e.g., 0.8-1.0), while beats in verses or bridges should have a moderate energy (e.g., 0.5-0.7).
       
-      **VOCALS (DUET DETECTION):**
-      Detect whether this is a solo or duet performance. If a duet, classify the pairing (male_female, male_male, female_female if possible) and provide vocalist entries with gender, role, and time segments where each vocalist sings.
+      **VOCALS (DUET/QUARTET DETECTION):**
+      The user specified the singer type as: "${singerGender}".
+      - LISTEN to the audio to confirm this and identify specific vocal characteristics (e.g., "raspy male voice", "soprano female", "harmonizing group").
+      - Verify if it is a solo, duet (male/female, male/male, female/female), or quartet/group.
+      - Provide vocalist entries with gender, role, and time segments where each vocalist sings.
       
       **LYRIC ANALYSIS (CRITICAL FOR CREATIVE VARIETY):**
       Deeply analyze the lyrics to understand the song's meaning and visual potential:
@@ -275,7 +298,18 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
 
     const response = await ai.models.generateContent({
         model: modelName,
-        contents: prompt,
+        contents: [
+            { role: 'user', parts: [{ text: prompt }] },
+            {
+                role: 'user',
+                parts: [{
+                    inlineData: {
+                        mimeType: file.type || 'audio/mp3',
+                        data: audioBase64
+                    }
+                }]
+            }
+        ],
         config: {
             responseMimeType: 'application/json',
             responseSchema: {
@@ -381,30 +415,30 @@ export const analyzeSongEnhanced = async (
     progressCallback?: (phase: string, progress: number) => void
 ): Promise<EnhancedSongAnalysis> => {
     console.log('AI Service: Starting enhanced song analysis...');
-    
+
     try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         progressCallback?.('Decoding audio...', 10);
-        
+
         const arrayBuffer = await audioBlob.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        
+
         progressCallback?.('Analyzing frequency spectrum...', 30);
         const { beats, subBeats } = await detectBeatsAndSubBeats(audioBuffer, audioContext, progressCallback);
-        
+
         progressCallback?.('Detecting musical phrases...', 60);
         const phrases = detectMusicalPhrases(beats, audioBuffer.duration);
-        
+
         progressCallback?.('Calculating tempo curve...', 75);
         const tempoCurve = calculateTempoCurve(beats);
-        
+
         progressCallback?.('Analyzing energy...', 85);
         const { measures, energyCurve } = analyzeEnergyAndMeasures(beats, audioBuffer);
-        
+
         progressCallback?.('Finalizing analysis...', 95);
-        
+
         const basicAnalysis = await generateBasicAnalysisFromBeats(beats, audioBuffer.duration);
-        
+
         const enhanced: EnhancedSongAnalysis = {
             ...basicAnalysis,
             beats,
@@ -414,10 +448,10 @@ export const analyzeSongEnhanced = async (
             measures,
             energy_curve: energyCurve
         };
-        
+
         progressCallback?.('Complete', 100);
         audioContext.close();
-        
+
         return enhanced;
     } catch (error) {
         console.error('Enhanced analysis failed:', error);
@@ -436,20 +470,20 @@ async function detectBeatsAndSubBeats(
     const channelData = audioBuffer.getChannelData(0);
     const sampleRate = audioBuffer.sampleRate;
     const duration = audioBuffer.duration;
-    
+
     const fftSize = 2048;
     const hopSize = 512;
     const numFrames = Math.floor(channelData.length / hopSize);
-    
+
     const spectralFlux: number[] = [];
     let prevSpectrum: Float32Array | null = null;
-    
+
     for (let i = 0; i < numFrames - 1; i++) {
         const frameStart = i * hopSize;
         const frame = channelData.slice(frameStart, frameStart + fftSize);
-        
+
         const spectrum = computeSpectrum(frame);
-        
+
         if (prevSpectrum) {
             let flux = 0;
             for (let j = 0; j < spectrum.length; j++) {
@@ -460,31 +494,31 @@ async function detectBeatsAndSubBeats(
         } else {
             spectralFlux.push(0);
         }
-        
+
         prevSpectrum = spectrum;
-        
+
         if (i % 1000 === 0) {
             const progress = 30 + (i / numFrames) * 20;
             progressCallback?.('Analyzing onsets...', progress);
         }
     }
-    
+
     const threshold = calculateAdaptiveThreshold(spectralFlux);
     const onsets = findPeaks(spectralFlux, threshold, hopSize / sampleRate);
-    
+
     const { tempo, confidence } = estimateTempo(onsets);
     const beatInterval = 60 / tempo;
-    
+
     const beats: Beat[] = [];
     const subBeats: Beat[] = [];
-    
+
     const quantizedOnsets = quantizeOnsets(onsets, beatInterval);
-    
+
     for (let i = 0; i < quantizedOnsets.length; i++) {
         const onset = quantizedOnsets[i];
         const energy = calculateEnergyAtTime(onset.time, channelData, sampleRate);
         const beatType = classifyBeatType(onset.time, channelData, sampleRate);
-        
+
         const beat: Beat = {
             time: onset.time,
             energy,
@@ -492,9 +526,9 @@ async function detectBeatsAndSubBeats(
             is_downbeat: i % 4 === 0,
             type: beatType
         };
-        
+
         beats.push(beat);
-        
+
         const subBeatTimes = generateSubBeats(onset.time, beatInterval);
         for (const subTime of subBeatTimes) {
             if (subTime > 0 && subTime < duration) {
@@ -509,7 +543,7 @@ async function detectBeatsAndSubBeats(
             }
         }
     }
-    
+
     return { beats, subBeats };
 }
 
@@ -519,7 +553,7 @@ async function detectBeatsAndSubBeats(
 function computeSpectrum(frame: Float32Array): Float32Array {
     const n = frame.length;
     const spectrum = new Float32Array(n / 2);
-    
+
     for (let k = 0; k < spectrum.length; k++) {
         let real = 0;
         let imag = 0;
@@ -530,7 +564,7 @@ function computeSpectrum(frame: Float32Array): Float32Array {
         }
         spectrum[k] = Math.sqrt(real * real + imag * imag);
     }
-    
+
     return spectrum;
 }
 
@@ -540,19 +574,19 @@ function computeSpectrum(frame: Float32Array): Float32Array {
 function calculateAdaptiveThreshold(spectralFlux: number[]): number[] {
     const windowSize = 10;
     const threshold: number[] = [];
-    
+
     for (let i = 0; i < spectralFlux.length; i++) {
         const start = Math.max(0, i - windowSize);
         const end = Math.min(spectralFlux.length, i + windowSize);
         const window = spectralFlux.slice(start, end);
-        
+
         const mean = window.reduce((a, b) => a + b, 0) / window.length;
         const variance = window.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / window.length;
         const stdDev = Math.sqrt(variance);
-        
+
         threshold.push(mean + 1.5 * stdDev);
     }
-    
+
     return threshold;
 }
 
@@ -565,7 +599,7 @@ function findPeaks(
     timeStep: number
 ): { time: number; confidence: number }[] {
     const peaks: { time: number; confidence: number }[] = [];
-    
+
     for (let i = 1; i < spectralFlux.length - 1; i++) {
         if (
             spectralFlux[i] > threshold[i] &&
@@ -577,7 +611,7 @@ function findPeaks(
             peaks.push({ time, confidence });
         }
     }
-    
+
     return peaks;
 }
 
@@ -588,12 +622,12 @@ function estimateTempo(onsets: { time: number }[]): { tempo: number; confidence:
     if (onsets.length < 2) {
         return { tempo: 120, confidence: 0.5 };
     }
-    
+
     const intervals: number[] = [];
     for (let i = 1; i < onsets.length; i++) {
         intervals.push(onsets[i].time - onsets[i - 1].time);
     }
-    
+
     const histogram: { [key: string]: number } = {};
     for (const interval of intervals) {
         const bpm = Math.round(60 / interval);
@@ -601,7 +635,7 @@ function estimateTempo(onsets: { time: number }[]): { tempo: number; confidence:
             histogram[bpm] = (histogram[bpm] || 0) + 1;
         }
     }
-    
+
     let maxCount = 0;
     let estimatedTempo = 120;
     for (const [bpm, count] of Object.entries(histogram)) {
@@ -610,7 +644,7 @@ function estimateTempo(onsets: { time: number }[]): { tempo: number; confidence:
             estimatedTempo = parseInt(bpm);
         }
     }
-    
+
     const confidence = maxCount / intervals.length;
     return { tempo: estimatedTempo, confidence };
 }
@@ -623,11 +657,11 @@ function quantizeOnsets(
     beatInterval: number
 ): { time: number; confidence: number }[] {
     const quantized: { time: number; confidence: number }[] = [];
-    
+
     let expectedTime = 0;
     for (const onset of onsets) {
         const nearestBeat = Math.round(onset.time / beatInterval) * beatInterval;
-        
+
         if (Math.abs(onset.time - nearestBeat) < beatInterval * 0.15) {
             quantized.push({
                 time: nearestBeat,
@@ -649,7 +683,7 @@ function quantizeOnsets(
             }
         }
     }
-    
+
     return quantized;
 }
 
@@ -664,12 +698,12 @@ function calculateEnergyAtTime(
     const windowSize = 2048;
     const startSample = Math.floor(time * sampleRate);
     const endSample = Math.min(startSample + windowSize, channelData.length);
-    
+
     let energy = 0;
     for (let i = startSample; i < endSample; i++) {
         energy += channelData[i] * channelData[i];
     }
-    
+
     return Math.min(1.0, Math.sqrt(energy / windowSize) * 10);
 }
 
@@ -684,13 +718,13 @@ function classifyBeatType(
     const windowSize = 2048;
     const startSample = Math.floor(time * sampleRate);
     const frame = channelData.slice(startSample, startSample + windowSize);
-    
+
     const spectrum = computeSpectrum(frame);
-    
+
     const bassEnergy = spectrum.slice(0, 5).reduce((a, b) => a + b, 0);
     const midEnergy = spectrum.slice(5, 20).reduce((a, b) => a + b, 0);
     const highEnergy = spectrum.slice(20, 50).reduce((a, b) => a + b, 0);
-    
+
     if (bassEnergy > midEnergy * 1.5 && bassEnergy > highEnergy * 2) {
         return 'kick';
     } else if (midEnergy > bassEnergy * 1.2 && midEnergy > highEnergy) {
@@ -700,7 +734,7 @@ function classifyBeatType(
     } else if (highEnergy > bassEnergy * 2) {
         return 'cymbal';
     }
-    
+
     return 'other';
 }
 
@@ -724,21 +758,21 @@ function detectMusicalPhrases(
     if (beats.length < 8) {
         return [];
     }
-    
+
     const phrases: NonNullable<EnhancedSongAnalysis['phrases']> = [];
     const beatsPerBar = 4;
     const barsPerPhrase = 4;
     const beatsPerPhrase = beatsPerBar * barsPerPhrase;
-    
+
     for (let i = 0; i < beats.length; i += beatsPerPhrase) {
         const phraseBeats = beats.slice(i, i + beatsPerPhrase);
         if (phraseBeats.length < beatsPerPhrase / 2) break;
-        
+
         const start = phraseBeats[0].time;
         const end = phraseBeats[phraseBeats.length - 1].time;
-        
+
         const avgEnergy = phraseBeats.reduce((sum, b) => sum + b.energy, 0) / phraseBeats.length;
-        
+
         let type: 'verse' | 'chorus' | 'bridge' | 'pre-chorus' | 'outro' | 'intro';
         if (start < 20) {
             type = 'intro';
@@ -753,10 +787,10 @@ function detectMusicalPhrases(
         } else {
             type = 'bridge';
         }
-        
+
         phrases.push({ start, end, type });
     }
-    
+
     return phrases;
 }
 
@@ -767,22 +801,22 @@ function calculateTempoCurve(beats: Beat[]): EnhancedSongAnalysis['tempo_curve']
     if (beats.length < 8) {
         return [];
     }
-    
+
     const tempoCurve: NonNullable<EnhancedSongAnalysis['tempo_curve']> = [];
     const windowSize = 8;
-    
+
     for (let i = 0; i < beats.length - windowSize; i += windowSize / 2) {
         const window = beats.slice(i, i + windowSize);
         const intervals = window.slice(1).map((b, idx) => b.time - window[idx].time);
         const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         const bpm = 60 / avgInterval;
-        
+
         tempoCurve.push({
             time: window[0].time,
             bpm: Math.round(bpm)
         });
     }
-    
+
     return tempoCurve;
 }
 
@@ -798,7 +832,7 @@ function analyzeEnergyAndMeasures(
 } {
     const measures: NonNullable<EnhancedSongAnalysis['measures']> = [];
     const energyCurve: NonNullable<EnhancedSongAnalysis['energy_curve']> = [];
-    
+
     const beatsPerBar = 4;
     for (let i = 0; i < beats.length; i += beatsPerBar) {
         measures.push({
@@ -806,16 +840,16 @@ function analyzeEnergyAndMeasures(
             bar_number: Math.floor(i / beatsPerBar) + 1
         });
     }
-    
+
     const channelData = audioBuffer.getChannelData(0);
     const sampleRate = audioBuffer.sampleRate;
     const energyWindowSize = 0.1;
-    
+
     for (let time = 0; time < audioBuffer.duration; time += energyWindowSize) {
         const energy = calculateEnergyAtTime(time, channelData, sampleRate);
         energyCurve.push({ time, energy });
     }
-    
+
     return { measures, energyCurve };
 }
 
@@ -829,10 +863,10 @@ async function generateBasicAnalysisFromBeats(
     const intervals = beats.slice(1).map((b, i) => b.time - beats[i].time);
     const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
     const bpm = Math.round(60 / avgInterval);
-    
+
     const highEnergyBeats = beats.filter(b => b.energy > 0.7);
     const avgEnergy = beats.reduce((sum, b) => sum + b.energy, 0) / beats.length;
-    
+
     const structure: SongAnalysis['structure'] = [
         { name: 'intro', start: 0, end: Math.min(20, duration * 0.15) },
         { name: 'verse', start: Math.min(20, duration * 0.15), end: Math.min(60, duration * 0.4) },
@@ -841,7 +875,7 @@ async function generateBasicAnalysisFromBeats(
         { name: 'chorus', start: Math.min(140, duration * 0.75), end: Math.min(180, duration * 0.9) },
         { name: 'outro', start: Math.min(180, duration * 0.9), end: duration }
     ].filter(s => s.start < s.end);
-    
+
     return {
         title: 'Untitled',
         artist: 'Unknown',
@@ -1001,7 +1035,7 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
                         }
                     }
                 },
-                 required: ['characters', 'locations']
+                required: ['characters', 'locations']
             }
         }
     });
@@ -1109,8 +1143,8 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
                                 start: { type: Type.NUMBER },
                                 end: { type: Type.NUMBER },
                                 description: { type: Type.STRING, description: "An optional summary of the scene's content and mood." },
-                                narrative_beats: { type: Type.ARRAY, items: {type: Type.STRING }},
-                                transitions: { type: Type.ARRAY, items: { type: Type.NULL }, description: "Set this to an empty array."},
+                                narrative_beats: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                transitions: { type: Type.ARRAY, items: { type: Type.NULL }, description: "Set this to an empty array." },
                                 shots: {
                                     type: Type.ARRAY,
                                     items: {
@@ -1160,7 +1194,7 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
                                     },
                                 },
                             },
-                             required: ['id', 'section', 'start', 'end', 'shots', 'narrative_beats', 'transitions'],
+                            required: ['id', 'section', 'start', 'end', 'shots', 'narrative_beats', 'transitions'],
                         },
                     },
                 },
@@ -1187,7 +1221,7 @@ function ensureStoryboardCoverage(
         const expectedShots = Math.max(1, Math.ceil(totalDuration / 7));
 
         // Helper: snap a time to the nearest beat within a window
-        const beats = (analysis.beats || []).map(b => b.time).sort((a,b)=>a-b);
+        const beats = (analysis.beats || []).map(b => b.time).sort((a, b) => a - b);
         const snapToBeat = (t: number): number => {
             if (beats.length === 0) return Math.max(0, Math.min(totalDuration, t));
             let lo = 0, hi = beats.length - 1, best = beats[0];
@@ -1201,16 +1235,16 @@ function ensureStoryboardCoverage(
         };
 
         // Build index: vocalist -> character name
-        const vocalistMap: Record<string,string> = {};
+        const vocalistMap: Record<string, string> = {};
         const vocalists = analysis.vocals?.vocalists || [];
-        for (let i=0; i<vocalists.length && i<bibles.characters.length; i++) {
+        for (let i = 0; i < vocalists.length && i < bibles.characters.length; i++) {
             vocalistMap[vocalists[i].id] = bibles.characters[i].name;
         }
 
         // Compute scenes by structure sections; ensure each has enough shots
-        const scenes = [...(sb.scenes || [])].map(s=>({ ...s, shots: [...(s.shots||[])], transitions: Array.isArray(s.transitions)? s.transitions: [] }));
-        const sectionMap = new Map<string, {start:number;end:number;name:string}>();
-        for (const sec of analysis.structure || []) sectionMap.set(sec.name + ':' + sec.start, {start: sec.start, end: sec.end, name: sec.name});
+        const scenes = [...(sb.scenes || [])].map(s => ({ ...s, shots: [...(s.shots || [])], transitions: Array.isArray(s.transitions) ? s.transitions : [] }));
+        const sectionMap = new Map<string, { start: number; end: number; name: string }>();
+        for (const sec of analysis.structure || []) sectionMap.set(sec.name + ':' + sec.start, { start: sec.start, end: sec.end, name: sec.name });
 
         // Fill or create scenes per section
         const ensureShotsForSection = (sectionName: string, start: number, end: number) => {
@@ -1231,10 +1265,10 @@ function ensureStoryboardCoverage(
                 scenes.push(scene);
             }
             // Add shots until target reached, enforcing 6–8s
-            const existing = scene.shots.sort((a,b)=>a.start-b.start);
+            const existing = scene.shots.sort((a, b) => a.start - b.start);
             let t = start;
             // If existing shots, advance t
-            if (existing.length > 0) t = Math.max(t, existing[existing.length-1].end);
+            if (existing.length > 0) t = Math.max(t, existing[existing.length - 1].end);
             let shotIndex = existing.length;
             while (shotIndex < target && t + 5.5 < end) {
                 const rawStart = snapToBeat(t);
@@ -1246,13 +1280,13 @@ function ensureStoryboardCoverage(
                 // Choose defaults
                 const primaryChar = bibles.characters[0]?.name;
                 const loc = bibles.locations[0]?.name;
-                const id = `${sectionName}-${Math.round(rawStart*10)}`;
+                const id = `${sectionName}-${Math.round(rawStart * 10)}`;
 
                 // Determine performers and lip-sync hint
                 const performer_refs: string[] = [];
                 let lipSync = false;
                 for (const v of vocalists) {
-                    const hasOverlap = (v.segments||[]).some(seg => Math.max(seg.start, rawStart) < Math.min(seg.end, finalEnd));
+                    const hasOverlap = (v.segments || []).some(seg => Math.max(seg.start, rawStart) < Math.min(seg.end, finalEnd));
                     if (hasOverlap) {
                         lipSync = true;
                         const mapped = vocalistMap[v.id] || primaryChar;
@@ -1303,19 +1337,19 @@ function ensureStoryboardCoverage(
         }
 
         // If global shot count still low, add more to longest sections
-        const flatShots = scenes.flatMap(s=>s.shots);
+        const flatShots = scenes.flatMap(s => s.shots);
         if (flatShots.length < expectedShots) {
-            const sectionsByDur = [...(analysis.structure||[])].sort((a,b)=>(b.end-b.start)-(a.end-a.start));
+            const sectionsByDur = [...(analysis.structure || [])].sort((a, b) => (b.end - b.start) - (a.end - a.start));
             let idx = 0;
-            while (scenes.flatMap(s=>s.shots).length < expectedShots && idx < sectionsByDur.length) {
+            while (scenes.flatMap(s => s.shots).length < expectedShots && idx < sectionsByDur.length) {
                 const sec = sectionsByDur[idx++];
                 ensureShotsForSection(sec.name, sec.start, sec.end);
             }
         }
 
         // Sort scenes and shots
-        scenes.sort((a,b)=>a.start-b.start);
-        for (const s of scenes) s.shots.sort((a,b)=>a.start-b.start);
+        scenes.sort((a, b) => a.start - b.start);
+        for (const s of scenes) s.shots.sort((a, b) => a.start - b.start);
 
         const scenesWithModelHints = scenes.map(scene => ({
             ...scene,
@@ -1334,20 +1368,20 @@ function ensureStoryboardCoverage(
 
 export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const prompt = getPromptForImageShot(shot, bibles, brief);
-    
+
     // Premium tier: Use Google Imagen (high quality, paid)
     if (modelTier === 'premium') {
         console.log("AI Service: Generating image for shot with Google Imagen (Premium)...", shot.id);
         const ai = getAiClient();
-        
+
         try {
             const response = await ai.models.generateImages({
                 model: 'imagen-4.0-generate-001',
                 prompt: prompt,
                 config: {
-                  numberOfImages: 1,
-                  outputMimeType: 'image/jpeg',
-                  aspectRatio: '16:9',
+                    numberOfImages: 1,
+                    outputMimeType: 'image/jpeg',
+                    aspectRatio: '16:9',
                 },
             });
 
@@ -1363,25 +1397,25 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             throw error;
         }
     }
-    
+
     // Freemium tier: Try ComfyUI first, fallback to Pollinations AI
     try {
         console.log("AI Service: Checking ComfyUI availability (Freemium)...");
-        const health = await backendService.checkA1111Health();
-        
+        const health = await backendService.checkComfyUIHealth();
+
         if (health.available) {
             console.log("AI Service: Generating image for shot with ComfyUI...", shot.id);
-            
+
             // Get character reference image from bible if available
             const characterRef = shot.character_refs[0]; // Primary character
             const character = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
             const referenceImageUrl = character?.source_images?.[0]; // Use first source image
-            
+
             const enhancedPrompt = getEnhancedPromptForA1111(shot, bibles, brief);
             console.log("AI Service: Enhanced prompt length:", enhancedPrompt.length);
             console.log("AI Service: Enhanced prompt preview:", enhancedPrompt.substring(0, 200));
             console.log("AI Service: Using character reference image:", referenceImageUrl ? "YES" : "NO");
-            
+
             const params: any = {
                 prompt: enhancedPrompt,
                 negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, inconsistent lighting, unrealistic, bad proportions, duplicate, clone, cartoon, anime, illustration, 3d render, painting",
@@ -1390,18 +1424,42 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
                 steps: 50,
                 cfg_scale: 7.5
             };
-            
+
             // Add img2img parameters if reference image exists
             // High denoising_strength (0.85) means: use reference for style/composition hints only,
             // but generate mostly new content based on prompt (avoids copying collage structure)
             if (referenceImageUrl) {
-                params.init_image = referenceImageUrl;
-                params.denoising_strength = 0.85; // High value = more creative freedom, less reference copying
-                console.log("AI Service: Using img2img mode with denoising_strength:", params.denoising_strength);
+                // If the reference image is a URL (e.g. from DB), fetch and convert to base64
+                let initImageBase64 = referenceImageUrl;
+                if (referenceImageUrl.startsWith('http')) {
+                    try {
+                        const resp = await fetch(referenceImageUrl);
+                        const blob = await resp.blob();
+                        const reader = new FileReader();
+                        initImageBase64 = await new Promise((resolve) => {
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.readAsDataURL(blob);
+                        });
+                        console.log("AI Service: Converted reference image URL to base64");
+                    } catch (e) {
+                        console.warn("AI Service: Failed to convert reference image URL to base64", e);
+                        // Continue without reference image or let it fail?
+                        // Let's unset it to be safe so we don't crash the backend
+                        initImageBase64 = "";
+                    }
+                }
+
+                if (initImageBase64) {
+                    params.init_image = initImageBase64;
+                    params.denoising_strength = 0.85;
+                    console.log("AI Service: Using img2img mode with denoising_strength:", params.denoising_strength);
+                } else {
+                    console.log("AI Service: Reference image processing failed - using txt2img mode");
+                }
             } else {
                 console.log("AI Service: NO REFERENCE IMAGE - using txt2img mode");
             }
-            
+
             const result = await backendService.generateImageWithA1111(params);
             return { imageUrl: result.imageUrl, tokenUsage: 0 };
         } else {
@@ -1410,18 +1468,18 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
     } catch (error) {
         console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
     }
-    
+
     // Fallback for freemium: Use Pollinations AI (free)
     console.log("AI Service: Generating image for shot with Pollinations AI (Freemium fallback)...", shot.id);
     try {
         const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=576&model=flux&nologo=true&enhance=true`;
-        
+
         // Fetch the image and convert to base64
         const response = await fetch(pollinationsUrl);
         if (!response.ok) {
             throw new Error(`Pollinations AI request failed: ${response.statusText}`);
         }
-        
+
         const blob = await response.blob();
         const base64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -1434,7 +1492,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             reader.onerror = reject;
             reader.readAsDataURL(blob);
         });
-        
+
         const imageUrl = `data:image/jpeg;base64,${base64}`;
         return { imageUrl, tokenUsage: 0 };
     } catch (error) {
@@ -1447,7 +1505,7 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
     const pa = character.physical_appearance;
     const cos = character.costuming_and_props;
     const cin = character.cinematic_style;
-    
+
     const prompt = `
       A cinematic 3:4 aspect ratio character concept art photo.
       - Style: ${brief.style}, ${brief.feel}.
@@ -1457,15 +1515,15 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
       - Costume Style: ${cos.outfit_style}, specifically wearing ${cos.specific_clothing_items.join(', ')}.
       - Cinematic Lighting: ${cin.lighting_style}.
     `;
-    
+
     if (modelTier === 'freemium') {
         try {
-            console.log("AI Service: Checking A1111 availability...");
-            const health = await backendService.checkA1111Health();
-            
+            console.log("AI Service: Checking ComfyUI availability...");
+            const health = await backendService.checkComfyUIHealth();
+
             if (health.available) {
-                console.log("AI Service: Generating character image with A1111...", character.name);
-                
+                console.log("AI Service: Generating character image with ComfyUI...", character.name);
+
                 // Enhanced prompt with full character details
                 const enhancedPrompt = `
 Cinematic ${brief.style} character portrait, ${brief.feel} mood, 3:4 aspect ratio.
@@ -1480,7 +1538,7 @@ Lighting: ${cin.lighting_style}.
 Style: ${cin.color_dominants_in_shots.join(', ')} color palette.
 Professional character concept art, high detail, sharp focus, photorealistic, ${cin.camera_lenses}.
                 `.trim().replace(/^ +/gm, '');
-                
+
                 const result = await backendService.generateImageWithA1111({
                     prompt: enhancedPrompt,
                     negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions",
@@ -1496,7 +1554,7 @@ Professional character concept art, high detail, sharp focus, photorealistic, ${
         } catch (error) {
             console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
         }
-        
+
         console.log("AI Service: Generating bible character with Pollinations AI (Freemium fallback)...", character.name);
         try {
             const enhancedPrompt = `
@@ -1507,20 +1565,20 @@ Wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}.
 Expression: ${character.performance_and_demeanor.emotional_arc}. Lighting: ${cin.lighting_style}.
 Professional character concept art, high detail, sharp focus, photorealistic.
             `.trim().replace(/\n/g, ' ');
-            
+
             const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=768&height=1024&model=flux&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
             const imageResponse = await fetch(pollinationsUrl);
             if (!imageResponse.ok) {
                 throw new Error(`Pollinations AI returned status ${imageResponse.status}`);
             }
-            
+
             const imageBlob = await imageResponse.blob();
             const base64 = await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result as string);
                 reader.readAsDataURL(imageBlob);
             });
-            
+
             const imageUrl = base64;
             return { imageUrl, tokenUsage: 0 };
         } catch (error) {
@@ -1528,17 +1586,17 @@ Professional character concept art, high detail, sharp focus, photorealistic.
             throw new Error("All image generation methods failed. Please try again.");
         }
     }
-    
+
     console.log("AI Service: Generating image for character bible with Imagen...", character.name);
     const ai = getAiClient();
-    
+
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
         config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: '3:4',
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '3:4',
         },
     });
 
@@ -1546,7 +1604,7 @@ Professional character concept art, high detail, sharp focus, photorealistic.
     if (!base64ImageBytes) {
         throw new Error("AI did not return a valid image.");
     }
-    
+
     const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
 
     return { imageUrl, tokenUsage: 400 };
@@ -1557,7 +1615,7 @@ export const generateImageForBibleLocation = async (location: LocationBible, bri
     const arch = location.architectural_and_natural_details;
     const sens = location.sensory_details;
     const cin = location.cinematic_style;
-    
+
     const prompt = `
        A cinematic 16:9 aspect ratio environment concept art photo.
       - Style: ${brief.style}, ${brief.feel}.
@@ -1567,15 +1625,15 @@ export const generateImageForBibleLocation = async (location: LocationBible, bri
       - Environmental Effects: ${sens.environmental_effects.join(', ')}.
       - Cinematic Lighting: ${cin.lighting_style}.
     `;
-    
+
     if (modelTier === 'freemium') {
         try {
-            console.log("AI Service: Checking A1111 availability...");
-            const health = await backendService.checkA1111Health();
-            
+            console.log("AI Service: Checking ComfyUI availability...");
+            const health = await backendService.checkComfyUIHealth();
+
             if (health.available) {
-                console.log("AI Service: Generating location image with A1111...", location.name);
-                
+                console.log("AI Service: Generating location image with ComfyUI...", location.name);
+
                 // Enhanced prompt with full location details
                 const enhancedPrompt = `
 Cinematic ${brief.style} environment concept art, ${brief.feel} mood, 16:9 aspect ratio.
@@ -1589,7 +1647,7 @@ Color palette: ${cin.color_palette.join(', ')}.
 Camera: ${cin.camera_perspective}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
                 `.trim().replace(/^ +/gm, '');
-                
+
                 const result = await backendService.generateImageWithA1111({
                     prompt: enhancedPrompt,
                     negative_prompt: "blurry, low quality, worst quality, distorted, people, characters, humans, figures, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, unrealistic lighting",
@@ -1605,7 +1663,7 @@ Professional environment concept art, high detail, sharp focus, photorealistic, 
         } catch (error) {
             console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
         }
-        
+
         console.log("AI Service: Generating bible location with Pollinations AI (Freemium fallback)...", location.name);
         try {
             const enhancedPrompt = `
@@ -1617,20 +1675,20 @@ Environmental effects: ${sens.environmental_effects.join(', ')}.
 Lighting: ${cin.lighting_style}. Color palette: ${cin.color_palette.join(', ')}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
             `.trim().replace(/\n/g, ' ');
-            
+
             const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=576&model=flux&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
             const imageResponse = await fetch(pollinationsUrl);
             if (!imageResponse.ok) {
                 throw new Error(`Pollinations AI returned status ${imageResponse.status}`);
             }
-            
+
             const imageBlob = await imageResponse.blob();
             const base64 = await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result as string);
                 reader.readAsDataURL(imageBlob);
             });
-            
+
             const imageUrl = base64;
             return { imageUrl, tokenUsage: 0 };
         } catch (error) {
@@ -1638,17 +1696,17 @@ Professional environment concept art, high detail, sharp focus, photorealistic, 
             throw new Error("All image generation methods failed. Please try again.");
         }
     }
-    
+
     console.log("AI Service: Generating image for location bible with Imagen...", location.name);
     const ai = getAiClient();
-    
+
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
         config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: '16:9',
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '16:9',
         },
     });
 
@@ -1672,7 +1730,7 @@ export const editImageForShot = async (shot: StoryboardShot, bibles: Bibles, bri
 
     const [header, base64Data] = shot.preview_image_url.split(',');
     const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-    
+
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
@@ -1686,14 +1744,14 @@ export const editImageForShot = async (shot: StoryboardShot, bibles: Bibles, bri
             responseModalities: [Modality.IMAGE],
         },
     });
-    
+
     const partWithData = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (partWithData?.inlineData) {
         const newBase64ImageBytes: string = partWithData.inlineData.data;
         const newImageUrl = `data:${partWithData.inlineData.mimeType};base64,${newBase64ImageBytes}`;
         return { imageUrl: newImageUrl, tokenUsage: 750 };
     }
-    
+
     throw new Error("AI did not return an edited image.");
 };
 
@@ -1706,12 +1764,63 @@ export const generateClipForShot = async (
     modelTier: 'freemium' | 'premium'
 ): Promise<{ clipUrl: string, tokenUsage: number }> => {
     console.log(`AI Service: Generating clip for shot with ${modelTier} tier...`, shot.id);
-    
-    // Freemium tier: Video generation is a premium feature
+
+    // Helper: map shot camera hints to backend-friendly motion tag
+    const mapCameraMotion = (cameraMove: string, cinematicMotion?: string): string => {
+        const combined = `${cameraMove || ''} ${cinematicMotion || ''}`.toLowerCase();
+        if (combined.includes('zoom in') || combined.includes('dolly in')) return 'zoom_in';
+        if (combined.includes('zoom out') || combined.includes('dolly out')) return 'zoom_out';
+        if (combined.includes('pan left')) return 'pan_left';
+        if (combined.includes('pan right')) return 'pan_right';
+        return 'static';
+    };
+
+    // Freemium: route to local ComfyUI via backend
     if (modelTier === 'freemium') {
-        throw new Error('AI video generation is a Premium feature. Please upgrade to generate video clips, or use image stills for your export.');
+        const rawDuration = typeof shot.end === 'number'
+            ? shot.end - (shot.start ?? 0)
+            : 6;
+        const duration = Math.max(6, Math.min(8, rawDuration || 6));
+        const bpm = (brief as any)?.bpm || 120;
+        const fps = Math.max(12, Math.min(24, Math.round(bpm / 6)));
+        const width = 1280;
+        const height = 720;
+        const prompt = getPromptForClipShot(shot, bibles, brief, false);
+        const camera_motion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements?.camera_motion);
+
+        const { promptId } = await backendService.generateVideoClip({
+            imageUrl: image,
+            prompt,
+            duration,
+            quality: 'draft',
+            camera_motion,
+            lipSync: !!shot.lip_sync_hint,
+            audioUrl: undefined,
+            shotId: shot.id,
+            workflow: shot.workflow_hint as any,
+            video_model: shot.video_model,
+            render_profile: shot.render_profile,
+            fps,
+            width,
+            height
+        });
+
+        let attempts = 0;
+        const maxAttempts = 300; // ~5 minutes polling at 1s
+        while (attempts < maxAttempts) {
+            await new Promise(res => setTimeout(res, 1000));
+            attempts++;
+            const status = await backendService.getVideoClipStatus(promptId);
+            if (status?.success && status.clipUrl) {
+                return { clipUrl: status.clipUrl, tokenUsage: 0 };
+            }
+            if (status?.error) {
+                throw new Error(status.error);
+            }
+        }
+        throw new Error('Video generation timed out');
     }
-    
+
     // Premium tier: Use Google Veo for high-quality AI video generation
     const ai = getAiClient(); // Create new instance to get latest key
     if (!image.startsWith('data:')) {
@@ -1750,7 +1859,7 @@ export const generateClipForShot = async (
     if (!downloadLink) {
         throw new Error("Video generation completed, but no download link was provided.");
     }
-    
+
     const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     if (!response.ok) {
         const errorBody = await response.text();
@@ -1770,7 +1879,7 @@ export const generateClipForShot = async (
 };
 
 export const analyzeMoodboardImages = async (
-    images: {mimeType: string, data: string}[],
+    images: { mimeType: string, data: string }[],
     modelTier: 'freemium' | 'premium'
 ): Promise<{ briefUpdate: Partial<CreativeBrief>, tokenUsage: number }> => {
     console.log(`AI Service: Analyzing ${images.length} moodboard images with ${modelTier} tier...`);
@@ -1885,7 +1994,7 @@ export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboar
             },
         },
     });
-    
+
     const suggestions = JSON.parse(response.text) as { shotId: string; vfx: VFX_PRESET }[];
     return { suggestions, tokenUsage: 800 };
 };
@@ -1904,7 +2013,7 @@ export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles
 
     const shotPairs = [];
     for (let i = 0; i < scene.shots.length - 1; i++) {
-        shotPairs.push({ from: scene.shots[i], to: scene.shots[i+1] });
+        shotPairs.push({ from: scene.shots[i], to: scene.shots[i + 1] });
     }
 
     const prompt = `

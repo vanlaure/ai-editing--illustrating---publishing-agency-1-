@@ -1,5 +1,4 @@
-// Get backend URL from the backendService module
-const BACKEND_URL = 'http://localhost:3002';
+import { BACKEND_URL } from './backendService';
 
 // WebSocket service for real-time communication with the backend
 class WebSocketService {
@@ -13,7 +12,7 @@ class WebSocketService {
   }
 
   connect() {
-    const wsUrl = `${BACKEND_URL.replace('http', 'ws')}`;
+    const wsUrl = BACKEND_URL.replace(/^http/i, 'ws');
     try {
       this.ws = new WebSocket(wsUrl);
       

@@ -55,7 +55,7 @@ services:
       start_period: 180s
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:1.82.1
+    image: docker.n8n.io/n8nio/n8n:2.6.4
     container_name: n8n
     ports:
       - "5678:5678"
@@ -66,7 +66,7 @@ services:
       - N8N_EDITOR_BASE_URL=http://localhost:5678
       - WEBHOOK_URL=http://localhost:5678
       - GENERIC_TIMEZONE=UTC
-      - N8N_RELEASE_DATE=${N8N_RELEASE_DATE:-2025-11-16T00:00:00Z}
+      - N8N_RELEASE_DATE=${N8N_RELEASE_DATE:-2026-02-06T12:54:52Z}
       - N8N_RUNNERS_ENABLED=${N8N_RUNNERS_ENABLED:-true}
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
@@ -76,7 +76,13 @@ services:
       - ./n8n_data:/home/node/.n8n
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:5678/healthz',(res)=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5

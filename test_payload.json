@@ -1,0 +1,7 @@
+{
+    "prompt": "a beautiful landscape",
+    "width": 512,
+    "height": 512,
+    "steps": 20,
+    "cfg_scale": 7
+}

@@ -91,8 +91,11 @@ const App: React.FC = () => {
                 return (
                     <ReviewStep
                         songFile={musicVideoGenerator.songFile}
+                        audioUrl={musicVideoGenerator.audioUrl}
                         storyboard={musicVideoGenerator.storyboard}
                         bibles={musicVideoGenerator.bibles}
+                        creativeBrief={musicVideoGenerator.creativeBrief}
+                        songAnalysis={musicVideoGenerator.songAnalysis}
                         onRestart={() => setIsRestartModalOpen(true)}
                         isProcessing={isProcessing}
                         isReviewing={musicVideoGenerator.isReviewing}

@@ -10,7 +10,8 @@
     "stack:docker": "docker compose up -d comfyui automatic1111",
     "stack:backend": "npm --prefix server start",
     "stack:frontend": "vite",
-    "stack:all": "npm run stack:docker && concurrently -k -n BACKEND,FRONTEND -c yellow,cyan \"npm --prefix server start\" \"npm run dev\"",
+    "stack:stitchstream": "npm --prefix stitchstream run dev -- --host --port 4100",
+    "stack:all": "npm run stack:docker && concurrently -k -n BACKEND,FRONTEND,STITCH -c yellow,cyan,magenta \"npm --prefix server start\" \"npm run dev\" \"npm run stack:stitchstream\"",
     "stack:down": "docker compose down",
     "stack:stop": "docker compose stop comfyui automatic1111"
   },
@@ -26,8 +27,11 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.22",
+    "concurrently": "^8.2.2",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.14",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "concurrently": "^8.2.2"
+    "vite": "^6.2.0"
   }
 }
