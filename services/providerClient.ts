@@ -128,30 +128,41 @@ export async function generateWithProvider(
         model: provider.selectedModel,
         messages,
         temperature: temperature ?? 0.7,
+        stream: false,
     };
 
     if (maxTokens) {
         body.max_tokens = maxTokens;
     }
 
+    // Determine endpoint — Ollama uses /api/chat, others use OpenAI-compatible /chat/completions
+    const baseUrl = provider.baseUrl.replace(/\/+$/, '');
+    const isOllama = provider.id === 'ollama' || baseUrl.includes(':11434');
+
     // Handle structured output
     if (responseSchema) {
-        const jsonSchema = geminiSchemaToJsonSchema(responseSchema);
-        body.response_format = {
-            type: 'json_schema',
-            json_schema: {
-                name: 'response',
-                strict: false,
-                schema: jsonSchema,
-            }
-        };
+        if (isOllama) {
+            // Ollama uses format: "json" for JSON output
+            body.format = 'json';
+        } else {
+            const jsonSchema = geminiSchemaToJsonSchema(responseSchema);
+            body.response_format = {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'response',
+                    strict: false,
+                    schema: jsonSchema,
+                }
+            };
+        }
     } else if (jsonMode) {
-        body.response_format = { type: 'json_object' };
+        if (isOllama) {
+            body.format = 'json';
+        } else {
+            body.response_format = { type: 'json_object' };
+        }
     }
-
-    // Determine endpoint
-    const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-    const endpoint = `${baseUrl}/chat/completions`;
+    const endpoint = isOllama ? `${baseUrl}/api/chat` : `${baseUrl}/chat/completions`;
 
     // Build headers
     const headers: Record<string, string> = {
@@ -186,14 +197,15 @@ export async function generateWithProvider(
     }
 
     const data = await response.json();
-    const choice = data.choices?.[0];
-    if (!choice?.message?.content) {
+    // Ollama returns { message: { content } }, OpenAI-compatible returns { choices: [{ message: { content } }] }
+    const content = data.choices?.[0]?.message?.content || data.message?.content;
+    if (!content) {
         throw new Error(`${provider.name} returned empty response`);
     }
 
-    let text = choice.message.content;
-    const usage = data.usage;
-    const tokenUsage = (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0);
+    let text = content;
+    const usage = data.usage || {};
+    const tokenUsage = (usage.prompt_tokens || usage.prompt_eval_count || 0) + (usage.completion_tokens || usage.eval_count || 0);
 
     // Strip thinking/reasoning tags (Qwen, DeepSeek, etc. wrap reasoning in <think> tags)
     text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
