@@ -422,9 +422,9 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
-export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, singerGender: string, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
-    console.log(`AI Service: Analyzing song with ${modelTier} tier...`, { title, artist, singerGender });
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, singerGender: string, providerSettings?: AIProviderSettings): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
+    console.log(`AI Service: Analyzing song...`, { title, artist, singerGender });
+    const geminiModel = 'gemini-2.5-flash';
 
     // Convert audio file to base64 for Gemini "listening"
     const audioBase64 = await fileToBase64(file);
@@ -1088,9 +1088,9 @@ async function generateBasicAnalysisFromBeats(
     };
 }
 
-export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrief, singerGender: 'male' | 'female' | 'unspecified', modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ bibles: Bibles, tokenUsage: number }> => {
-    console.log(`AI Service: Generating Bibles with ${modelTier} tier...`, brief);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrief, singerGender: 'male' | 'female' | 'unspecified', providerSettings?: AIProviderSettings): Promise<{ bibles: Bibles, tokenUsage: number }> => {
+    console.log(`AI Service: Generating Bibles...`, brief);
+    const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
       Act as a world-class cinematographer and production designer. Based on the provided song analysis and creative brief, generate HYPER-DETAILED "visual bibles" for a music video. The output must be a valid JSON object adhering to the specified schema.
@@ -1301,9 +1301,9 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
 };
 
 
-export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
-    console.log(`AI Service: Generating Storyboard with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, providerSettings?: AIProviderSettings): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
+    console.log(`AI Service: Generating Storyboard...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
       Act as an expert music video director and cinematographer. Create a complete storyboard based on the provided song analysis, creative brief, and visual bibles.
@@ -1804,7 +1804,7 @@ async function generateImageWithProvider(provider: AIProvider, prompt: string): 
     throw new Error(`${provider.name} returned no image data`);
 }
 
-export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium', providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
+export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
     // Use model-optimized prompt if provider settings are available
     const optimized = providerSettings ? getOptimizedImagePrompt(shot, bibles, brief, providerSettings) : null;
     const prompt = optimized?.prompt || getPromptForImageShot(shot, bibles, brief);
@@ -1828,36 +1828,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
         }
     }
 
-    // --- Priority 2: Premium tier Google Imagen ---
-    if (modelTier === 'premium') {
-        console.log("AI Service: Generating image for shot with Google Imagen (Premium)...", shot.id);
-        const ai = getAiClient();
-
-        try {
-            const response = await ai.models.generateImages({
-                model: 'imagen-4.0-generate-001',
-                prompt: prompt,
-                config: {
-                    numberOfImages: 1,
-                    outputMimeType: 'image/jpeg',
-                    aspectRatio: '16:9',
-                },
-            });
-
-            const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
-            if (!base64ImageBytes) {
-                throw new Error("AI did not return a valid image.");
-            }
-
-            const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
-            return { imageUrl, tokenUsage: 500 };
-        } catch (error) {
-            console.error("AI Service: Google Imagen failed:", error);
-            throw error;
-        }
-    }
-
-    // --- Priority 3: ComfyUI (local) ---
+    // --- Priority 2: ComfyUI (local) ---
     try {
         console.log("AI Service: Checking ComfyUI availability...");
         const health = await backendService.checkComfyUIHealth();
@@ -1929,7 +1900,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
     throw new Error("All image generation methods failed. Please check your image provider settings and API key.");
 };
 
-export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
+export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const pa = character.physical_appearance || {} as any;
     const cos = character.costuming_and_props || {} as any;
     const cin = character.cinematic_style || {} as any;
@@ -1949,16 +1920,15 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
       - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
-    if (modelTier === 'freemium') {
-        try {
-            console.log("AI Service: Checking ComfyUI availability...");
-            const health = await backendService.checkComfyUIHealth();
+    try {
+        console.log("AI Service: Checking ComfyUI availability...");
+        const health = await backendService.checkComfyUIHealth();
 
-            if (health.available) {
-                console.log("AI Service: Generating character image with ComfyUI...", character.name);
+        if (health.available) {
+            console.log("AI Service: Generating character image with ComfyUI...", character.name);
 
-                // Enhanced prompt with full granular character details for identity lock
-                const enhancedPrompt = `
+            // Enhanced prompt with full granular character details for identity lock
+            const enhancedPrompt = `
 Cinematic ${safe(brief.style)} character reference portrait, ${safe(brief.feel)} mood, 3:4 aspect ratio.
 ${safe(character.name)}: ${safe(pa.gender_presentation)} ${safe(pa.ethnicity)} person, ${safe(pa.age_range)} years old, ${safe(pa.body_type)} build.
 Skin: ${safe(pa.skin_tone)}.
@@ -1972,49 +1942,26 @@ Expression: ${safe(character.performance_and_demeanor?.emotional_arc)}.
 Lighting: ${safe(cin.lighting_style)}.
 Style: ${safeJoin(cin.color_dominants_in_shots)} color palette.
 Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurface scattering, anatomically perfect face, sharp focus, ${cin.camera_lenses}.
-                `.trim().replace(/^ +/gm, '');
+            `.trim().replace(/^ +/gm, '');
 
-                const result = await backendService.generateImageWithComfyUI({
-                    prompt: enhancedPrompt,
-                    negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions, plastic skin, airbrushed, smooth skin, doll-like, uncanny valley, asymmetric eyes, wrong eye color, face morphing, hair color change, outfit change",
-                    width: 768,
-                    height: 1024,
-                    steps: 50,
-                    cfg_scale: 9
-                });
-                return { imageUrl: result.imageUrl, tokenUsage: 0 };
-            }
-        } catch (error) {
-            console.warn("AI Service: ComfyUI generation failed:", error);
+            const result = await backendService.generateImageWithComfyUI({
+                prompt: enhancedPrompt,
+                negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions, plastic skin, airbrushed, smooth skin, doll-like, uncanny valley, asymmetric eyes, wrong eye color, face morphing, hair color change, outfit change",
+                width: 768,
+                height: 1024,
+                steps: 50,
+                cfg_scale: 9
+            });
+            return { imageUrl: result.imageUrl, tokenUsage: 0 };
         }
-
-        throw new Error("Character image generation failed. Please check your image provider settings.");
+    } catch (error) {
+        console.warn("AI Service: ComfyUI generation failed:", error);
     }
 
-    console.log("AI Service: Generating image for character bible with Imagen...", character.name);
-    const ai = getAiClient();
-
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: prompt,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: '3:4',
-        },
-    });
-
-    const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
-    if (!base64ImageBytes) {
-        throw new Error("AI did not return a valid image.");
-    }
-
-    const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
-
-    return { imageUrl, tokenUsage: 400 };
+    throw new Error("Character image generation failed. Please check your image provider settings.");
 };
 
-export const generateImageForBibleLocation = async (location: LocationBible, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
+export const generateImageForBibleLocation = async (location: LocationBible, brief: CreativeBrief): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const atm = location.atmosphere_and_environment || {} as any;
     const arch = location.architectural_and_natural_details || {} as any;
     const sens = location.sensory_details || {} as any;
@@ -2030,16 +1977,15 @@ export const generateImageForBibleLocation = async (location: LocationBible, bri
       - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
-    if (modelTier === 'freemium') {
-        try {
-            console.log("AI Service: Checking ComfyUI availability...");
-            const health = await backendService.checkComfyUIHealth();
+    try {
+        console.log("AI Service: Checking ComfyUI availability...");
+        const health = await backendService.checkComfyUIHealth();
 
-            if (health.available) {
-                console.log("AI Service: Generating location image with ComfyUI...", location.name);
+        if (health.available) {
+            console.log("AI Service: Generating location image with ComfyUI...", location.name);
 
-                // Enhanced prompt with full location details
-                const enhancedPrompt = `
+            // Enhanced prompt with full location details
+            const enhancedPrompt = `
 Cinematic ${brief.style} environment concept art, ${brief.feel} mood, 16:9 aspect ratio.
 ${location.name}: ${location.setting_type}.
 Time: ${safe(atm.time_of_day)}, Weather: ${safe(atm.weather)}, Mood: ${safe(atm.dominant_mood)}.
@@ -2050,47 +1996,23 @@ Lighting: ${safe(cin.lighting_style)}.
 Color palette: ${safeJoin(cin.color_palette)}.
 Camera: ${safe(cin.camera_perspective)}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
-                `.trim().replace(/^ +/gm, '');
+            `.trim().replace(/^ +/gm, '');
 
-                const result = await backendService.generateImageWithComfyUI({
-                    prompt: enhancedPrompt,
-                    negative_prompt: "blurry, low quality, worst quality, distorted, people, characters, humans, figures, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, unrealistic lighting",
-                    width: 1024,
-                    height: 576,
-                    steps: 45,
-                    cfg_scale: 8
-                });
-                return { imageUrl: result.imageUrl, tokenUsage: 0 };
-            } else {
-            }
-        } catch (error) {
-            console.warn("AI Service: ComfyUI generation failed:", error);
+            const result = await backendService.generateImageWithComfyUI({
+                prompt: enhancedPrompt,
+                negative_prompt: "blurry, low quality, worst quality, distorted, people, characters, humans, figures, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, unrealistic lighting",
+                width: 1024,
+                height: 576,
+                steps: 45,
+                cfg_scale: 8
+            });
+            return { imageUrl: result.imageUrl, tokenUsage: 0 };
         }
-
-        throw new Error("Location image generation failed. Please check your image provider settings.");
+    } catch (error) {
+        console.warn("AI Service: ComfyUI generation failed:", error);
     }
 
-    console.log("AI Service: Generating image for location bible with Imagen...", location.name);
-    const ai = getAiClient();
-
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: prompt,
-        config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: '16:9',
-        },
-    });
-
-    const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
-    if (!base64ImageBytes) {
-        throw new Error("AI did not return a valid image.");
-    }
-
-    const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
-
-    return { imageUrl, tokenUsage: 400 };
+    throw new Error("Location image generation failed. Please check your image provider settings.");
 };
 
 
@@ -2134,10 +2056,9 @@ export const generateClipForShot = async (
     image: string,
     bibles: Bibles,
     brief: CreativeBrief,
-    modelTier: 'freemium' | 'premium',
     providerSettings?: AIProviderSettings
 ): Promise<{ clipUrl: string, tokenUsage: number }> => {
-    console.log(`AI Service: Generating clip for shot with ${modelTier} tier...`, shot.id);
+    console.log(`AI Service: Generating clip for shot...`, shot.id);
 
     // Helper: map shot camera hints to backend-friendly motion tag (expert director vocabulary)
     const mapCameraMotion = (cameraMove: string, cinematicMotion?: string): string => {
@@ -2192,118 +2113,59 @@ export const generateClipForShot = async (
         return 'static';
     };
 
-    // Freemium: route to local ComfyUI via backend
-    if (modelTier === 'freemium') {
-        const rawDuration = typeof shot.end === 'number'
-            ? shot.end - (shot.start ?? 0)
-            : 6;
-        const duration = Math.max(6, Math.min(8, rawDuration || 6));
-        const bpm = (brief as any)?.bpm || 120;
-        const fps = Math.max(12, Math.min(24, Math.round(bpm / 6)));
-        const width = 1280;
-        const height = 720;
-        // Use model-optimized prompt if provider settings are available
-        const optimized = providerSettings ? getOptimizedVideoPrompt(shot, bibles, brief, providerSettings) : null;
-        const prompt = optimized?.prompt || getPromptForClipShot(shot, bibles, brief, false);
-        const camera_motion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements?.camera_motion);
+    // Route to local ComfyUI via backend
+    const rawDuration = typeof shot.end === 'number'
+        ? shot.end - (shot.start ?? 0)
+        : 6;
+    const duration = Math.max(6, Math.min(8, rawDuration || 6));
+    const bpm = (brief as any)?.bpm || 120;
+    const fps = Math.max(12, Math.min(24, Math.round(bpm / 6)));
+    const width = 1280;
+    const height = 720;
+    // Use model-optimized prompt if provider settings are available
+    const optimized = providerSettings ? getOptimizedVideoPrompt(shot, bibles, brief, providerSettings) : null;
+    const prompt = optimized?.prompt || getPromptForClipShot(shot, bibles, brief, false);
+    const camera_motion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements?.camera_motion);
 
-        const { promptId } = await backendService.generateVideoClip({
-            imageUrl: image,
-            prompt,
-            duration,
-            quality: 'draft',
-            camera_motion,
-            lipSync: !!shot.lip_sync_hint,
-            audioUrl: undefined,
-            shotId: shot.id,
-            workflow: shot.workflow_hint as any,
-            video_model: shot.video_model,
-            render_profile: shot.render_profile,
-            fps,
-            width,
-            height
-        });
-
-        let attempts = 0;
-        const maxAttempts = 300; // ~5 minutes polling at 1s
-        while (attempts < maxAttempts) {
-            await new Promise(res => setTimeout(res, 1000));
-            attempts++;
-            const status = await backendService.getVideoClipStatus(promptId);
-            if (status?.success && status.clipUrl) {
-                return { clipUrl: status.clipUrl, tokenUsage: 0 };
-            }
-            if (status?.error) {
-                throw new Error(status.error);
-            }
-        }
-        throw new Error('Video generation timed out');
-    }
-
-    // Premium tier: Use Google Veo for high-quality AI video generation
-    const ai = getAiClient(); // Create new instance to get latest key
-    if (!image.startsWith('data:')) {
-        throw new Error("Cannot generate clip from a non-data URL image.");
-    }
-
-    const [header, base64Data] = image.split(',');
-    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-
-    const prompt = getPromptForClipShot(shot, bibles, brief);
-
-    let operation = await ai.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: prompt,
-        image: {
-            imageBytes: base64Data,
-            mimeType: mimeType,
-        },
-        // The generated clips are visuals for a music track and should be silent.
-        // The Veo API for image/text-to-video does not add an audio track.
-        config: {
-            numberOfVideos: 1,
-            aspectRatio: '16:9',
-            resolution: '720p',
-        }
+    const { promptId } = await backendService.generateVideoClip({
+        imageUrl: image,
+        prompt,
+        duration,
+        quality: 'draft',
+        camera_motion,
+        lipSync: !!shot.lip_sync_hint,
+        audioUrl: undefined,
+        shotId: shot.id,
+        workflow: shot.workflow_hint as any,
+        video_model: shot.video_model,
+        render_profile: shot.render_profile,
+        fps,
+        width,
+        height
     });
 
-    console.log("Video generation started, polling for completion...");
-    while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Poll every 10 seconds
-        operation = await ai.operations.getVideosOperation({ operation: operation });
-        console.log(`Polling... done: ${operation.done}`);
+    let attempts = 0;
+    const maxAttempts = 300; // ~5 minutes polling at 1s
+    while (attempts < maxAttempts) {
+        await new Promise(res => setTimeout(res, 1000));
+        attempts++;
+        const status = await backendService.getVideoClipStatus(promptId);
+        if (status?.success && status.clipUrl) {
+            return { clipUrl: status.clipUrl, tokenUsage: 0 };
+        }
+        if (status?.error) {
+            throw new Error(status.error);
+        }
     }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) {
-        throw new Error("Video generation completed, but no download link was provided.");
-    }
-
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    if (!response.ok) {
-        const errorBody = await response.text();
-        console.error("Fetch error body:", errorBody);
-        throw new Error(`Failed to download the generated video. Status: ${response.statusText}`);
-    }
-
-    const videoBlob = await response.blob();
-    const clipUrl = URL.createObjectURL(videoBlob);
-    // Cache blob in-memory so export can upload without refetching blob: URL
-    if (typeof window !== 'undefined') {
-        (window as any).__mvClipBlobs = (window as any).__mvClipBlobs || {};
-        (window as any).__mvClipBlobs[clipUrl] = videoBlob;
-    }
-
-    return { clipUrl, tokenUsage: 2000 };
+    throw new Error('Video generation timed out');
 };
 
 export const analyzeMoodboardImages = async (
     images: { mimeType: string, data: string }[],
-    modelTier: 'freemium' | 'premium',
     providerSettings?: AIProviderSettings
 ): Promise<{ briefUpdate: Partial<CreativeBrief>, tokenUsage: number }> => {
-    console.log(`AI Service: Analyzing ${images.length} moodboard images with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    console.log(`AI Service: Analyzing ${images.length} moodboard images via provider...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     const moodboardPrompt = "Analyze the following images from a mood board for a music video. Describe the overall 'feel' and 'style', and extract the 5 most dominant colors as hex codes. Respond with a valid JSON object.";
     const moodboardSchema = {
@@ -2334,9 +2196,9 @@ export const analyzeMoodboardImages = async (
     return { briefUpdate, tokenUsage: result.tokenUsage || 1200 };
 };
 
-export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, currentBrief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ suggestions: Partial<CreativeBrief>, tokenUsage: number }> => {
-    console.log(`AI Service: Getting director suggestions with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, currentBrief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ suggestions: Partial<CreativeBrief>, tokenUsage: number }> => {
+    console.log(`AI Service: Getting director suggestions via provider...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
       You are a helpful and creative AI music video director. Based on the provided song analysis and the user's current brief (which may be partially filled), enhance and complete the brief.
@@ -2370,9 +2232,9 @@ export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, current
     return { suggestions, tokenUsage: result.tokenUsage || 1000 };
 };
 
-export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboard: Storyboard, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ suggestions: { shotId: string; vfx: VFX_PRESET }[], tokenUsage: number }> => {
-    console.log(`AI Service: Suggesting beat-synced VFX with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboard: Storyboard, providerSettings?: AIProviderSettings): Promise<{ suggestions: { shotId: string; vfx: VFX_PRESET }[], tokenUsage: number }> => {
+    console.log(`AI Service: Suggesting beat-synced VFX via provider...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
       You are an AI music video editor. Your task is to suggest visual effects (VFX) that sync with the music's energy.
@@ -2413,9 +2275,9 @@ export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboar
     return { suggestions, tokenUsage: result.tokenUsage || 800 };
 };
 
-export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ transitions: (Transition | null)[], tokenUsage: number }> => {
-    console.log(`AI Service: Generating transitions for scene ${scene.id} with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ transitions: (Transition | null)[], tokenUsage: number }> => {
+    console.log(`AI Service: Generating transitions for scene ${scene.id} via provider...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     if (!scene.shots || scene.shots.length <= 1) {
         const numShots = scene.shots?.length || 0;
@@ -2471,9 +2333,9 @@ export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles
     return { transitions: transitionsWithNull, tokenUsage: genResult.tokenUsage || 1000 };
 };
 
-export const generateExecutiveProducerFeedback = async (storyboard: Storyboard, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ feedback: ExecutiveProducerFeedback, tokenUsage: number }> => {
-    console.log(`AI Service: Generating Executive Producer feedback with ${modelTier} tier...`);
-    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+export const generateExecutiveProducerFeedback = async (storyboard: Storyboard, bibles: Bibles, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ feedback: ExecutiveProducerFeedback, tokenUsage: number }> => {
+    console.log(`AI Service: Generating Executive Producer feedback via provider...`);
+    const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
       Act as a seasoned Executive Producer for a major record label. You are reviewing the complete pre-production package for a music video. Your task is to provide high-level, critical feedback on the project as a whole.

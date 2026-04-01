@@ -37,13 +37,12 @@ type StitchStreamStatus = 'checking' | 'available' | 'unavailable';
 
 interface HeaderActionsProps {
     currentStep: Step;
-    modelTier: 'freemium' | 'premium';
     onLoadProductionFile: (file: File) => void;
     getFullState: () => Promise<object>;
     onRestart: () => void;
 }
 
-const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, modelTier, onLoadProductionFile, getFullState, onRestart }) => {
+const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProductionFile, getFullState, onRestart }) => {
     const [comfyUIStatus, setComfyUIStatus] = useState<ComfyUIStatus>('checking');
     const [stitchStatus, setStitchStatus] = useState<StitchStreamStatus>('checking');
     const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null);
@@ -142,9 +141,9 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, modelTier, o
 
     const getStatusTooltip = () => {
         const baseText = comfyUIStatus === 'available'
-            ? 'ComfyUI is running and ready for freemium tier image generation'
+            ? 'ComfyUI is running and ready for local image generation'
             : comfyUIStatus === 'unavailable'
-                ? 'ComfyUI is not available. Freemium tier will use Pollinations AI fallback'
+                ? 'ComfyUI is not available. Images will use your configured provider.'
                 : 'Checking ComfyUI status...';
 
         return lastCheckTime
@@ -166,9 +165,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, modelTier, o
 
     return (
         <div className="flex items-center space-x-2 bg-brand-dark p-1 rounded-full border border-brand-light-gray/20">
-            {modelTier === 'freemium' && (
-                <>
-                    <button
+            <button
                         onClick={checkComfyUIStatus}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-full transition-all ${comfyUIStatus === 'available'
                                 ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
@@ -189,8 +186,6 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, modelTier, o
                             )}
                         </div>
                     </button>
-                </>
-            )}
 
             <button
                 onClick={checkStitchStatus}

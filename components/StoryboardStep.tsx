@@ -36,8 +36,8 @@ interface StoryboardStepProps {
   suggestAndApplyBeatSyncedVfx: () => void;
   onRegenerateBibleImage: (item: { type: 'character' | 'location'; name: string }) => void;
   updateShotWithFileUpload: (shotId: string, mediaType: 'image' | 'video', file: File) => void;
-  modelTier: 'draft' | 'premium';
-  onModelTierChange: (tier: 'draft' | 'premium') => void;
+  videoQuality: 'draft' | 'high';
+  onVideoQualityChange: (quality: 'draft' | 'high') => void;
 }
 
 const RegenerateIcon = () => (
@@ -385,7 +385,7 @@ const TransitionDisplay: React.FC<{ transition: Transition | null }> = ({ transi
 
 import { webSocketService } from '../services/webSocketService';
 
-const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGenerateAllClips, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, modelTier, onModelTierChange }) => {
+const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGenerateAllClips, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, videoQuality, onVideoQualityChange }) => {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
@@ -740,12 +740,12 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
             <label htmlFor="model-tier" className="block text-xs font-medium text-gray-400 mb-2">Model Tier</label>
             <select
               id="model-tier"
-              value={modelTier}
-              onChange={(e) => onModelTierChange(e.target.value as 'draft' | 'premium')}
+              value={videoQuality}
+              onChange={(e) => onVideoQualityChange(e.target.value as 'draft' | 'high')}
               className="bg-brand-light-gray border border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-brand-cyan focus:border-brand-cyan outline-none transition text-white"
             >
               <option value="draft">Draft (AnimateDiff 512p@8fps, ~30-60s)</option>
-              <option value="premium">Premium (HunyuanVideo 720p@24fps, ~2-3min)</option>
+              <option value="high">High Quality (720p@24fps, ~2-3min)</option>
             </select>
           </div>
           
@@ -765,7 +765,7 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
               if (isBatchGenerating) return;
               setIsBatchGenerating(true);
               try {
-                const quality = modelTier === 'premium' ? 'high' : 'draft';
+                const quality = videoQuality;
                 await onGenerateAllClips(quality);
               } catch (err) {
                 console.error('Generate all clips failed', err);
@@ -868,11 +868,11 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
                         onTogglePrompt={() => setExpandedPromptShotId(prevId => prevId === shot.id ? null : shot.id)}
                         onRegenerate={() => onRegenerateImage(shot.id)}
                         onEdit={() => setEditingShot(shot)}
-                        onGenerate={() => handleGenerateClip(shot.id, modelTier === 'premium' ? 'high' : 'draft')}
+                        onGenerate={() => handleGenerateClip(shot.id, videoQuality)}
                         onPlayClip={(url) => setPlayingClipUrl(url)}
                         onSetVfx={(vfx) => onSetVfx(shot.id, vfx)}
                         onFileUpload={(mediaType, file) => updateShotWithFileUpload(shot.id, mediaType, file)}
-                        quality={modelTier === 'premium' ? 'high' : 'draft'}
+                        quality={videoQuality}
                         generatingClipId={generatingClipId}
                         shotProgressMap={shotProgressMap}
                     />

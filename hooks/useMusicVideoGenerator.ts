@@ -170,7 +170,7 @@ type State = {
   songFile: File | null;
   audioUrl?: string | null;
   singerGender: 'male' | 'female' | 'unspecified';
-  modelTier: 'freemium' | 'premium';
+  
   songAnalysis: SongAnalysis | null;
   creativeBrief: CreativeBrief;
   bibles: Bibles | null;
@@ -199,7 +199,6 @@ type Action =
   | { type: 'SET_SONG_FILE'; payload: File }
   | { type: 'SET_AUDIO_URL'; payload: string }
   | { type: 'SET_SINGER_GENDER'; payload: 'male' | 'female' | 'unspecified' }
-  | { type: 'SET_MODEL_TIER'; payload: 'freemium' | 'premium' }
   | { type: 'SET_ANALYSIS'; payload: SongAnalysis }
   | { type: 'UPDATE_CREATIVE_BRIEF'; payload: Partial<CreativeBrief> }
   | { type: 'SET_BIBLES'; payload: Bibles }
@@ -228,7 +227,7 @@ const initialState: State = {
   songFile: null,
   audioUrl: null,
   singerGender: 'unspecified',
-  modelTier: 'freemium',
+
   songAnalysis: null,
   creativeBrief: {
     feel: '',
@@ -287,8 +286,6 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, audioUrl: action.payload };
     case 'SET_SINGER_GENDER':
       return { ...state, singerGender: action.payload };
-    case 'SET_MODEL_TIER':
-      return { ...state, modelTier: action.payload };
     case 'SET_ANALYSIS':
       return { ...state, songAnalysis: action.payload, currentStep: Step.Controls, isProcessing: false };
     case 'UPDATE_CREATIVE_BRIEF':
@@ -451,7 +448,7 @@ const reducer = (state: State, action: Action): State => {
         bibles: hydratedBibles,
         storyboard: hydratedStoryboard,
         tokenUsage: payload.tokenUsage ? { ...initialState.tokenUsage, ...payload.tokenUsage } : initialState.tokenUsage,
-        modelTier: payload.modelTier || 'freemium',
+        
         executiveProducerFeedback: payload.executiveProducerFeedback || null,
         visualContinuityReport: payload.visualContinuityReport || null,
       };
@@ -523,15 +520,12 @@ export const useMusicVideoGenerator = () => {
 
   const clearApiError = useCallback(() => dispatch({ type: 'CLEAR_API_ERROR' }), []);
 
-  const setModelTier = useCallback((tier: 'freemium' | 'premium') => {
-    dispatch({ type: 'SET_MODEL_TIER', payload: tier });
-  }, []);
 
-  const processSongUpload = useCallback(async (file: File, data: { lyrics: string; title?: string; artist?: string, singerGender: 'male' | 'female' | 'unspecified', modelTier: 'freemium' | 'premium' }) => {
+  const processSongUpload = useCallback(async (file: File, data: { lyrics: string; title?: string; artist?: string, singerGender: 'male' | 'female' | 'unspecified' }) => {
     dispatch({ type: 'START_PROCESSING' });
     dispatch({ type: 'SET_SONG_FILE', payload: file });
     dispatch({ type: 'SET_SINGER_GENDER', payload: data.singerGender });
-    dispatch({ type: 'SET_MODEL_TIER', payload: data.modelTier });
+    
     try {
       // Upload audio for backend processing (lip-sync and export)
       try {
@@ -541,7 +535,7 @@ export const useMusicVideoGenerator = () => {
         console.warn('Audio upload failed; continuing without audio URL', e);
       }
 
-      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.singerGender, data.modelTier, providerSettings);
+      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.singerGender, providerSettings);
       dispatch({ type: 'SET_ANALYSIS', payload: analysis });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { analysis: tokenUsage } });
     } catch (e) {
@@ -575,7 +569,7 @@ export const useMusicVideoGenerator = () => {
           data: await fileToBase64(file),
         }))
       );
-      const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, state.modelTier, providerSettings);
+      const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, providerSettings);
       dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: briefUpdate });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { moodboardAnalysis: tokenUsage } });
     } catch (e) {
@@ -583,13 +577,13 @@ export const useMusicVideoGenerator = () => {
     } finally {
       dispatch({ type: 'FINISH_MOODBOARD_ANALYSIS' });
     }
-  }, [state.moodboardImages, state.modelTier]);
+  }, [state.moodboardImages]);
 
   const getDirectorSuggestions = useCallback(async () => {
     if (!state.songAnalysis) return;
     dispatch({ type: 'START_BRIEF_SUGGESTION' });
     try {
-      const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, state.modelTier, providerSettings);
+      const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, providerSettings);
       dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: suggestions });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: tokenUsage } }); // Using 'bibles' category for this for now
     } catch (e) {
@@ -597,14 +591,14 @@ export const useMusicVideoGenerator = () => {
     } finally {
       dispatch({ type: 'FINISH_BRIEF_SUGGESTION' });
     }
-  }, [state.songAnalysis, state.creativeBrief, state.modelTier]);
+  }, [state.songAnalysis, state.creativeBrief]);
 
   const generateBibleImages = useCallback(async (bibles: Bibles, brief: CreativeBrief) => {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
     for (const character of (bibles.characters || [])) {
       try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief, state.modelTier);
+        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: [imageUrl] } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
@@ -616,7 +610,7 @@ export const useMusicVideoGenerator = () => {
     }
     for (const location of (bibles.locations || [])) {
       try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief, state.modelTier);
+        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: [imageUrl] } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
@@ -632,7 +626,7 @@ export const useMusicVideoGenerator = () => {
     if (!state.bibles || !state.creativeBrief) return;
     for (const scene of storyboard.scenes) {
       try {
-        const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
+        const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, providerSettings);
         dispatch({ type: 'SET_TRANSITIONS_FOR_SCENE', payload: { sceneId: scene.id, transitions } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { transitions: tokenUsage } });
       } catch (e) {
@@ -640,7 +634,7 @@ export const useMusicVideoGenerator = () => {
         dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Transition generation failed for scene ${scene.id}.` });
       }
     }
-  }, [state.bibles, state.creativeBrief, state.modelTier]);
+  }, [state.bibles, state.creativeBrief]);
 
   const generateCreativeAssets = useCallback(async () => {
     if (!state.songAnalysis || !state.creativeBrief || !state.singerGender) return;
@@ -648,13 +642,13 @@ export const useMusicVideoGenerator = () => {
     dispatch({ type: 'SET_STEP', payload: Step.Plan });
 
     try {
-      const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier, providerSettings);
+      const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, providerSettings);
       dispatch({ type: 'SET_BIBLES', payload: bibles });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: biblesTokens } });
 
       generateBibleImages(bibles, state.creativeBrief);
 
-      const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, state.modelTier, providerSettings);
+      const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, providerSettings);
       dispatch({ type: 'SET_STORYBOARD', payload: storyboard });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { storyboard: storyboardTokens } });
 
@@ -664,7 +658,7 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to generate creative assets.' });
       dispatch({ type: 'SET_STEP', payload: Step.Controls }); // Go back on error
     }
-  }, [state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier, generateBibleImages, generateAllTransitions]);
+  }, [state.songAnalysis, state.creativeBrief, state.singerGender, generateBibleImages, generateAllTransitions]);
 
   const generateAllImages = useCallback(async () => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
@@ -692,7 +686,7 @@ export const useMusicVideoGenerator = () => {
     for (const shot of allShots) {
       if (shot.preview_image_url && shot.preview_image_url !== 'error') continue;
       try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
+        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, providerSettings);
         dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
@@ -712,7 +706,7 @@ export const useMusicVideoGenerator = () => {
       }
       await delay(1500);
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
+  }, [state.storyboard, state.bibles, state.creativeBrief]);
 
 
   const regenerateImage = useCallback(async (shotId: string) => {
@@ -722,14 +716,14 @@ export const useMusicVideoGenerator = () => {
 
     dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: '' } }); // Set to loading state
     try {
-      const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
+      const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, providerSettings);
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
     } catch (e) {
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to regenerate image.' });
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
+  }, [state.storyboard, state.bibles, state.creativeBrief]);
 
   const regenerateBibleImage = useCallback(async (item: { type: 'character' | 'location', name: string }) => {
     if (!state.bibles || !state.creativeBrief) return;
@@ -743,11 +737,11 @@ export const useMusicVideoGenerator = () => {
       if (type === 'character') {
         const character = state.bibles.characters.find(c => c.name === name);
         if (!character) return;
-        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief, state.modelTier));
+        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief));
       } else {
         const location = state.bibles.locations.find(l => l.name === name);
         if (!location) return;
-        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, state.creativeBrief, state.modelTier));
+        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, state.creativeBrief));
       }
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type, name, imageUrls: [imageUrl] } });
@@ -944,7 +938,7 @@ export const useMusicVideoGenerator = () => {
     if (!state.songAnalysis || !state.storyboard) return;
     dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'processing' } });
     try {
-      const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, state.modelTier, providerSettings);
+      const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, providerSettings);
 
       const allShotsMap = new Map(state.storyboard.scenes.flatMap(s => s.shots).map(shot => [shot.id, shot]));
 
@@ -961,19 +955,19 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get VFX suggestions.' });
       dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'idle' } });
     }
-  }, [state.songAnalysis, state.storyboard, state.modelTier]);
+  }, [state.songAnalysis, state.storyboard]);
 
   const runExecutiveProducerReview = useCallback(async () => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
     try {
-      const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
+      const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, providerSettings);
       dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: feedback });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { executiveReview: tokenUsage } });
     } catch (e) {
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get executive producer feedback.' });
       dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: { pacing_score: 0, narrative_score: 0, consistency_score: 0, final_notes: "Error generating feedback." } });
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
+  }, [state.storyboard, state.bibles, state.creativeBrief]);
 
   const runVisualQaReview = useCallback(async () => {
     if (!state.storyboard || !state.bibles) {
@@ -1191,7 +1185,6 @@ export const useMusicVideoGenerator = () => {
   return {
     ...state,
     processSongUpload,
-    setModelTier,
     generateCreativeAssets,
     generateAllImages,
     regenerateImage,

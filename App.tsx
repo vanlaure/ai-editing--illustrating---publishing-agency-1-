@@ -38,7 +38,6 @@ const App: React.FC = () => {
         return {
             currentStep: s.currentStep,
             singerGender: s.singerGender,
-            modelTier: s.modelTier,
             songAnalysis: s.songAnalysis,
             audioUrl: s.audioUrl && !s.audioUrl.startsWith('blob:') ? s.audioUrl : null,
             creativeBrief: s.creativeBrief,
@@ -52,7 +51,6 @@ const App: React.FC = () => {
     }, [
         musicVideoGenerator.currentStep,
         musicVideoGenerator.singerGender,
-        musicVideoGenerator.modelTier,
         musicVideoGenerator.songAnalysis,
         musicVideoGenerator.audioUrl,
         musicVideoGenerator.creativeBrief,
@@ -119,7 +117,6 @@ const App: React.FC = () => {
                         isProcessing={isProcessing}
                         // FIX: Corrected typo from `musicVideo-generator` to `musicVideoGenerator`.
                         onLoadProductionFile={musicVideoGenerator.loadProductionFile}
-                        onModelTierChange={musicVideoGenerator.setModelTier}
                     />
                 );
             case Step.Plan:
@@ -168,8 +165,7 @@ const App: React.FC = () => {
                         suggestAndApplyBeatSyncedVfx={musicVideoGenerator.suggestAndApplyBeatSyncedVfx}
                         onRegenerateBibleImage={musicVideoGenerator.regenerateBibleImage}
                         updateShotWithFileUpload={musicVideoGenerator.updateShotWithFileUpload}
-                        modelTier={musicVideoGenerator.modelTier}
-                        onModelTierChange={musicVideoGenerator.setModelTier}
+                       
                     />
                 );
             case Step.Review:
@@ -269,7 +265,6 @@ const App: React.FC = () => {
             bibles: stateToSave.bibles,
             storyboard: serializedStoryboard,
             tokenUsage: stateToSave.tokenUsage,
-            modelTier: stateToSave.modelTier,
         };
         return serializableState;
     }
@@ -307,7 +302,7 @@ const App: React.FC = () => {
                     </button>
                     <HeaderActions
                         currentStep={currentStep}
-                        modelTier={musicVideoGenerator.modelTier}
+                       
                         onLoadProductionFile={musicVideoGenerator.loadProductionFile}
                         getFullState={getFullStateForDownload}
                         onRestart={() => setIsRestartModalOpen(true)}

@@ -5,10 +5,9 @@ import { useDropzone } from 'react-dropzone';
 import Spinner from './Spinner';
 
 interface UploadStepProps {
-    onSubmit: (file: File, data: { lyrics: string; title?: string; artist?: string; singerGender: 'male' | 'female' | 'duet-male-female' | 'duet-male-male' | 'duet-female-female' | 'quartet' | 'unspecified', bpm?: number, modelTier: 'freemium' | 'premium' }) => void;
+    onSubmit: (file: File, data: { lyrics: string; title?: string; artist?: string; singerGender: 'male' | 'female' | 'duet-male-female' | 'duet-male-male' | 'duet-female-female' | 'quartet' | 'unspecified', bpm?: number }) => void;
     isProcessing: boolean;
     onLoadProductionFile: (file: File) => void;
-    onModelTierChange?: (tier: 'freemium' | 'premium') => void;
 }
 
 const UploadIcon = () => (
@@ -24,7 +23,7 @@ const JsonIcon = () => (
     </svg>
 );
 
-const UploadStep: React.FC<UploadStepProps> = ({ onSubmit, isProcessing, onLoadProductionFile, onModelTierChange }) => {
+const UploadStep: React.FC<UploadStepProps> = ({ onSubmit, isProcessing, onLoadProductionFile }) => {
     const [error, setError] = useState<string | null>(null);
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [audioSrc, setAudioSrc] = useState<string | null>(null);
@@ -33,7 +32,6 @@ const UploadStep: React.FC<UploadStepProps> = ({ onSubmit, isProcessing, onLoadP
     const [artist, setArtist] = useState('');
     const [singerGender, setSingerGender] = useState<'male' | 'female' | 'duet-male-female' | 'duet-male-male' | 'duet-female-female' | 'quartet' | 'unspecified'>('unspecified');
     const [bpm, setBpm] = useState<string>('');
-    const [modelTier, setModelTier] = useState<'freemium' | 'premium'>('freemium');
 
 
     useEffect(() => {
@@ -87,7 +85,7 @@ const UploadStep: React.FC<UploadStepProps> = ({ onSubmit, isProcessing, onLoadP
             setError("Please specify the singer's gender.");
             return;
         }
-        onSubmit(audioFile, { lyrics, title, artist, singerGender, bpm: bpm ? parseInt(bpm) : undefined, modelTier });
+        onSubmit(audioFile, { lyrics, title, artist, singerGender, bpm: bpm ? parseInt(bpm) : undefined });
     };
 
     const onJsonDrop = useCallback((acceptedFiles: File[]) => {
@@ -188,35 +186,6 @@ const UploadStep: React.FC<UploadStepProps> = ({ onSubmit, isProcessing, onLoadP
                         </div>
                     </div>
                 </div>
-
-                <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-3 text-brand-cyan">4. Select Model Quality</h3>
-                    <div className="flex bg-brand-dark p-1 rounded-lg border border-gray-600">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setModelTier('freemium');
-                                onModelTierChange?.('freemium');
-                            }}
-                            className={`w-1/2 px-4 py-3 rounded-md font-semibold transition-colors text-center ${modelTier === 'freemium' ? 'bg-brand-cyan text-brand-dark' : 'text-gray-300 hover:bg-brand-light-gray'}`}
-                        >
-                            <p className="font-bold">Freemium</p>
-                            <p className="text-xs font-normal">Fast & Good Quality</p>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setModelTier('premium');
-                                onModelTierChange?.('premium');
-                            }}
-                            className={`w-1/2 px-4 py-3 rounded-md font-semibold transition-colors text-center ${modelTier === 'premium' ? 'bg-brand-magenta text-white' : 'text-gray-300 hover:bg-brand-light-gray'}`}
-                        >
-                            <p className="font-bold">Premium</p>
-                            <p className="text-xs font-normal">Highest Quality & Slower</p>
-                        </button>
-                    </div>
-                </div>
-
 
                 {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
 
