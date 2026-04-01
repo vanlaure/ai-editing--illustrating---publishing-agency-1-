@@ -1,6 +1,25 @@
-import type { AIProvider, AIProviderModel } from '../types';
+import type { AIProvider, AIProviderModel, AIProviderRole } from '../types';
 import { PROVIDER_PRESETS } from '../stores/settingsStore';
 import { BACKEND_URL } from './backendService';
+
+async function postProviderModels(provider: AIProvider): Promise<any> {
+    const response = await fetch(`${BACKEND_URL}/api/providers/models`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            provider: provider.id,
+            baseUrl: provider.baseUrl,
+            apiKey: provider.apiKey || undefined,
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return response.json();
+}
 
 /**
  * Fetch available models from a provider's API.
@@ -96,13 +115,8 @@ async function fetchOpenRouterModels(provider: AIProvider): Promise<AIProviderMo
             throw new Error('Backend proxy returned ' + proxyResp.status);
         }
     } catch {
-        // Fallback: direct v1 API (browser-safe, but only ~348 models)
-        console.warn('OpenRouter full catalog proxy unavailable, falling back to /v1/models');
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey}`;
-        const response = await fetch(`${provider.baseUrl}/models`, { headers });
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        const data = await response.json();
+        console.warn('OpenRouter full catalog proxy unavailable, falling back to backend /models proxy');
+        const data = await postProviderModels(provider);
         rawModels = data.data || [];
     }
 
@@ -173,16 +187,8 @@ export function getModelCategories(models: AIProviderModel[]): string[] {
 // --- NVIDIA NIM (OpenAI-compatible) ---
 
 async function fetchNvidiaModels(provider: AIProvider): Promise<AIProviderModel[]> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (provider.apiKey) {
-        headers['Authorization'] = `Bearer ${provider.apiKey}`;
-    }
-
     try {
-        const response = await fetch(`${provider.baseUrl}/models`, { headers });
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-        const data = await response.json();
+        const data = await postProviderModels(provider);
         const models = data.data || data;
 
         return (Array.isArray(models) ? models : []).map((m: any) => ({
@@ -221,27 +227,18 @@ async function fetchOllamaModels(provider: AIProvider): Promise<AIProviderModel[
 // --- ComfyUI (checkpoint models) ---
 
 async function fetchComfyUIModels(provider: AIProvider): Promise<AIProviderModel[]> {
+    // Route through backend to avoid CORS issues (browser can't reach ComfyUI directly)
     try {
-        const response = await fetch(`${provider.baseUrl}/object_info/CheckpointLoaderSimple`);
+        const response = await fetch(`${BACKEND_URL}/api/comfyui/models?baseUrl=${encodeURIComponent(provider.baseUrl)}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        const ckpts = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
-        return ckpts.map((name: string) => ({
+        return (Array.isArray(data.models) ? data.models : []).map((name: string) => ({
             id: name,
             name: name.replace(/\.(safetensors|ckpt|pt)$/i, ''),
         }));
-    } catch {
-        try {
-            const response = await fetch(`${provider.baseUrl}/models/checkpoints`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            return (Array.isArray(data) ? data : []).map((name: string) => ({
-                id: name,
-                name: name.replace(/\.(safetensors|ckpt|pt)$/i, ''),
-            }));
-        } catch {
-            return [];
-        }
+    } catch (err) {
+        console.warn('Failed to fetch ComfyUI models via backend:', err);
+        return [];
     }
 }
 
@@ -293,63 +290,32 @@ async function fetchHuggingFaceModels(provider: AIProvider): Promise<AIProviderM
 
 // --- Connectivity Test ---
 
-export async function testConnection(provider: AIProvider): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
-    const start = performance.now();
+export async function testConnection(provider: AIProvider, role?: AIProviderRole): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
     try {
-        switch (provider.id) {
-            case 'ollama': {
-                const res = await fetch(`${provider.baseUrl}/api/tags`, { signal: AbortSignal.timeout(10000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return { ok: true, latencyMs: Math.round(performance.now() - start) };
-            }
-            case 'comfyui':
-            case 'comfyui-video': {
-                const res = await fetch(`${provider.baseUrl}/system_stats`, { signal: AbortSignal.timeout(10000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return { ok: true, latencyMs: Math.round(performance.now() - start) };
-            }
-            case 'openrouter':
-            case 'nvidia':
-            case 'custom': {
-                const headers: Record<string, string> = {};
-                if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey}`;
-                const res = await fetch(`${provider.baseUrl}/models`, { headers, signal: AbortSignal.timeout(10000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                return { ok: true, latencyMs: Math.round(performance.now() - start) };
-            }
-            case 'huggingface': {
-                const headers: Record<string, string> = {};
-                if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey}`;
-                const res = await fetch(`https://huggingface.co/api/whoami-v2`, { headers, signal: AbortSignal.timeout(10000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}: Invalid token or unreachable`);
-                return { ok: true, latencyMs: Math.round(performance.now() - start) };
-            }
-            default: {
-                // Generic health check: try /models or just base URL
-                const headers: Record<string, string> = {};
-                if (provider.apiKey) headers['Authorization'] = `Bearer ${provider.apiKey}`;
-                const res = await fetch(`${provider.baseUrl}/models`, { headers, signal: AbortSignal.timeout(10000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return { ok: true, latencyMs: Math.round(performance.now() - start) };
-            }
+        const response = await fetch(`${BACKEND_URL}/api/providers/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                role,
+                provider: provider.id,
+                baseUrl: provider.baseUrl,
+                apiKey: provider.apiKey || undefined,
+                selectedModel: provider.selectedModel || undefined,
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+        return response.json();
     } catch (err: any) {
-        return { ok: false, latencyMs: Math.round(performance.now() - start), error: err.message || 'Connection failed' };
+        return { ok: false, latencyMs: 0, error: err.message || 'Connection failed' };
     }
 }
 
 // --- Generic OpenAI-compatible fallback ---
 
 async function fetchOpenAICompatibleModels(provider: AIProvider): Promise<AIProviderModel[]> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (provider.apiKey) {
-        headers['Authorization'] = `Bearer ${provider.apiKey}`;
-    }
-
-    const response = await fetch(`${provider.baseUrl}/models`, { headers });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-    const data = await response.json();
+    const data = await postProviderModels(provider);
     const models = data.data || data;
 
     return (Array.isArray(models) ? models : []).map((m: any) => ({

@@ -2,6 +2,13 @@
 // with a fallback to the backend server port (3002) so health checks hit the API instead of the frontend dev server.
 export const BACKEND_URL = (import.meta as any)?.env?.VITE_BACKEND_URL || 'http://localhost:3002';
 export const STITCHSTREAM_URL = (import.meta as any)?.env?.VITE_STITCHSTREAM_URL || 'http://localhost:4100';
+export const REQUIRED_BACKEND_FEATURES = [
+  'api_meta_v1',
+  'ai_generate_v1',
+  'provider_models_post_v1',
+  'provider_test_v1',
+  'comfyui_baseurl_v1',
+] as const;
 
 // Add debug logging to confirm which URL is being used
 console.log('Backend URL initialized to:', BACKEND_URL);
@@ -40,6 +47,36 @@ export interface ProductionData {
   scripts?: any;
   storyboards?: any;
   metadata?: any;
+}
+
+export interface BackendMeta {
+  status: string;
+  service: string;
+  startedAt: string;
+  port: number;
+  features: string[];
+}
+
+export interface ComfyUIHealthResult {
+  available: boolean;
+  backendReachable: boolean;
+  message?: string;
+  baseUrl?: string;
+  requestedBaseUrl?: string;
+  fallbackUsed?: boolean;
+}
+
+export interface ComfyUIPreflightResult extends ComfyUIHealthResult {
+  ok: boolean;
+  missingNodes: string[];
+}
+
+function formatBackendFetchError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return `${error.message}. Cannot reach backend at ${BACKEND_URL}.`;
+  }
+
+  return `Cannot reach backend at ${BACKEND_URL}.`;
 }
 
 export const backendService = {
@@ -151,13 +188,38 @@ export const backendService = {
     return { videoUrl: json.url, filename: json.filename };
   },
 
-  async checkComfyUIHealth(): Promise<{ available: boolean }> {
+  async checkComfyUIHealth(baseUrl?: string): Promise<ComfyUIHealthResult> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/comfyui/health`);
-      const data = await response.json();
-      return { available: data.available || false };
-    } catch {
-      return { available: false };
+      const query = baseUrl ? `?baseUrl=${encodeURIComponent(baseUrl)}` : '';
+      const response = await fetch(`${BACKEND_URL}/api/comfyui/health${query}`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return {
+          available: false,
+          backendReachable: true,
+          message: data.error || `Backend returned HTTP ${response.status} while checking ComfyUI.`,
+          baseUrl: data.baseUrl,
+          requestedBaseUrl: data.requestedBaseUrl,
+          fallbackUsed: data.fallbackUsed,
+        };
+      }
+
+      return {
+        available: data.available || false,
+        backendReachable: true,
+        message: data.error,
+        baseUrl: data.baseUrl,
+        requestedBaseUrl: data.requestedBaseUrl,
+        fallbackUsed: data.fallbackUsed,
+      };
+    } catch (error) {
+      return {
+        available: false,
+        backendReachable: false,
+        message: formatBackendFetchError(error),
+        requestedBaseUrl: baseUrl,
+      };
     }
   },
 
@@ -203,6 +265,7 @@ export const backendService = {
   },
 
   async generateImageWithComfyUI(params: {
+    baseUrl?: string;
     prompt: string;
     negative_prompt?: string;
     width?: number;
@@ -228,7 +291,8 @@ export const backendService = {
       reference_face_image: params.reference_face_image,
       ipadapter_weight: params.ipadapter_weight || 0.85,
       shotId: params.shotId,
-      generationType: params.generationType || 'shot'
+      generationType: params.generationType || 'shot',
+      baseUrl: params.baseUrl,
     };
 
     const response = await fetch(`${BACKEND_URL}/api/comfyui/generate`, {
@@ -270,6 +334,7 @@ export const backendService = {
   },
 
   async generateVideoClip(params: {
+    baseUrl?: string;
     imageUrl: string;
     prompt: string;
     duration: number;
@@ -380,16 +445,155 @@ export const backendService = {
     }
   },
 
-  async comfyPreflight(): Promise<{ ok: boolean; available: boolean; missingNodes: string[]; message?: string }> {
+  async comfyPreflight(): Promise<ComfyUIPreflightResult> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/comfyui/preflight`);
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        return { ok: false, available: false, missingNodes: ['unknown'], message: `HTTP ${response.status}` };
+        return {
+          ok: false,
+          available: false,
+          backendReachable: true,
+          missingNodes: Array.isArray(data.missingNodes) ? data.missingNodes : ['unknown'],
+          message: data.message || `Backend returned HTTP ${response.status} while checking ComfyUI preflight.`,
+          baseUrl: data.baseUrl,
+          requestedBaseUrl: data.requestedBaseUrl,
+          fallbackUsed: data.fallbackUsed,
+        };
       }
-      return response.json();
+      return {
+        ok: !!data.ok,
+        available: !!data.available,
+        backendReachable: true,
+        missingNodes: Array.isArray(data.missingNodes) ? data.missingNodes : [],
+        message: data.message,
+        baseUrl: data.baseUrl,
+        requestedBaseUrl: data.requestedBaseUrl,
+        fallbackUsed: data.fallbackUsed,
+      };
     } catch (e) {
-      return { ok: false, available: false, missingNodes: ['unknown'], message: e instanceof Error ? e.message : 'Network error' };
+      return {
+        ok: false,
+        available: false,
+        backendReachable: false,
+        missingNodes: ['unknown'],
+        message: formatBackendFetchError(e),
+      };
     }
+  },
+
+  async comfyPreflightFor(baseUrl?: string): Promise<ComfyUIPreflightResult> {
+    try {
+      const query = baseUrl ? `?baseUrl=${encodeURIComponent(baseUrl)}` : '';
+      const response = await fetch(`${BACKEND_URL}/api/comfyui/preflight${query}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return {
+          ok: false,
+          available: false,
+          backendReachable: true,
+          missingNodes: Array.isArray(data.missingNodes) ? data.missingNodes : ['unknown'],
+          message: data.message || `Backend returned HTTP ${response.status} while checking ComfyUI preflight.`,
+          baseUrl: data.baseUrl,
+          requestedBaseUrl: data.requestedBaseUrl,
+          fallbackUsed: data.fallbackUsed,
+        };
+      }
+      return {
+        ok: !!data.ok,
+        available: !!data.available,
+        backendReachable: true,
+        missingNodes: Array.isArray(data.missingNodes) ? data.missingNodes : [],
+        message: data.message,
+        baseUrl: data.baseUrl,
+        requestedBaseUrl: data.requestedBaseUrl,
+        fallbackUsed: data.fallbackUsed,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        available: false,
+        backendReachable: false,
+        missingNodes: ['unknown'],
+        message: formatBackendFetchError(e),
+        requestedBaseUrl: baseUrl,
+      };
+    }
+  },
+
+  async generateAiText(params: {
+    provider?: any;
+    prompt?: string;
+    system?: string;
+    responseSchema?: any;
+    jsonMode?: boolean;
+    images?: { data: string; mimeType: string }[];
+    temperature?: number;
+    maxTokens?: number;
+    geminiModel?: string;
+    geminiContents?: any;
+  }): Promise<{ text: string; tokenUsage: number }> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout for large LLM requests
+    let response: Response;
+    try {
+      response = await fetch(`${BACKEND_URL}/api/ai/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out — the AI provider took too long to respond. Try a faster model or simplify the request.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || 'Failed to generate AI text');
+    }
+
+    return response.json();
+  },
+
+  async generateProviderImage(params: {
+    provider: any;
+    prompt: string;
+    width?: number;
+    height?: number;
+  }): Promise<{ imageUrl: string; tokenUsage: number }> {
+    const response = await fetch(`${BACKEND_URL}/api/ai/image/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || 'Failed to generate image');
+    }
+
+    return response.json();
+  },
+
+  async editImageWithGemini(imageDataUrl: string, prompt: string): Promise<{ imageUrl: string; tokenUsage: number }> {
+    const response = await fetch(`${BACKEND_URL}/api/ai/image/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageDataUrl, prompt }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || 'Failed to edit image');
+    }
+
+    return response.json();
   },
 
   getImageUrl(filename: string): string {
@@ -402,5 +606,44 @@ export const backendService = {
 
   getVideoUrl(filename: string): string {
     return `${BACKEND_URL}/videos/${filename}`;
+  },
+
+  async getBackendMeta(): Promise<BackendMeta> {
+    const response = await fetch(`${BACKEND_URL}/api/meta`);
+    if (!response.ok) {
+      throw new Error(`Backend metadata unavailable (HTTP ${response.status})`);
+    }
+    return response.json();
+  },
+
+  async checkBackendCompatibility(): Promise<{
+    ok: boolean;
+    message?: string;
+    meta?: BackendMeta;
+    missingFeatures?: string[];
+  }> {
+    try {
+      const meta = await this.getBackendMeta();
+      const features = Array.isArray(meta.features) ? meta.features : [];
+      const missingFeatures = REQUIRED_BACKEND_FEATURES.filter(feature => !features.includes(feature));
+
+      if (missingFeatures.length > 0) {
+        return {
+          ok: false,
+          meta,
+          missingFeatures,
+          message: `Backend is running but missing required features: ${missingFeatures.join(', ')}.`,
+        };
+      }
+
+      return { ok: true, meta };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error
+          ? `${error.message}. The backend may be offline or an outdated process is still bound to ${BACKEND_URL}.`
+          : `Backend compatibility check failed for ${BACKEND_URL}.`,
+      };
+    }
   }
 };

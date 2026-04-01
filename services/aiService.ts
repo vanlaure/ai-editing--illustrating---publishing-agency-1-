@@ -1,11 +1,9 @@
-import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
+import { Type } from "@google/genai";
 import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile, AIProviderSettings, AIProvider } from '../types';
 import { VFX_PRESETS } from "../constants";
 import { backendService } from './backendService';
 import { getProfileForModel, adaptPromptForModel, buildThinkingModelKnowledge, buildResearchPrompt, cacheResearchedProfile, parseResearchResponse } from './promptOptimizer';
 import { generateThinking, hasThinkingProvider } from './providerClient';
-
-const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 /** Safely join an array-like field — handles undefined, strings, and objects */
 const safeJoin = (val: any, sep = ', '): string => {
@@ -32,9 +30,11 @@ const generateText = async (
         geminiModel?: string;
         /** Gemini-specific: multipart contents array (for audio, etc.) */
         geminiContents?: any;
+        /** Max output tokens — set explicitly for large responses (storyboards, bibles) */
+        maxTokens?: number;
     }
 ): Promise<{ text: string; tokenUsage: number }> => {
-    const { prompt, system, responseSchema, images, providerSettings, geminiModel, geminiContents } = options;
+    const { prompt, system, responseSchema, images, providerSettings, geminiModel, geminiContents, maxTokens } = options;
 
     // Use configured provider — no Gemini fallback
     if (hasThinkingProvider(providerSettings)) {
@@ -43,28 +43,21 @@ const generateText = async (
             system,
             responseSchema,
             images,
+            maxTokens,
         });
         if (result) return result;
         throw new Error('Configured thinking provider returned no result');
     }
 
-    // No provider configured — use Gemini as last resort
-    const ai = getAiClient();
-    const model = geminiModel || 'gemini-2.5-flash';
-
-    const config: any = {};
-    if (responseSchema) {
-        config.responseMimeType = 'application/json';
-        config.responseSchema = responseSchema;
-    }
-
-    const response = await ai.models.generateContent({
-        model,
-        contents: geminiContents || prompt,
-        config,
+    return backendService.generateAiText({
+        prompt,
+        system,
+        responseSchema,
+        images,
+        geminiModel,
+        geminiContents,
+        maxTokens,
     });
-
-    return { text: response.text || '', tokenUsage: 0 };
 };
 
 
@@ -438,13 +431,8 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
       The analysis should include BPM, mood, genre, instrumentation, and a breakdown of the song structure (e.g., intro, verse, chorus).
       For the structure, provide estimated start and end timestamps in seconds.
       
-      **BEATS ARRAY (CRITICAL):**
-      You must also generate a 'beats' array containing the timestamp for every beat in the song.
-      - Calculate the time between beats using the formula: 60 / BPM.
-      - The first beat is at time 0.
-      - Continue adding beats until you reach the end of the song's total duration.
-      - For each beat, assign an 'energy' score from 0.0 to 1.0. Beats within 'chorus' sections should have a higher energy (e.g., 0.8-1.0), while beats in verses or bridges should have a moderate energy (e.g., 0.5-0.7).
-      
+      **BEATS:** Do NOT generate a beats array — it will be calculated programmatically from BPM and structure. Just provide accurate BPM and structure timestamps.
+
       **VOCALS (DUET/QUARTET DETECTION):**
       The user specified the singer type as: "${singerGender}".
       - LISTEN to the audio to confirm this and identify specific vocal characteristics (e.g., "raspy male voice", "soprano female", "harmonizing group").
@@ -512,17 +500,6 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
                     required: ['name', 'start', 'end'],
                 },
             },
-            beats: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        time: { type: Type.NUMBER },
-                        energy: { type: Type.NUMBER },
-                    },
-                    required: ['time', 'energy'],
-                }
-            },
             vocals: {
                 type: Type.OBJECT,
                 properties: {
@@ -578,7 +555,7 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
                 required: ['primary', 'alternatives', 'reasoning']
             }
         },
-        required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'beats', 'lyric_analysis', 'recommended_video_types'],
+        required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'lyric_analysis', 'recommended_video_types'],
     };
 
     // Provider path: text+lyrics only (no audio — most LLMs don't support audio input)
@@ -588,6 +565,7 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
         responseSchema: songAnalysisSchema,
         providerSettings,
         geminiModel,
+        maxTokens: 4096,
         geminiContents: [
             { role: 'user', parts: [{ text: prompt }] },
             {
@@ -603,6 +581,29 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
     });
 
     const analysis = JSON.parse(result.text) as SongAnalysis;
+
+    // Generate beats programmatically from BPM + structure (fast and reliable)
+    // Note: analyzeSongEnhanced exists for opt-in deep beat detection but its naive DFT
+    // is too slow to run synchronously here (~30s+ for a 3-minute song)
+    if (analysis.bpm && Array.isArray(analysis.structure) && analysis.structure.length > 0 && (!analysis.beats || analysis.beats.length === 0)) {
+        const totalDuration = analysis.structure[analysis.structure.length - 1]?.end || 0;
+        const interval = 60 / analysis.bpm;
+        const beats: { time: number; energy: number }[] = [];
+        for (let t = 0; t < totalDuration; t += interval) {
+            // Find which section this beat falls in
+            const section = analysis.structure.find(s => t >= s.start && t < s.end);
+            const name = (section?.name || '').toLowerCase();
+            // Assign energy based on section type
+            const energy = /chorus|drop|hook/.test(name) ? 0.8 + Math.random() * 0.2
+                : /bridge|solo/.test(name) ? 0.6 + Math.random() * 0.2
+                : /intro|outro/.test(name) ? 0.3 + Math.random() * 0.2
+                : 0.5 + Math.random() * 0.2;
+            beats.push({ time: Math.round(t * 100) / 100, energy: Math.round(energy * 100) / 100 });
+        }
+        analysis.beats = beats;
+        console.log(`AI Service: Generated ${beats.length} beats programmatically from ${analysis.bpm} BPM (fallback)`);
+    }
+
     return { analysis, tokenUsage: result.tokenUsage || 1500 };
 };
 
@@ -1268,6 +1269,7 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
         responseSchema: biblesSchema,
         providerSettings,
         geminiModel,
+        maxTokens: 8192,
     });
 
     let parsed: any;
@@ -1292,11 +1294,60 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
         }
     }
 
-    const bibles = parsed as Bibles;
+    const bibles = {
+        ...parsed,
+        characters: Array.isArray(parsed?.characters) ? parsed.characters.filter(Boolean) : [],
+        locations: Array.isArray(parsed?.locations) ? parsed.locations.filter(Boolean) : [],
+    } as Bibles;
+
     if (!Array.isArray(bibles.characters) || !Array.isArray(bibles.locations)) {
         console.error('AI Service: Invalid bibles structure:', Object.keys(parsed));
         throw new Error('Bibles response missing characters or locations array');
     }
+
+    bibles.characters = bibles.characters.map((character: any, index: number) => ({
+        ...character,
+        name: safe(character?.name, `Character ${index + 1}`),
+        source_images: Array.isArray(character?.source_images) ? character.source_images : [],
+        costuming_and_props: {
+            outfit_style: safe(character?.costuming_and_props?.outfit_style),
+            specific_clothing_items: Array.isArray(character?.costuming_and_props?.specific_clothing_items) ? character.costuming_and_props.specific_clothing_items : [],
+            signature_props: Array.isArray(character?.costuming_and_props?.signature_props) ? character.costuming_and_props.signature_props : [],
+        },
+        performance_and_demeanor: character?.performance_and_demeanor || {},
+        cinematic_style: {
+            ...(character?.cinematic_style || {}),
+            color_dominants_in_shots: Array.isArray(character?.cinematic_style?.color_dominants_in_shots)
+                ? character.cinematic_style.color_dominants_in_shots
+                : [],
+        },
+        physical_appearance: character?.physical_appearance || {},
+    }));
+
+    bibles.locations = bibles.locations.map((location: any, index: number) => ({
+        ...location,
+        name: safe(location?.name, `Location ${index + 1}`),
+        source_images: Array.isArray(location?.source_images) ? location.source_images : [],
+        atmosphere_and_environment: location?.atmosphere_and_environment || {},
+        architectural_and_natural_details: {
+            ...(location?.architectural_and_natural_details || {}),
+            key_features: Array.isArray(location?.architectural_and_natural_details?.key_features)
+                ? location.architectural_and_natural_details.key_features
+                : [],
+        },
+        sensory_details: {
+            ...(location?.sensory_details || {}),
+            textures: Array.isArray(location?.sensory_details?.textures) ? location.sensory_details.textures : [],
+            environmental_effects: Array.isArray(location?.sensory_details?.environmental_effects)
+                ? location.sensory_details.environmental_effects
+                : [],
+        },
+        cinematic_style: {
+            ...(location?.cinematic_style || {}),
+            color_palette: Array.isArray(location?.cinematic_style?.color_palette) ? location.cinematic_style.color_palette : [],
+        },
+    }));
+
     return { bibles, tokenUsage: result.tokenUsage || 2500 };
 };
 
@@ -1304,17 +1355,20 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
 export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, providerSettings?: AIProviderSettings): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
     console.log(`AI Service: Generating Storyboard...`);
     const geminiModel = 'gemini-2.5-flash';
+    const structure = Array.isArray(analysis?.structure) ? analysis.structure : [];
+    const totalDuration = structure.length > 0 ? structure[structure.length - 1]?.end || 0 : 0;
 
     const prompt = `
       Act as an expert music video director and cinematographer. Create a complete storyboard based on the provided song analysis, creative brief, and visual bibles.
       The output must be a valid JSON object.
       
-      **CRITICAL VIDEO GENERATION CONSTRAINT**: ComfyUI generates video clips that are 6-8 seconds long. Each shot you create will result in ONE 6-8 second video clip.
-      
-      **COVERAGE REQUIREMENT**: The song is ${analysis.structure[analysis.structure.length - 1]?.end || 0} seconds long. You MUST create enough shots to cover the ENTIRE song duration.
-      - Target approximately ${Math.ceil((analysis.structure[analysis.structure.length - 1]?.end || 0) / 7)} shots total (song duration ÷ 7 seconds average clip length).
+      **CRITICAL VIDEO GENERATION CONSTRAINT**: Each shot you create will result in ONE 3-5 second video clip. Music videos cut FAST — think MTV pacing, not film. Short, punchy shots create energy and keep viewers engaged.
+
+      **COVERAGE REQUIREMENT**: The song is ${totalDuration} seconds long. You MUST create enough shots to cover the ENTIRE song duration.
+      - Target approximately ${Math.ceil(totalDuration / 4)} shots total (song duration ÷ 4 seconds average clip length).
       - Distribute shots evenly across ALL song sections to ensure complete coverage.
       - Each section should have multiple shots based on its duration (longer sections need more shots).
+      - Vary shot duration: quick 2-3s cuts for high-energy moments (chorus, drops), 4-5s holds for emotional beats (verse introspection, bridge climax).
       
       **RHYTHM IS KEY**: Use the provided 'beats' data. The start and end times of your generated shots MUST align with the beat timestamps provided in the analysis. This is crucial for creating a rhythmically engaging video.
       
@@ -1347,6 +1401,12 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       **CONCERT/PERFORMANCE STYLE**:
       - If Creative Brief videoType is "Concert Performance", prioritize stage and audience shots, dynamic lights, and multi-angle coverage. Ensure most shots visibly feature the singer(s) and enable lip-sync hints where vocals occur.
       
+      **CRITICAL: NO DUPLICATE SHOTS.** Every single shot MUST have a unique subject, action, and composition. Even when a chorus or section repeats in the song:
+      - Use COMPLETELY DIFFERENT camera angles, locations, character actions, and visual metaphors for each repetition.
+      - Chorus 1 might show the singer close-up; Chorus 2 could be a wide two-shot; Chorus 3 might cut to a symbolic image.
+      - NEVER copy-paste the same shot description. Each shot description must be unique across the entire storyboard.
+      - Vary the 'subject' field dramatically between shots — different framing, different moment, different emotion.
+
       Avoid repetitive patterns. For example:
       - If the song has themes of freedom, consider open landscapes, birds in flight, breaking chains, or expansive drone shots rather than generic imagery.
       - If it's a love song, explore specific relationship dynamics from the lyrics rather than generic romantic tropes.
@@ -1354,9 +1414,18 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       - For melancholic songs, use slower pacing, muted colors, intimate close-ups, rain/weather effects, or solitary figure compositions.
       
       For each section in the song's structure, calculate how many shots are needed:
-      - Short sections (0-20s): 2-3 shots
-      - Medium sections (20-40s): 4-6 shots
-      - Long sections (40s+): 6-10 shots
+      - Short sections (0-10s): 2-3 shots
+      - Medium sections (10-20s): 4-6 shots
+      - Long sections (20-40s): 6-10 shots
+      - Very long sections (40s+): 10-15 shots
+
+      **LYRIC-SPECIFIC VISUALS**: For EACH shot, the 'subject' description MUST reference a specific lyric line, image, or emotion from that exact moment in the song. Do NOT use generic descriptions. If the lyric says "broken glass on the floor", show broken glass. If the lyric says "I watch the way you walk the room", show the character walking through a room being watched. Be LITERAL with lyric imagery first, then add cinematic interpretation on top.
+
+      **VISUAL CONTRAST BETWEEN SECTIONS**: Each song section must have a distinctly different visual identity:
+      - Verses: intimate, grounded, naturalistic — close framing, warm practical lighting
+      - Choruses: expansive, heightened, dramatic — wider shots, stylized lighting, more movement
+      - Bridge: visual rupture — completely different color palette, location, or visual style from everything before
+      - Intro/Outro: establishing/resolving shots that bookend the visual narrative
       
       For EACH SHOT, provide ALL of the following details:
       - A detailed description for 'subject' and 'composition'.
@@ -1482,11 +1551,23 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
         responseSchema: storyboardSchema,
         providerSettings,
         geminiModel,
+        maxTokens: 16384,
     });
     const storyboard = JSON.parse(result.text) as Storyboard;
 
     // Post-process to guarantee full coverage with 6–8s shots aligned to beats
     const covered = ensureStoryboardCoverage(analysis, brief, bibles, storyboard);
+
+    // Assign every shot a simple, globally unique sequential number
+    let shotNum = 1;
+    for (const scene of covered.scenes) {
+        for (const shot of scene.shots) {
+            shot.id = `shot-${shotNum}`;
+            shotNum++;
+        }
+    }
+    console.log(`AI Service: Storyboard has ${shotNum - 1} shots with unique IDs (shot-1 through shot-${shotNum - 1})`);
+
     return { storyboard: covered, tokenUsage: 4000 };
 };
 
@@ -1498,8 +1579,11 @@ function ensureStoryboardCoverage(
     sb: Storyboard
 ): Storyboard {
     try {
-        const totalDuration = analysis.structure?.[analysis.structure.length - 1]?.end || 0;
-        const expectedShots = Math.max(1, Math.ceil(totalDuration / 7));
+        const structure = Array.isArray(analysis?.structure) ? analysis.structure : [];
+        const characters = Array.isArray(bibles?.characters) ? bibles.characters.filter(Boolean) : [];
+        const locations = Array.isArray(bibles?.locations) ? bibles.locations.filter(Boolean) : [];
+        const totalDuration = structure.length > 0 ? structure[structure.length - 1]?.end || 0 : 0;
+        const expectedShots = Math.max(1, Math.ceil(totalDuration / 4));
 
         // Helper: snap a time to the nearest beat within a window
         const beats = (analysis.beats || []).map(b => b.time).sort((a, b) => a - b);
@@ -1518,19 +1602,19 @@ function ensureStoryboardCoverage(
         // Build index: vocalist -> character name
         const vocalistMap: Record<string, string> = {};
         const vocalists = analysis.vocals?.vocalists || [];
-        for (let i = 0; i < vocalists.length && i < bibles.characters.length; i++) {
-            vocalistMap[vocalists[i].id] = bibles.characters[i].name;
+        for (let i = 0; i < vocalists.length && i < characters.length; i++) {
+            vocalistMap[vocalists[i].id] = characters[i].name;
         }
 
         // Compute scenes by structure sections; ensure each has enough shots
         const scenes = [...(sb.scenes || [])].map(s => ({ ...s, shots: [...(s.shots || [])], transitions: Array.isArray(s.transitions) ? s.transitions : [] }));
         const sectionMap = new Map<string, { start: number; end: number; name: string }>();
-        for (const sec of analysis.structure || []) sectionMap.set(sec.name + ':' + sec.start, { start: sec.start, end: sec.end, name: sec.name });
+        for (const sec of structure) sectionMap.set(sec.name + ':' + sec.start, { start: sec.start, end: sec.end, name: sec.name });
 
         // Fill or create scenes per section
         const ensureShotsForSection = (sectionName: string, start: number, end: number) => {
             const duration = Math.max(0, end - start);
-            const target = Math.max(1, Math.ceil(duration / 7));
+            const target = Math.max(1, Math.ceil(duration / 4));
             // Find existing scene or create
             let scene = scenes.find(sc => sc.section === sectionName && Math.abs(sc.start - start) < 1.5);
             if (!scene) {
@@ -1551,16 +1635,16 @@ function ensureStoryboardCoverage(
             // If existing shots, advance t
             if (existing.length > 0) t = Math.max(t, existing[existing.length - 1].end);
             let shotIndex = existing.length;
-            while (shotIndex < target && t + 5.5 < end) {
+            while (shotIndex < target && t + 2.5 < end) {
                 const rawStart = snapToBeat(t);
-                const desired = 7; // seconds
+                const desired = 4; // seconds — music videos cut fast
                 const rawEnd = snapToBeat(Math.min(end, rawStart + desired));
-                const clipDur = Math.max(6, Math.min(8, rawEnd - rawStart || desired));
+                const clipDur = Math.max(3, Math.min(5, rawEnd - rawStart || desired));
                 const finalEnd = snapToBeat(Math.min(end, rawStart + clipDur));
 
                 // Choose defaults
-                const primaryChar = bibles.characters[0]?.name;
-                const loc = bibles.locations[0]?.name;
+                const primaryChar = characters[0]?.name;
+                const loc = locations[0]?.name;
                 const id = `${sectionName}-${Math.round(rawStart * 10)}`;
 
                 // Determine performers and lip-sync hint
@@ -1622,6 +1706,74 @@ function ensureStoryboardCoverage(
                     : verseMoves;
                 const pick = movePool[shotIndex % movePool.length];
 
+                // Build a unique subject line from actual lyric content + visual elements
+                const charName = primaryChar || 'Subject';
+                const locName = loc || 'the setting';
+                const lyricAnalysis = analysis.lyric_analysis;
+                const keyVisuals = lyricAnalysis?.key_visual_elements || [];
+                const themes = lyricAnalysis?.primary_themes || [];
+                const emotionalArc = lyricAnalysis?.emotional_arc || '';
+                const lineByLine = lyricAnalysis?.line_by_line_story || '';
+
+                // Extract visual cues from the line-by-line story for this section
+                const sectionStoryLines = lineByLine.split(/[.\n]/).filter(l => l.trim().length > 10);
+                const sectionVisual = keyVisuals[shotIndex % Math.max(1, keyVisuals.length)] || '';
+                const sectionTheme = themes[shotIndex % Math.max(1, themes.length)] || '';
+
+                // Build lyric-aware subjects that vary by section type AND actual song content
+                const buildSubject = (): string => {
+                    const storyHint = sectionStoryLines[shotIndex % Math.max(1, sectionStoryLines.length)] || '';
+                    const visualHint = sectionVisual;
+
+                    if (isIntro) {
+                        const introOptions = [
+                            `Wide establishing shot of ${locName}, ${visualHint || 'atmospheric haze'}, setting the tone for ${sectionTheme || 'the story'}`,
+                            `Slow reveal of ${charName} in silhouette, ${emotionalArc.split(',')[0] || 'contemplative mood'}, opening moment`,
+                            `Detail shot: ${visualHint || 'symbolic object'} in ${locName}, shallow focus, narrative foreshadowing`,
+                            `${charName} alone in ${locName}, first glimpse — ${storyHint || 'the world before the story begins'}`,
+                        ];
+                        return introOptions[shotIndex % introOptions.length];
+                    }
+                    if (isChorus) {
+                        const chorusOptions = [
+                            `${charName} ${storyHint ? '— ' + storyHint.trim() : 'expressing raw emotion'}, dramatic lighting, wide framing`,
+                            `Dynamic shot of ${visualHint || charName}, energy peaks, ${sectionTheme || 'heightened emotion'} fills the frame`,
+                            `${charName} center frame, ${storyHint || 'the core emotion laid bare'}, cinematic backlighting`,
+                            `${visualHint || charName} in motion, chorus energy — ${sectionTheme || 'passion and intensity'}`,
+                            `Wide shot: ${charName} and ${locName} unified, ${storyHint || 'the emotional climax of this moment'}`,
+                            `Close-up: ${charName}'s face, ${storyHint || 'singing with full conviction'}, light flaring behind`,
+                        ];
+                        return chorusOptions[shotIndex % chorusOptions.length];
+                    }
+                    if (isBridge) {
+                        const bridgeOptions = [
+                            `Extreme close-up of ${charName}, ${storyHint || 'moment of transformation'}, shifting light`,
+                            `${visualHint || 'Symbolic imagery'}: ${storyHint || 'the turning point'}, different color palette from earlier`,
+                            `${charName} in a new visual context — ${storyHint || 'everything changes here'}, dramatic contrast`,
+                        ];
+                        return bridgeOptions[shotIndex % bridgeOptions.length];
+                    }
+                    if (isOutro) {
+                        const outroOptions = [
+                            `${charName} ${storyHint || 'finding resolution'}, fading warm light, sense of closure`,
+                            `Final wide shot of ${locName}, ${visualHint || 'the world after the story'}, peaceful`,
+                            `Slow pull back from ${charName}, ${emotionalArc.split(',').pop()?.trim() || 'quiet acceptance'}, ending`,
+                        ];
+                        return outroOptions[shotIndex % outroOptions.length];
+                    }
+                    // Verse — intimate, grounded, lyric-literal
+                    const verseOptions = [
+                        `${charName} ${storyHint || 'in a quiet moment'}, naturalistic lighting in ${locName}`,
+                        `Close framing: ${charName} with ${visualHint || 'meaningful detail'}, ${sectionTheme || 'introspection'}`,
+                        `${charName} moving through ${locName}, ${storyHint || 'the story unfolds'}, warm practical light`,
+                        `Detail shot: ${visualHint || 'hands, texture, environment'} — ${sectionTheme || 'grounding the narrative'}`,
+                        `${charName} interacting with the space, ${storyHint || 'living in the lyrics'}, intimate framing`,
+                        `${locName} framed around ${charName}, ${visualHint || 'visual metaphor'}, ${storyHint || 'verse narrative'}`,
+                    ];
+                    return verseOptions[shotIndex % verseOptions.length];
+                };
+                const subject = buildSubject();
+
                 const newShot: StoryboardShot = {
                     id,
                     start: rawStart,
@@ -1629,7 +1781,8 @@ function ensureStoryboardCoverage(
                     shot_type: pick.shot,
                     camera_move: pick.move,
                     composition: 'Rule of thirds, shallow depth of field',
-                    subject: brief.videoType === 'Concert Performance' ? 'Singer performing on stage with dynamic lights' : 'Subject expressing lyric emotion',
+                    subject,
+                    action: subject.split(',').slice(1).join(',').trim() || 'expressing emotion naturally',
                     location_ref: loc || 'Primary Location',
                     character_refs: primaryChar ? [primaryChar] : [],
                     performer_refs: performer_refs.length ? performer_refs : undefined,
@@ -1651,7 +1804,7 @@ function ensureStoryboardCoverage(
                 const shotWithModel = { ...newShot, ...chooseVideoModel(newShot, sectionName, brief) };
                 scene.shots.push(shotWithModel);
                 shotIndex++;
-                t = finalEnd + (60 / Math.max(60, analysis.bpm || 120));
+                t = finalEnd; // No gap — next shot starts right where this one ends for tight editing
             }
             // Ensure transitions array length
             const shotCount = scene.shots.length;
@@ -1660,14 +1813,14 @@ function ensureStoryboardCoverage(
             }
         };
 
-        for (const sec of analysis.structure || []) {
+        for (const sec of structure) {
             ensureShotsForSection(sec.name, sec.start, sec.end);
         }
 
         // If global shot count still low, add more to longest sections
         const flatShots = scenes.flatMap(s => s.shots);
         if (flatShots.length < expectedShots) {
-            const sectionsByDur = [...(analysis.structure || [])].sort((a, b) => (b.end - b.start) - (a.end - a.start));
+            const sectionsByDur = [...structure].sort((a, b) => (b.end - b.start) - (a.end - a.start));
             let idx = 0;
             while (scenes.flatMap(s => s.shots).length < expectedShots && idx < sectionsByDur.length) {
                 const sec = sectionsByDur[idx++];
@@ -1700,108 +1853,12 @@ function ensureStoryboardCoverage(
  * Other providers (HuggingFace, etc.) use /images/generations.
  */
 async function generateImageWithProvider(provider: AIProvider, prompt: string): Promise<{ imageUrl: string, tokenUsage: number }> {
-    const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (provider.apiKey) {
-        headers['Authorization'] = `Bearer ${provider.apiKey}`;
-    }
-
-    const isOpenRouter = provider.id === 'openrouter' || baseUrl.includes('openrouter.ai');
-
-    if (isOpenRouter) {
-        // OpenRouter: image generation via /chat/completions with modalities param
-        const endpoint = `${baseUrl}/chat/completions`;
-        let model = provider.selectedModel;
-        console.log(`[ImageProvider] OpenRouter image gen: ${model}`);
-
-        let response = await fetch(endpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                model,
-                modalities: ['image'],
-                messages: [{ role: 'user', content: prompt }],
-                image_config: {
-                    aspect_ratio: '16:9',
-                    image_size: '1K',
-                },
-            }),
-        });
-
-        // Retry with :free suffix if model not found
-        if (response.status === 404 && !model.includes(':')) {
-            model = model + ':free';
-            console.log(`[ImageProvider] Retrying with :free suffix: ${model}`);
-            response = await fetch(endpoint, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    model,
-                    modalities: ['image'],
-                    messages: [{ role: 'user', content: prompt }],
-                    image_config: { aspect_ratio: '16:9', image_size: '1K' },
-                }),
-            });
-        }
-
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => '');
-            throw new Error(`OpenRouter image API error ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-        const message = data.choices?.[0]?.message;
-
-        // OpenRouter returns images in message.images[].image_url as base64 data URLs
-        const imageUrl = message?.images?.[0]?.image_url;
-        if (imageUrl) {
-            const usage = data.usage;
-            const tokenUsage = (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0);
-            return { imageUrl, tokenUsage };
-        }
-
-        throw new Error('OpenRouter returned no image in response');
-    }
-
-    // Other providers: OpenAI-compatible /images/generations endpoint
-    const imageEndpoint = `${baseUrl}/images/generations`;
-    console.log(`[ImageProvider] Calling ${imageEndpoint} with model ${provider.selectedModel}`);
-
-    const response = await fetch(imageEndpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-            model: provider.selectedModel,
-            prompt,
-            n: 1,
-            size: '1024x576',
-            response_format: 'b64_json',
-        }),
+    return backendService.generateProviderImage({
+        provider,
+        prompt,
+        width: 1024,
+        height: 576,
     });
-
-    if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(`${provider.name} image API error ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    const imageData = data.data?.[0];
-
-    if (imageData?.b64_json) {
-        return { imageUrl: `data:image/png;base64,${imageData.b64_json}`, tokenUsage: 0 };
-    } else if (imageData?.url) {
-        const imgResp = await fetch(imageData.url);
-        const blob = await imgResp.blob();
-        const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-        return { imageUrl: base64, tokenUsage: 0 };
-    }
-
-    throw new Error(`${provider.name} returned no image data`);
 }
 
 export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
@@ -1809,29 +1866,46 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
     const optimized = providerSettings ? getOptimizedImagePrompt(shot, bibles, brief, providerSettings) : null;
     const prompt = optimized?.prompt || getPromptForImageShot(shot, bibles, brief);
 
-    // --- Priority 1: Use configured image provider (OpenRouter, HuggingFace, etc.) ---
-    // Skip ComfyUI here — it's handled separately in Priority 3 with IP-Adapter support
     const imageProvider = providerSettings?.image;
     const isComfyUIProvider = imageProvider?.id === 'comfyui' || imageProvider?.id === 'comfyui-video';
-    if (imageProvider?.enabled && imageProvider.baseUrl && imageProvider.selectedModel && !isComfyUIProvider) {
-        // If image provider has no API key but shares the same service as thinking, borrow the key
-        const resolvedProvider = { ...imageProvider };
-        if (!resolvedProvider.apiKey && providerSettings?.thinking?.apiKey && resolvedProvider.id === providerSettings.thinking.id) {
-            resolvedProvider.apiKey = providerSettings.thinking.apiKey;
-            console.log('AI Service: Borrowing API key from thinking provider for image generation');
-        }
-        console.log(`AI Service: Generating image with configured provider: ${resolvedProvider.name} / ${resolvedProvider.selectedModel} (hasKey: ${!!resolvedProvider.apiKey})`, shot.id);
+
+    // --- If a non-ComfyUI provider is configured, use it directly ---
+    if (imageProvider && !isComfyUIProvider) {
+        console.log(`AI Service: Generating shot image via provider: ${imageProvider.id}`, shot.id);
+        return generateImageWithProvider(imageProvider, prompt);
+    }
+
+    // --- Priority 1: ComfyUI with IP-Adapter face lock (best consistency) ---
+    const characterRef = shot.character_refs?.[0];
+    const character = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
+    const referenceImageUrl = character?.source_images?.[0];
+    if (referenceImageUrl && referenceImageUrl !== 'error') {
         try {
-            return await generateImageWithProvider(resolvedProvider, prompt);
+            const health = await backendService.checkComfyUIHealth();
+            if (health.available) {
+                console.log(`AI Service: Using ComfyUI + IP-Adapter for face consistency (ref: ${character?.name})`, shot.id);
+                const enhancedPrompt = getEnhancedPromptForComfyUI(shot, bibles, brief);
+                const result = await backendService.generateImageWithComfyUI({
+                    prompt: enhancedPrompt,
+                    negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, extra limbs, watermark, text, signature, face morphing, different person, changing face",
+                    width: 1280,
+                    height: 720,
+                    steps: 35,
+                    cfg_scale: 7.5,
+                    reference_face_image: referenceImageUrl,
+                    ipadapter_weight: 0.85,
+                });
+                return { imageUrl: result.imageUrl, tokenUsage: 0 };
+            }
         } catch (error) {
-            console.warn(`AI Service: ${imageProvider.name} image generation failed, falling through to fallbacks:`, error);
+            console.warn('AI Service: ComfyUI IP-Adapter failed, falling through to API provider:', error);
         }
     }
 
-    // --- Priority 2: ComfyUI (local) ---
+    // --- ComfyUI without IP-Adapter ---
     try {
         console.log("AI Service: Checking ComfyUI availability...");
-        const health = await backendService.checkComfyUIHealth();
+        const health = await backendService.checkComfyUIHealth(imageProvider?.baseUrl);
 
         if (health.available) {
             console.log("AI Service: Generating image for shot with ComfyUI...", shot.id);
@@ -1849,6 +1923,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
 
             const params: any = {
                 prompt: enhancedPrompt,
+                baseUrl: imageProvider?.baseUrl,
                 negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, inconsistent lighting, unrealistic, bad proportions, duplicate, clone, cartoon, anime, illustration, 3d render, painting",
                 width: 1024,
                 height: 576,
@@ -1891,16 +1966,23 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             const result = await backendService.generateImageWithComfyUI(params);
             return { imageUrl: result.imageUrl, tokenUsage: 0 };
         } else {
-            console.log("AI Service: ComfyUI unavailable, no further fallbacks available...");
+            console.log("AI Service: ComfyUI unavailable, trying provider fallback...");
         }
     } catch (error) {
-        console.warn("AI Service: ComfyUI generation failed, no further fallbacks available:", error);
+        console.warn("AI Service: ComfyUI generation failed, trying provider fallback:", error);
+    }
+
+    // Fallback: use configured image provider (OpenRouter/FLUX, HuggingFace, etc.)
+    const fallbackProvider = providerSettings?.image;
+    if (fallbackProvider) {
+        console.log(`AI Service: Generating shot image via provider: ${fallbackProvider.id}`);
+        return generateImageWithProvider(fallbackProvider, prompt);
     }
 
     throw new Error("All image generation methods failed. Please check your image provider settings and API key.");
 };
 
-export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief): Promise<{ imageUrl: string, tokenUsage: number }> => {
+export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const pa = character.physical_appearance || {} as any;
     const cos = character.costuming_and_props || {} as any;
     const cin = character.cinematic_style || {} as any;
@@ -1920,15 +2002,7 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
       - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
-    try {
-        console.log("AI Service: Checking ComfyUI availability...");
-        const health = await backendService.checkComfyUIHealth();
-
-        if (health.available) {
-            console.log("AI Service: Generating character image with ComfyUI...", character.name);
-
-            // Enhanced prompt with full granular character details for identity lock
-            const enhancedPrompt = `
+    const enhancedPrompt = `
 Cinematic ${safe(brief.style)} character reference portrait, ${safe(brief.feel)} mood, 3:4 aspect ratio.
 ${safe(character.name)}: ${safe(pa.gender_presentation)} ${safe(pa.ethnicity)} person, ${safe(pa.age_range)} years old, ${safe(pa.body_type)} build.
 Skin: ${safe(pa.skin_tone)}.
@@ -1942,8 +2016,15 @@ Expression: ${safe(character.performance_and_demeanor?.emotional_arc)}.
 Lighting: ${safe(cin.lighting_style)}.
 Style: ${safeJoin(cin.color_dominants_in_shots)} color palette.
 Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurface scattering, anatomically perfect face, sharp focus, ${cin.camera_lenses}.
-            `.trim().replace(/^ +/gm, '');
+    `.trim().replace(/^ +/gm, '');
 
+    // ComfyUI image generation
+    try {
+        console.log("AI Service: Checking ComfyUI availability...");
+        const health = await backendService.checkComfyUIHealth();
+
+        if (health.available) {
+            console.log("AI Service: Generating character image with ComfyUI...", character.name);
             const result = await backendService.generateImageWithComfyUI({
                 prompt: enhancedPrompt,
                 negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions, plastic skin, airbrushed, smooth skin, doll-like, uncanny valley, asymmetric eyes, wrong eye color, face morphing, hair color change, outfit change",
@@ -1961,7 +2042,7 @@ Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurfac
     throw new Error("Character image generation failed. Please check your image provider settings.");
 };
 
-export const generateImageForBibleLocation = async (location: LocationBible, brief: CreativeBrief): Promise<{ imageUrl: string, tokenUsage: number }> => {
+export const generateImageForBibleLocation = async (location: LocationBible, brief: CreativeBrief, providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
     const atm = location.atmosphere_and_environment || {} as any;
     const arch = location.architectural_and_natural_details || {} as any;
     const sens = location.sensory_details || {} as any;
@@ -1977,15 +2058,7 @@ export const generateImageForBibleLocation = async (location: LocationBible, bri
       - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
-    try {
-        console.log("AI Service: Checking ComfyUI availability...");
-        const health = await backendService.checkComfyUIHealth();
-
-        if (health.available) {
-            console.log("AI Service: Generating location image with ComfyUI...", location.name);
-
-            // Enhanced prompt with full location details
-            const enhancedPrompt = `
+    const enhancedPrompt = `
 Cinematic ${brief.style} environment concept art, ${brief.feel} mood, 16:9 aspect ratio.
 ${location.name}: ${location.setting_type}.
 Time: ${safe(atm.time_of_day)}, Weather: ${safe(atm.weather)}, Mood: ${safe(atm.dominant_mood)}.
@@ -1996,8 +2069,15 @@ Lighting: ${safe(cin.lighting_style)}.
 Color palette: ${safeJoin(cin.color_palette)}.
 Camera: ${safe(cin.camera_perspective)}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
-            `.trim().replace(/^ +/gm, '');
+    `.trim().replace(/^ +/gm, '');
 
+    // Try ComfyUI first
+    try {
+        console.log("AI Service: Checking ComfyUI availability...");
+        const health = await backendService.checkComfyUIHealth();
+
+        if (health.available) {
+            console.log("AI Service: Generating location image with ComfyUI...", location.name);
             const result = await backendService.generateImageWithComfyUI({
                 prompt: enhancedPrompt,
                 negative_prompt: "blurry, low quality, worst quality, distorted, people, characters, humans, figures, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, unrealistic lighting",
@@ -2009,7 +2089,14 @@ Professional environment concept art, high detail, sharp focus, photorealistic, 
             return { imageUrl: result.imageUrl, tokenUsage: 0 };
         }
     } catch (error) {
-        console.warn("AI Service: ComfyUI generation failed:", error);
+        console.warn("AI Service: ComfyUI generation failed, trying provider fallback:", error);
+    }
+
+    // Fallback: use configured image provider (OpenRouter/FLUX, HuggingFace, etc.)
+    const imageProvider = providerSettings?.image;
+    if (imageProvider) {
+        console.log(`AI Service: Generating location image via provider: ${imageProvider.id}`);
+        return generateImageWithProvider(imageProvider, enhancedPrompt);
     }
 
     throw new Error("Location image generation failed. Please check your image provider settings.");
@@ -2018,36 +2105,10 @@ Professional environment concept art, high detail, sharp focus, photorealistic, 
 
 export const editImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, userPrompt: string): Promise<{ imageUrl: string, tokenUsage: number }> => {
     console.log("AI Service: Editing image for shot with Gemini...", shot.id, userPrompt);
-    const ai = getAiClient();
     if (!shot.preview_image_url.startsWith('data:')) {
         throw new Error("Cannot edit a non-data URL image.");
     }
-
-    const [header, base64Data] = shot.preview_image_url.split(',');
-    const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-            parts: [
-                { inlineData: { data: base64Data, mimeType: mimeType } },
-                { text: userPrompt },
-            ],
-        },
-        config: {
-            // FIX: Corrected responseModalities to only include Modality.IMAGE as per API guidelines.
-            responseModalities: [Modality.IMAGE],
-        },
-    });
-
-    const partWithData = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (partWithData?.inlineData) {
-        const newBase64ImageBytes: string = partWithData.inlineData.data;
-        const newImageUrl = `data:${partWithData.inlineData.mimeType};base64,${newBase64ImageBytes}`;
-        return { imageUrl: newImageUrl, tokenUsage: 750 };
-    }
-
-    throw new Error("AI did not return an edited image.");
+    return backendService.editImageWithGemini(shot.preview_image_url, userPrompt);
 };
 
 
@@ -2128,6 +2189,7 @@ export const generateClipForShot = async (
     const camera_motion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements?.camera_motion);
 
     const { promptId } = await backendService.generateVideoClip({
+        baseUrl: providerSettings?.video?.baseUrl,
         imageUrl: image,
         prompt,
         duration,
@@ -2237,19 +2299,31 @@ export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboar
     const geminiModel = 'gemini-2.5-flash';
 
     const prompt = `
-      You are an AI music video editor. Your task is to suggest visual effects (VFX) that sync with the music's energy.
-      Analyze the provided song structure and storyboard.
-      Identify shots that occur during high-energy sections (like a 'chorus' or 'solo').
-      For 1-2 of those shots, suggest a suitable VFX from the provided list.
-      Return your suggestions as a valid JSON array.
+      You are an expert AI music video editor and VFX supervisor. Your task is to assign a visual effect (VFX) to EVERY shot in the storyboard.
 
-      Available VFX Presets: ${VFX_PRESETS.map(p => p.name).join(', ')}
+      **CRITICAL: You MUST return a suggestion for EVERY shot listed below — no exceptions.** Each shot ID must appear exactly once in your output.
 
-      Song Analysis:
+      Analyze each shot's content, the section it belongs to (verse, chorus, bridge, etc.), and the music's energy at that moment.
+      Choose the VFX that best enhances the visual storytelling:
+
+      **VFX Selection Guide:**
+      ${VFX_PRESETS.map(p => `- **${p.name}**: ${p.description}`).join('\n      ')}
+
+      **Rules for VFX assignment:**
+      - **Slow Motion**: Use for emotional peaks, dramatic reveals, tears, prayer, intimate moments
+      - **Speed Ramp**: Use for transitions between energy levels, action sequences, dynamic movement
+      - **Lens Flare**: Use for hopeful moments, spiritual scenes, golden hour shots, light-focused compositions
+      - **Glitch Effect**: Use for tension, confusion, surreal moments, digital/modern aesthetics
+      - **Vintage Film Grain**: Use for nostalgic moments, flashbacks, warm intimate verses, retro feel
+      - Vary your choices — don't use the same VFX for more than 3 consecutive shots
+      - Match VFX intensity to musical energy: verses get subtler effects, choruses get more dramatic ones
+      - Consider the emotional arc: effects should evolve as the song progresses
+
+      Song Structure:
       ${JSON.stringify(songAnalysis.structure, null, 2)}
 
-      Storyboard (shot IDs and timings):
-      ${JSON.stringify(storyboard.scenes.map(s => ({ section: s.section, shots: s.shots.map(sh => ({ id: sh.id, start: sh.start, end: sh.end })) })), null, 2)}
+      ALL Shots (you MUST assign a VFX to each one):
+      ${JSON.stringify(storyboard.scenes.flatMap(s => s.shots.map(sh => ({ id: sh.id, section: s.section, start: sh.start, end: sh.end, subject: sh.subject, action: sh.action, shot_type: sh.shot_type, camera_move: sh.camera_move }))), null, 2)}
     `;
 
     const vfxSchema = {

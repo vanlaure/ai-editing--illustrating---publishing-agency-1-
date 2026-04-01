@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Step } from '../types';
-import { backendService } from '../services/backendService';
+import { backendService, type ComfyUIHealthResult } from '../services/backendService';
+import { testConnection } from '../services/providerService';
+import { useSettings } from '../stores/settingsStore';
 
 const LoadIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -32,7 +34,7 @@ const StitchStreamIcon = () => (
     </svg>
 );
 
-type ComfyUIStatus = 'checking' | 'available' | 'unavailable';
+type ComfyUIStatus = 'checking' | 'available' | 'unavailable' | 'backend_unreachable';
 type StitchStreamStatus = 'checking' | 'available' | 'unavailable';
 
 interface HeaderActionsProps {
@@ -43,17 +45,38 @@ interface HeaderActionsProps {
 }
 
 const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProductionFile, getFullState, onRestart }) => {
+    const { settings } = useSettings();
     const [comfyUIStatus, setComfyUIStatus] = useState<ComfyUIStatus>('checking');
+    const [comfyUIHealth, setComfyUIHealth] = useState<ComfyUIHealthResult | null>(null);
     const [stitchStatus, setStitchStatus] = useState<StitchStreamStatus>('checking');
     const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null);
     const [lastStitchCheckTime, setLastStitchCheckTime] = useState<Date | null>(null);
 
+    // Determine the active image provider — check ComfyUI if configured, otherwise test the provider API
+    const imageProvider = settings.image;
+    const isComfyImage = imageProvider.id === 'comfyui';
+    const imageProviderLabel = isComfyImage ? 'ComfyUI' : (imageProvider.name || imageProvider.id);
+
     const checkComfyUIStatus = async () => {
         try {
-            const health = await backendService.checkComfyUIHealth();
-            setComfyUIStatus(health.available ? 'available' : 'unavailable');
+            if (isComfyImage) {
+                // ComfyUI: use the dedicated health endpoint
+                const health = await backendService.checkComfyUIHealth(imageProvider.baseUrl);
+                setComfyUIHealth(health);
+                if (!health.backendReachable) {
+                    setComfyUIStatus('backend_unreachable');
+                } else {
+                    setComfyUIStatus(health.available ? 'available' : 'unavailable');
+                }
+            } else {
+                // Non-ComfyUI provider (OpenRouter, etc.): test connection via provider API
+                const result = await testConnection(imageProvider, 'image');
+                setComfyUIHealth(null);
+                setComfyUIStatus(result.ok ? 'available' : 'unavailable');
+            }
             setLastCheckTime(new Date());
         } catch (error) {
+            setComfyUIHealth(null);
             setComfyUIStatus('unavailable');
             setLastCheckTime(new Date());
         }
@@ -79,7 +102,7 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProduc
             clearInterval(interval);
             clearInterval(stitchInterval);
         };
-    }, []);
+    }, [imageProvider.id, imageProvider.baseUrl, currentStep]);
 
     const handleProductionFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -111,14 +134,16 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProduc
         switch (comfyUIStatus) {
             case 'available': return 'bg-green-500';
             case 'unavailable': return 'bg-red-500';
+            case 'backend_unreachable': return 'bg-amber-500';
             case 'checking': return 'bg-yellow-500';
         }
     };
 
     const getStatusText = () => {
         switch (comfyUIStatus) {
-            case 'available': return 'ComfyUI Ready';
-            case 'unavailable': return 'ComfyUI Offline';
+            case 'available': return `${imageProviderLabel} Ready`;
+            case 'unavailable': return `${imageProviderLabel} Unreachable`;
+            case 'backend_unreachable': return 'Backend Offline';
             case 'checking': return 'Checking...';
         }
     };
@@ -140,11 +165,19 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProduc
     };
 
     const getStatusTooltip = () => {
+        const roleLabel = (currentStep === Step.Controls || currentStep === Step.Review) ? 'video' : 'image';
+        const resolvedBaseUrl = comfyUIHealth?.baseUrl || imageProvider.baseUrl || 'default';
+        const requestedBaseUrl = comfyUIHealth?.requestedBaseUrl || imageProvider.baseUrl || 'default';
+
         const baseText = comfyUIStatus === 'available'
-            ? 'ComfyUI is running and ready for local image generation'
+            ? comfyUIHealth?.fallbackUsed && resolvedBaseUrl
+                ? `${imageProviderLabel} ${roleLabel} checks are healthy via fallback ${resolvedBaseUrl}.`
+                : `${imageProviderLabel} ${roleLabel} checks are healthy at ${resolvedBaseUrl}.`
             : comfyUIStatus === 'unavailable'
-                ? 'ComfyUI is not available. Images will use your configured provider.'
-                : 'Checking ComfyUI status...';
+                ? `Backend is online, but ${imageProviderLabel} ${roleLabel} checks failed for ${requestedBaseUrl}.`
+                : comfyUIStatus === 'backend_unreachable'
+                    ? comfyUIHealth?.message || 'The backend API is offline.'
+                    : `Checking ${imageProviderLabel} ${roleLabel} status...`;
 
         return lastCheckTime
             ? `${baseText}\nLast checked: ${lastCheckTime.toLocaleTimeString()}`
@@ -169,7 +202,9 @@ const HeaderActions: React.FC<HeaderActionsProps> = ({ currentStep, onLoadProduc
                         onClick={checkComfyUIStatus}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-full transition-all ${comfyUIStatus === 'available'
                                 ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                                : comfyUIStatus === 'unavailable'
+                                : comfyUIStatus === 'backend_unreachable'
+                                    ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                                    : comfyUIStatus === 'unavailable'
                                     ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                                     : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
                             }`}

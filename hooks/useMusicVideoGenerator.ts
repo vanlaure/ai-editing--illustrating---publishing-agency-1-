@@ -183,6 +183,8 @@ type State = {
   moodboardImages: File[];
   isAnalyzingMoodboard: boolean;
   isSuggestingBrief: boolean;
+  // Pipeline agent progress (for the Plan step UI)
+  pipelineAgents: import('../types').AgentState[];
   // Executive Producer State
   isReviewing: boolean;
   executiveProducerFeedback: ExecutiveProducerFeedback | null;
@@ -220,6 +222,8 @@ type Action =
   | { type: 'SET_VISUAL_REVIEW_RESULT'; payload: VisualContinuityReport | null }
   | { type: 'LOAD_PRODUCTION_FILE', payload: any }
   | { type: 'UPDATE_SHOT_MEDIA'; payload: { shotId: string; mediaType: 'image' | 'video'; url: string } }
+  | { type: 'SET_PIPELINE_AGENTS'; payload: import('../types').AgentState[] }
+  | { type: 'UPDATE_PIPELINE_AGENT'; payload: { name: string; status: import('../types').AgentState['status'] } }
   | { type: 'RESET' };
 
 const initialState: State = {
@@ -264,6 +268,7 @@ const initialState: State = {
   moodboardImages: [],
   isAnalyzingMoodboard: false,
   isSuggestingBrief: false,
+  pipelineAgents: [],
   isReviewing: false,
   executiveProducerFeedback: null,
   isVisualReviewing: false,
@@ -411,6 +416,15 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, isVisualReviewing: true, visualContinuityReport: null };
     case 'SET_VISUAL_REVIEW_RESULT':
       return { ...state, isVisualReviewing: false, visualContinuityReport: action.payload };
+    case 'SET_PIPELINE_AGENTS':
+      return { ...state, pipelineAgents: action.payload };
+    case 'UPDATE_PIPELINE_AGENT':
+      return {
+        ...state,
+        pipelineAgents: state.pipelineAgents.map(a =>
+          a.name === action.payload.name ? { ...a, status: action.payload.status } : a
+        ),
+      };
     case 'LOAD_PRODUCTION_FILE': {
       const payload = action.payload || {};
 
@@ -437,9 +451,22 @@ const reducer = (state: State, action: Action): State => {
         ? bibles
         : null;
 
+      // The Plan step is a transient processing screen — if we restore into it,
+      // redirect to an appropriate stable step based on what data we have.
+      let restoredStep = payload.currentStep || Step.Upload;
+      if (restoredStep === Step.Plan) {
+        if (hydratedStoryboard) {
+          restoredStep = Step.Storyboard;
+        } else if (payload.songAnalysis) {
+          restoredStep = Step.Controls;
+        } else {
+          restoredStep = Step.Upload;
+        }
+      }
+
       return {
         ...initialState,
-        currentStep: payload.currentStep || Step.Upload,
+        currentStep: restoredStep,
         songFile: payload.songFile || null,
         audioUrl: payload.audioUrl || null,
         singerGender: payload.singerGender || 'unspecified',
@@ -464,7 +491,25 @@ const reducer = (state: State, action: Action): State => {
 export const useMusicVideoGenerator = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const storyboardRef = useRef<Storyboard | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const { settings: providerSettings } = useSettings();
+
+  /** Call before starting any generation loop to get a fresh signal */
+  const startGeneration = () => {
+    abortRef.current?.abort(); // cancel any previous
+    abortRef.current = new AbortController();
+    return abortRef.current.signal;
+  };
+
+  /** Call to stop all in-flight generation */
+  const stopGeneration = useCallback(() => {
+    if (abortRef.current) {
+      console.log('[Pipeline] User stopped generation');
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    dispatch({ type: 'SET_API_ERROR', payload: 'Generation stopped by user.' });
+  }, []);
 
   // Auto-research unknown models when provider settings change
   useEffect(() => {
@@ -577,7 +622,7 @@ export const useMusicVideoGenerator = () => {
     } finally {
       dispatch({ type: 'FINISH_MOODBOARD_ANALYSIS' });
     }
-  }, [state.moodboardImages]);
+  }, [state.moodboardImages, providerSettings]);
 
   const getDirectorSuggestions = useCallback(async () => {
     if (!state.songAnalysis) return;
@@ -591,14 +636,14 @@ export const useMusicVideoGenerator = () => {
     } finally {
       dispatch({ type: 'FINISH_BRIEF_SUGGESTION' });
     }
-  }, [state.songAnalysis, state.creativeBrief]);
+  }, [state.songAnalysis, state.creativeBrief, providerSettings]);
 
   const generateBibleImages = useCallback(async (bibles: Bibles, brief: CreativeBrief) => {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    for (const character of (bibles.characters || [])) {
+    for (const character of (bibles.characters || []).filter(Boolean)) {
       try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief);
+        const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief, providerSettings);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: [imageUrl] } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
@@ -608,7 +653,7 @@ export const useMusicVideoGenerator = () => {
       }
       await delay(1500); // Wait between requests to avoid rate limiting
     }
-    for (const location of (bibles.locations || [])) {
+    for (const location of (bibles.locations || []).filter(Boolean)) {
       try {
         const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: [imageUrl] } });
@@ -634,34 +679,83 @@ export const useMusicVideoGenerator = () => {
         dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Transition generation failed for scene ${scene.id}.` });
       }
     }
-  }, [state.bibles, state.creativeBrief]);
+  }, [state.bibles, state.creativeBrief, providerSettings]);
 
   const generateCreativeAssets = useCallback(async () => {
     if (!state.songAnalysis || !state.creativeBrief || !state.singerGender) return;
+    const signal = startGeneration();
     dispatch({ type: 'START_PROCESSING' });
     dispatch({ type: 'SET_STEP', payload: Step.Plan });
 
+    const agents = [
+      { name: 'Creative Director', description: 'Synthesizing your brief into a vision.', status: 'working' as const },
+      { name: 'Casting Director', description: 'Defining character aesthetics.', status: 'idle' as const },
+      { name: 'Location Scout', description: 'Finding the perfect virtual locations.', status: 'idle' as const },
+      { name: 'Storyboard Artist', description: 'Building the shot-by-shot storyboard.', status: 'idle' as const },
+    ];
+    dispatch({ type: 'SET_PIPELINE_AGENTS', payload: agents });
+
+    const t0 = performance.now();
     try {
+      // Generate bibles (characters + locations)
       const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, providerSettings);
+      if (signal.aborted) return;
+      console.log(`[Pipeline] Bibles generated in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
       dispatch({ type: 'SET_BIBLES', payload: bibles });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: biblesTokens } });
+      dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Creative Director', status: 'done' } });
 
-      generateBibleImages(bibles, state.creativeBrief);
+      // Fire off image gen in background
+      dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Casting Director', status: 'working' } });
+      dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Location Scout', status: 'working' } });
+      generateBibleImages(bibles, state.creativeBrief).then(() => {
+        dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Casting Director', status: 'done' } });
+        dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Location Scout', status: 'done' } });
+      });
 
+      // Generate storyboard
+      if (signal.aborted) return;
+      dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Storyboard Artist', status: 'working' } });
+      const t1 = performance.now();
       const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, providerSettings);
+      if (signal.aborted) return;
+      console.log(`[Pipeline] Storyboard generated in ${((performance.now() - t1) / 1000).toFixed(1)}s (total: ${((performance.now() - t0) / 1000).toFixed(1)}s)`);
+      dispatch({ type: 'UPDATE_PIPELINE_AGENT', payload: { name: 'Storyboard Artist', status: 'done' } });
       dispatch({ type: 'SET_STORYBOARD', payload: storyboard });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { storyboard: storyboardTokens } });
 
       generateAllTransitions(storyboard);
 
+      // Auto-suggest VFX for all shots (runs in background, non-blocking)
+      (async () => {
+        try {
+          console.log('[Pipeline] Auto-suggesting VFX for all shots...');
+          const { suggestions, tokenUsage: vfxTokens } = await aiService.suggestBeatSyncedVfx(state.songAnalysis!, storyboard, providerSettings);
+          const allShotsMap = new Map(storyboard.scenes.flatMap(s => s.shots).map(shot => [shot.id, shot]));
+          for (const suggestion of suggestions) {
+            const shot = allShotsMap.get(suggestion.shotId);
+            if (shot) {
+              dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, vfx: suggestion.vfx } });
+            }
+          }
+          dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: vfxTokens } });
+          console.log(`[Pipeline] VFX assigned to ${suggestions.length} shots`);
+        } catch (e) {
+          console.warn('[Pipeline] VFX auto-suggestion failed (non-critical):', e);
+        }
+      })();
+
     } catch (e) {
+      console.error(`[Pipeline] Failed after ${((performance.now() - t0) / 1000).toFixed(1)}s:`, e);
+      dispatch({ type: 'SET_PIPELINE_AGENTS', payload: agents.map(a => a.status === 'working' ? { ...a, status: 'error' as const } : a) });
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to generate creative assets.' });
       dispatch({ type: 'SET_STEP', payload: Step.Controls }); // Go back on error
     }
-  }, [state.songAnalysis, state.creativeBrief, state.singerGender, generateBibleImages, generateAllTransitions]);
+  }, [state.songAnalysis, state.creativeBrief, state.singerGender, generateBibleImages, generateAllTransitions, providerSettings]);
 
   const generateAllImages = useCallback(async () => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
+    const signal = startGeneration();
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
     const allShots = state.storyboard.scenes.flatMap(s => s.shots);
 
@@ -684,9 +778,11 @@ export const useMusicVideoGenerator = () => {
 
     // Generate remaining missing images
     for (const shot of allShots) {
+      if (signal.aborted) { console.log('[Pipeline] Image generation stopped by user'); return; }
       if (shot.preview_image_url && shot.preview_image_url !== 'error') continue;
       try {
         const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, providerSettings);
+        if (signal.aborted) return;
         dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
@@ -706,7 +802,7 @@ export const useMusicVideoGenerator = () => {
       }
       await delay(1500);
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief]);
+  }, [state.storyboard, state.bibles, state.creativeBrief, providerSettings]);
 
 
   const regenerateImage = useCallback(async (shotId: string) => {
@@ -723,7 +819,7 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to regenerate image.' });
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief]);
+  }, [state.storyboard, state.bibles, state.creativeBrief, providerSettings]);
 
   const regenerateBibleImage = useCallback(async (item: { type: 'character' | 'location', name: string }) => {
     if (!state.bibles || !state.creativeBrief) return;
@@ -737,7 +833,7 @@ export const useMusicVideoGenerator = () => {
       if (type === 'character') {
         const character = state.bibles.characters.find(c => c.name === name);
         if (!character) return;
-        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief));
+        ({ imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, state.creativeBrief, providerSettings));
       } else {
         const location = state.bibles.locations.find(l => l.name === name);
         if (!location) return;
@@ -775,6 +871,10 @@ export const useMusicVideoGenerator = () => {
     const shot = state.storyboard.scenes.flatMap(s => s.shots).find(s => s.id === shotId);
     if (!shot || !shot.preview_image_url || shot.preview_image_url === 'error') return false;
 
+    if (!shot.preview_image_url || shot.preview_image_url === 'error') {
+      dispatch({ type: 'SET_API_ERROR', payload: `Shot ${shot.id} has no preview image — generate images first before creating video clips.` });
+      return;
+    }
     dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, is_generating_clip: true } });
     let success = false;
     try {
@@ -798,6 +898,7 @@ export const useMusicVideoGenerator = () => {
       const lipSync = !!(shot.lip_sync_hint || shot.lyric_overlay?.text);
 
       const { promptId } = await backendService.generateVideoClip({
+        baseUrl: providerSettings?.video?.baseUrl,
         imageUrl: shot.preview_image_url,
         prompt,
         duration,
@@ -869,10 +970,11 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'SET_API_ERROR', payload: errorMessage });
     }
     return success;
-  }, [state.storyboard, state.creativeBrief]);
+  }, [state.storyboard, state.creativeBrief, state.bibles, state.songAnalysis, state.audioUrl, providerSettings]);
 
   const generateStoryboardBatch = useCallback(async (quality: 'draft' | 'high' = 'high') => {
     if (!state.storyboard || !state.creativeBrief) return;
+    const signal = startGeneration();
 
     // Flatten and keep scene/shot order; fall back to start time if present.
     const orderedShots = state.storyboard.scenes
@@ -892,6 +994,7 @@ export const useMusicVideoGenerator = () => {
 
     const failed: string[] = [];
     for (const entry of orderedShots) {
+      if (signal.aborted) { console.log('[Pipeline] Clip generation stopped by user'); return; }
       const ok = await generateClip(entry.shot.id, quality);
       if (!ok) failed.push(entry.shot.id);
     }
@@ -955,7 +1058,7 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get VFX suggestions.' });
       dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'idle' } });
     }
-  }, [state.songAnalysis, state.storyboard]);
+  }, [state.songAnalysis, state.storyboard, providerSettings]);
 
   const runExecutiveProducerReview = useCallback(async () => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
@@ -967,7 +1070,7 @@ export const useMusicVideoGenerator = () => {
       dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : 'Failed to get executive producer feedback.' });
       dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: { pacing_score: 0, narrative_score: 0, consistency_score: 0, final_notes: "Error generating feedback." } });
     }
-  }, [state.storyboard, state.bibles, state.creativeBrief]);
+  }, [state.storyboard, state.bibles, state.creativeBrief, providerSettings]);
 
   const runVisualQaReview = useCallback(async () => {
     if (!state.storyboard || !state.bibles) {
@@ -1192,6 +1295,7 @@ export const useMusicVideoGenerator = () => {
     generateClip,
     generateStoryboardBatch,
     regenerateClip,
+    stopGeneration,
     setVfxForShot,
     applyPostProductionEnhancement,
     suggestAndApplyBeatSyncedVfx,

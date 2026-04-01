@@ -5,7 +5,6 @@ import ExportModal from './ExportModal';
 import ExecutiveProducerFeedbackDisplay from './ExecutiveProducerFeedbackDisplay';
 import { renderVideo } from '../services/ffmpegService';
 import { STITCHSTREAM_URL } from '../services/backendService';
-const GEMINI_KEY = (import.meta as any)?.env?.VITE_GEMINI_API_KEY || (import.meta as any)?.env?.GEMINI_API_KEY;
 
 interface ReviewStepProps {
   songFile: File | null;
@@ -214,13 +213,6 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, audioUrl, storyboard,
   // Push clips into the embedded StitchStream instance whenever storyboard updates
   const syncClipsToStitchStream = useCallback(() => {
     if (!stitchFrameRef.current || !storyboard) return;
-
-    if (GEMINI_KEY) {
-      stitchFrameRef.current.contentWindow?.postMessage(
-        { type: 'MVG_SYNC_CONFIG', geminiApiKey: GEMINI_KEY },
-        '*'
-      );
-    }
 
     const orderedShots = [...storyboard.scenes.flatMap(scene => scene.shots)].sort((a, b) => a.start - b.start);
     const clips = orderedShots
@@ -458,7 +450,7 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ songFile, audioUrl, storyboard,
                   <div className="w-full h-full bg-brand-dark flex flex-col">
                     <iframe
                       title="StitchStream Studio"
-                      src={`${STITCHSTREAM_URL}${GEMINI_KEY ? `?geminiKey=${encodeURIComponent(GEMINI_KEY)}` : ''}`}
+                      src={STITCHSTREAM_URL}
                       className="w-full h-full border-0"
                       allowFullScreen
                       ref={stitchFrameRef}

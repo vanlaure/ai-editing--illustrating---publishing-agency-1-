@@ -1,26 +1,10 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { GEMINI_MODEL } from "../constants";
 import { AIAnalysis } from "../types";
-
-const initGenAI = () => {
-  const apiKey =
-    (typeof window !== 'undefined' && (window as any).__mvgConfig?.geminiApiKey) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.GEMINI_API_KEY) ||
-    process.env.GEMINI_API_KEY ||
-    process.env.API_KEY;
-
-  if (!apiKey) {
-    throw new Error("Gemini API key missing. Set GEMINI_API_KEY or VITE_GEMINI_API_KEY in your env.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
+const BACKEND_URL = (import.meta as any)?.env?.VITE_BACKEND_URL || 'http://localhost:3002';
 
 export const analyzeMontage = async (thumbnails: string[], contextText?: string): Promise<AIAnalysis> => {
   try {
-    const ai = initGenAI();
-    
     // Send up to 20 frames to get a good sense of the sequence without hitting limits too hard
     const selectedThumbnails = thumbnails.slice(0, 20);
 
@@ -63,16 +47,17 @@ export const analyzeMontage = async (thumbnails: string[], contextText?: string)
       ADDITIONAL CONTEXT (text only, do not hallucinate visuals): ${contextText ? contextText.slice(0, 4000) : 'Not provided.'}
     `;
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: {
-        parts: [
-          ...parts,
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
+    const response = await fetch(`${BACKEND_URL}/api/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        geminiModel: GEMINI_MODEL,
+        geminiContents: {
+          parts: [
+            ...parts,
+            { text: prompt }
+          ]
+        },
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -142,14 +127,15 @@ export const analyzeMontage = async (thumbnails: string[], contextText?: string)
           },
           required: ["title", "summary", "keywords", "directorNotes"]
         }
-      }
+      })
     });
 
-    if (!response.text) {
-      throw new Error("No response from AI");
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "No response from AI");
     }
 
-    return JSON.parse(response.text) as AIAnalysis;
+    return JSON.parse(payload.text) as AIAnalysis;
 
   } catch (error) {
     console.error("Gemini Analysis Error:", error);

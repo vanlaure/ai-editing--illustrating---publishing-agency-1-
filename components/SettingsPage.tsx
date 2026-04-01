@@ -340,19 +340,6 @@ interface ProviderCardProps {
     iconText: string;
 }
 
-// Env key mapping: provider id -> VITE_ env var name
-const ENV_KEY_MAP: Record<string, string> = {
-    openrouter: 'VITE_OPENROUTER_API_KEY',
-    nvidia: 'VITE_NVIDIA_API_KEY',
-    huggingface: 'VITE_HUGGINGFACE_API_KEY',
-};
-
-function getEnvApiKey(providerId: string): string {
-    const envVar = ENV_KEY_MAP[providerId];
-    if (!envVar) return '';
-    return (import.meta as any)?.env?.[envVar] || '';
-}
-
 const LockIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -384,9 +371,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
     const [testError, setTestError] = useState<string | null>(null);
     const [locked, setLocked] = useState(false);
 
-    // Resolve API key: explicit field > env var
-    const resolvedApiKey = provider.apiKey || getEnvApiKey(provider.id);
-    const providerWithKey = { ...provider, apiKey: resolvedApiKey };
+    const providerWithKey = provider;
 
     const handleFetchModels = useCallback(async () => {
         setFetchStatus('fetching');
@@ -422,7 +407,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
                         id: preset.id,
                         name: preset.name,
                         baseUrl: preset.defaultBaseUrl,
-                        apiKey: getEnvApiKey(preset.id) || provider.apiKey,
+                        apiKey: provider.apiKey,
                         models: [],
                         selectedModel: '',
                     };
@@ -443,7 +428,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
     const handleTestConnection = useCallback(async () => {
         setTestStatus('testing');
         setTestError(null);
-        const result = await testConnection(providerWithKey);
+        const result = await testConnection(providerWithKey, role);
         if (result.ok) {
             setTestStatus('connected');
             setTestLatency(result.latencyMs);
@@ -452,7 +437,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
             setTestError(result.error || 'Connection failed');
             setTestLatency(null);
         }
-    }, [providerWithKey]);
+    }, [providerWithKey, role]);
 
     const handleLockIn = useCallback(() => {
         if (!provider.selectedModel) return;
@@ -465,7 +450,6 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
 
     const preset = PROVIDER_PRESETS.find(p => p.id === provider.id);
     const needsApiKey = preset?.requiresApiKey ?? false;
-    const hasEnvKey = !!getEnvApiKey(provider.id);
     const canLock = !!provider.selectedModel && testStatus === 'connected';
 
     return (
@@ -525,16 +509,13 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
                         <label className="text-sm text-gray-300 font-medium">API Key</label>
-                        {hasEnvKey && !provider.apiKey && (
-                            <span className="text-xs text-green-400/70">Using .env key</span>
-                        )}
                     </div>
                     <div className="relative">
                         <input
                             type={showApiKey ? 'text' : 'password'}
                             value={provider.apiKey}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(role, 'apiKey', e.target.value)}
-                            placeholder={hasEnvKey ? 'Using key from .env.local' : 'Enter API key...'}
+                            placeholder="Optional if the server already has this key configured"
                             disabled={locked}
                             className="w-full bg-brand-gray border border-brand-light-gray/30 rounded-lg px-4 py-2.5 pr-20 text-white placeholder-gray-500 focus:outline-none focus:border-brand-cyan/50 transition-colors font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         />
@@ -546,6 +527,11 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ role, label, description, i
                             {showApiKey ? 'Hide' : 'Show'}
                         </button>
                     </div>
+                    {provider.apiKey && (
+                        <p className="text-xs text-amber-300/90">
+                            Local API key override is active. This value takes precedence over any backend server env key.
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -642,7 +628,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
 
             {/* Info footer */}
             <div className="bg-brand-dark/50 border border-brand-light-gray/10 rounded-xl p-4 text-sm text-gray-500">
-                <p>API keys are stored in your browser's localStorage for convenience. For production use, configure keys via environment variables in <code className="text-gray-400">.env.local</code>.</p>
+                <p>Leave API keys blank when they are configured on the backend server. Keys typed here stay local to this browser profile and should be treated as local-development overrides only.</p>
             </div>
         </div>
     );

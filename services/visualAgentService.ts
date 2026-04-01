@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import type {
     Bibles,
     CreativeBrief,
@@ -7,8 +7,7 @@ import type {
     VisualContinuityIssue,
     VisualContinuityReport,
 } from "../types";
-
-const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
+import { backendService } from "./backendService";
 
 const guessMimeType = (url: string, fallback: string): string => {
     const lower = url.toLowerCase();
@@ -115,8 +114,6 @@ export const runVisualContinuityAudit = async (
     bibles: Bibles,
     brief: CreativeBrief
 ): Promise<{ report: VisualContinuityReport; tokenUsage: number }> => {
-    const ai = getAiClient();
-
     const shotsWithAssets = storyboard.scenes
         .flatMap(scene => scene.shots.map(shot => ({ shot, scene })))
         .filter(({ shot }) => Boolean(shot.clip_url || shot.preview_image_url && shot.preview_image_url !== "error"));
@@ -163,51 +160,48 @@ For any mismatch, call out the exact storyboard section (e.g., verse_1, chorus_2
         }
     }
 
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        contents: [{ role: "user", parts }],
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    summary: { type: Type.STRING },
-                    overallVerdict: { type: Type.STRING },
-                    overallScore: { type: Type.NUMBER },
-                    checklist: {
+    const result = await backendService.generateAiText({
+        geminiModel: "gemini-2.5-pro",
+        geminiContents: [{ role: "user", parts }],
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                summary: { type: Type.STRING },
+                overallVerdict: { type: Type.STRING },
+                overallScore: { type: Type.NUMBER },
+                checklist: {
+                    type: Type.OBJECT,
+                    properties: {
+                        characterConsistency: { type: Type.STRING },
+                        styleConsistency: { type: Type.STRING },
+                        continuity: { type: Type.STRING },
+                        visualQuality: { type: Type.STRING },
+                    },
+                    required: ["characterConsistency", "styleConsistency", "continuity", "visualQuality"],
+                },
+                issues: {
+                    type: Type.ARRAY,
+                    items: {
                         type: Type.OBJECT,
                         properties: {
-                            characterConsistency: { type: Type.STRING },
-                            styleConsistency: { type: Type.STRING },
-                            continuity: { type: Type.STRING },
-                            visualQuality: { type: Type.STRING },
+                            shotId: { type: Type.STRING },
+                            sceneId: { type: Type.STRING },
+                            section: { type: Type.STRING },
+                            assetType: { type: Type.STRING },
+                            assetUrl: { type: Type.STRING },
+                            severity: { type: Type.STRING },
+                            finding: { type: Type.STRING },
+                            recommendation: { type: Type.STRING },
                         },
-                        required: ["characterConsistency", "styleConsistency", "continuity", "visualQuality"],
-                    },
-                    issues: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                shotId: { type: Type.STRING },
-                                sceneId: { type: Type.STRING },
-                                section: { type: Type.STRING },
-                                assetType: { type: Type.STRING },
-                                assetUrl: { type: Type.STRING },
-                                severity: { type: Type.STRING },
-                                finding: { type: Type.STRING },
-                                recommendation: { type: Type.STRING },
-                            },
-                            required: ["shotId", "section", "assetType", "severity", "finding", "recommendation"],
-                        },
+                        required: ["shotId", "section", "assetType", "severity", "finding", "recommendation"],
                     },
                 },
-                required: ["summary", "overallVerdict", "issues", "checklist"],
             },
+            required: ["summary", "overallVerdict", "issues", "checklist"],
         },
     });
 
-    const report = JSON.parse(response.text) as VisualContinuityReport;
+    const report = JSON.parse(result.text) as VisualContinuityReport;
 
     // Enrich issues with missing section data if omitted.
     const sectionLookup = new Map<string, { section: string; sceneId: string }>();
@@ -224,4 +218,3 @@ For any mismatch, call out the exact storyboard section (e.g., verse_1, chorus_2
 
     return { report, tokenUsage: 900 };
 };
-

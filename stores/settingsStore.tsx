@@ -3,18 +3,24 @@ import type { AIProvider, AIProviderSettings, AIProviderRole, ProviderPreset, Pr
 
 // --- Provider Presets ---
 
+const DEFAULT_COMFYUI_URL = (import.meta as any)?.env?.VITE_COMFYUI_API_URL || 'http://localhost:8188';
+const DEFAULT_COMFYUI_VIDEO_URL =
+    (import.meta as any)?.env?.VITE_COMFYUI_VIDEO_API_URL ||
+    DEFAULT_COMFYUI_URL;
+const LEGACY_COMFYUI_VIDEO_URL = 'http://127.0.0.1:8189';
+
 export const PROVIDER_PRESETS: ProviderPresetConfig[] = [
-    // Thinking / LLM providers (also available for image & video where applicable)
-    { id: 'openrouter', name: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', roles: ['thinking', 'image', 'video'], requiresApiKey: true, modelListEndpoint: '/models' },
-    { id: 'nvidia', name: 'NVIDIA NIM', defaultBaseUrl: 'https://integrate.api.nvidia.com/v1', roles: ['thinking', 'image', 'video'], requiresApiKey: true, modelListEndpoint: '/models' },
-    { id: 'ollama', name: 'Ollama (Local)', defaultBaseUrl: 'http://localhost:11434', roles: ['thinking', 'image', 'video'], requiresApiKey: false, modelListEndpoint: '/api/tags' },
+    // Thinking / LLM providers
+    { id: 'openrouter', name: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', roles: ['thinking', 'image'], requiresApiKey: true, modelListEndpoint: '/models' },
+    { id: 'nvidia', name: 'NVIDIA NIM', defaultBaseUrl: 'https://integrate.api.nvidia.com/v1', roles: ['thinking'], requiresApiKey: true, modelListEndpoint: '/models' },
+    { id: 'ollama', name: 'Ollama (Local)', defaultBaseUrl: 'http://localhost:11434', roles: ['thinking'], requiresApiKey: false, modelListEndpoint: '/api/tags' },
+    { id: 'custom', name: 'OpenAI-Compatible', defaultBaseUrl: 'http://localhost:1234/v1', roles: ['thinking', 'image'], requiresApiKey: true, modelListEndpoint: '/models' },
 
     // Image generation providers
-    { id: 'comfyui', name: 'ComfyUI (Local)', defaultBaseUrl: 'http://localhost:8188', roles: ['image'], requiresApiKey: false },
-    { id: 'huggingface', name: 'HuggingFace Inference', defaultBaseUrl: 'https://api-inference.huggingface.co', roles: ['image', 'video'], requiresApiKey: true, modelListEndpoint: '/api/models' },
+    { id: 'comfyui', name: 'ComfyUI (Local)', defaultBaseUrl: DEFAULT_COMFYUI_URL, roles: ['image'], requiresApiKey: false },
 
     // Video generation providers
-    { id: 'comfyui-video', name: 'ComfyUI Video (Local)', defaultBaseUrl: 'http://127.0.0.1:8189', roles: ['video'], requiresApiKey: false },
+    { id: 'comfyui-video', name: 'ComfyUI Video (Local)', defaultBaseUrl: DEFAULT_COMFYUI_VIDEO_URL, roles: ['video'], requiresApiKey: false },
 ];
 
 // --- Default State ---
@@ -22,8 +28,8 @@ export const PROVIDER_PRESETS: ProviderPresetConfig[] = [
 const defaultProvider = (role: AIProviderRole): AIProvider => {
     const defaults: Record<AIProviderRole, Partial<AIProvider> & { id: string; name: string; baseUrl: string }> = {
         thinking: { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
-        image: { id: 'comfyui', name: 'ComfyUI (Local)', baseUrl: 'http://localhost:8188' },
-        video: { id: 'comfyui-video', name: 'ComfyUI Video (Local)', baseUrl: 'http://127.0.0.1:8189' },
+        image: { id: 'comfyui', name: 'ComfyUI (Local)', baseUrl: DEFAULT_COMFYUI_URL },
+        video: { id: 'comfyui-video', name: 'ComfyUI Video (Local)', baseUrl: DEFAULT_COMFYUI_VIDEO_URL },
     };
     const d = defaults[role];
     return {
@@ -100,24 +106,28 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 const SETTINGS_KEY = 'ai_music_video_provider_settings';
 
-// Resolve API key from env vars when not explicitly set
-
-function getEnvApiKey(providerId: string): string {
-    switch (providerId) {
-        case 'openrouter': return process.env.OPENROUTER_API_KEY || '';
-        case 'nvidia': return process.env.NVIDIA_API_KEY || '';
-        case 'huggingface': return process.env.HUGGINGFACE_API_KEY || '';
-        default: return '';
-    }
+function isPresetAllowed(role: AIProviderRole, providerId: string): boolean {
+    return PROVIDER_PRESETS.some(preset => preset.id === providerId && preset.roles.includes(role));
 }
 
-function resolveApiKey(provider: AIProvider): AIProvider {
-    // Always prefer env var if available, fall back to stored key
-    const envKey = getEnvApiKey(provider.id);
-    if (envKey) {
-        return { ...provider, apiKey: envKey };
+function sanitizeProvider(role: AIProviderRole, provider: AIProvider | undefined): AIProvider {
+    if (!provider || !isPresetAllowed(role, provider.id)) {
+        return defaultProvider(role);
     }
-    return provider;
+
+    const normalized = {
+        ...defaultProvider(role),
+        ...provider,
+    };
+
+    // Migrate the old separate video default (8189) to the active ComfyUI URL.
+    if (role === 'video' && normalized.id === 'comfyui-video' && normalized.baseUrl === LEGACY_COMFYUI_VIDEO_URL) {
+        normalized.baseUrl = DEFAULT_COMFYUI_VIDEO_URL;
+    }
+
+    return {
+        ...normalized,
+    };
 }
 
 function loadSettings(): AIProviderSettings {
@@ -125,11 +135,10 @@ function loadSettings(): AIProviderSettings {
         const raw = localStorage.getItem(SETTINGS_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            // Merge with defaults to handle new fields, then resolve env API keys
             return {
-                thinking: resolveApiKey({ ...defaultSettings.thinking, ...parsed.thinking }),
-                image: resolveApiKey({ ...defaultSettings.image, ...parsed.image }),
-                video: resolveApiKey({ ...defaultSettings.video, ...parsed.video }),
+                thinking: sanitizeProvider('thinking', parsed.thinking),
+                image: sanitizeProvider('image', parsed.image),
+                video: sanitizeProvider('video', parsed.video),
             };
         }
     } catch (e) {
@@ -164,15 +173,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch({ type: 'SET_MODELS', role, models });
     }, []);
 
-    // Always resolve API keys from env vars before providing to consumers
-    const resolvedSettings = React.useMemo(() => ({
-        thinking: resolveApiKey(settings.thinking),
-        image: resolveApiKey(settings.image),
-        video: resolveApiKey(settings.video),
-    }), [settings]);
-
     return (
-        <SettingsContext.Provider value={{ settings: resolvedSettings, dispatch, setPreset, updateField, setModels }}>
+        <SettingsContext.Provider value={{ settings, dispatch, setPreset, updateField, setModels }}>
             {children}
         </SettingsContext.Provider>
     );

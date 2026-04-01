@@ -27,7 +27,7 @@ const getSectionColor = (sectionName: string) => {
 };
 
 const BeatTimelineVisualizer: React.FC<BeatTimelineVisualizerProps> = ({ analysis }) => {
-    if (!analysis || analysis.structure.length === 0) {
+    if (!analysis || !Array.isArray(analysis.structure) || analysis.structure.length === 0 || !Array.isArray(analysis.beats)) {
         return null;
     }
 

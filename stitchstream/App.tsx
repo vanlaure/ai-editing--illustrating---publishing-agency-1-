@@ -32,16 +32,6 @@ const App: React.FC = () => {
 
   const playerRef = useRef<PlayerRef>(null);
 
-  // Capture Gemini key from URL (shared via parent iframe) as an immediate fallback
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const keyFromQuery = params.get('geminiKey');
-    if (keyFromQuery) {
-      (window as any).__mvgConfig = (window as any).__mvgConfig || {};
-      (window as any).__mvgConfig.geminiApiKey = keyFromQuery;
-    }
-  }, []);
-
   // When AI analysis arrives, auto-select settings and populate editable state
   useEffect(() => {
     if (analysis) {
@@ -100,14 +90,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== 'object') return;
-
-      if (event.data.type === 'MVG_SYNC_CONFIG') {
-        (window as any).__mvgConfig = (window as any).__mvgConfig || {};
-        if (event.data.geminiApiKey) {
-          (window as any).__mvgConfig.geminiApiKey = event.data.geminiApiKey;
-        }
-        return;
-      }
 
       if (event.data.type !== 'MVG_SYNC_CLIPS' || !Array.isArray(event.data.clips)) return;
 

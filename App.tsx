@@ -13,7 +13,9 @@ import HeaderActions from './components/HeaderActions';
 import AutosaveIndicator from './components/AutosaveIndicator';
 import ConfirmationModal from './components/ConfirmationModal';
 import ApiErrorModal from './components/ApiErrorModal';
+import BackendCompatibilityBanner from './components/BackendCompatibilityBanner';
 import SettingsPage from './components/SettingsPage';
+import { backendService, type BackendMeta } from './services/backendService';
 
 // FIX: Removed conflicting global declaration. Type definitions for window.aistudio, window.jspdf, and window.JSZip are assumed to be provided elsewhere in the project.
 
@@ -26,7 +28,11 @@ const App: React.FC = () => {
 
     const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [backendWarning, setBackendWarning] = useState<string | null>(null);
+    const [backendMeta, setBackendMeta] = useState<BackendMeta | undefined>(undefined);
+    const [backendWarningDismissed, setBackendWarningDismissed] = useState(false);
 
+    const [videoQuality, setVideoQuality] = useState<'draft' | 'high'>('draft');
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasRestoredRef = useRef(false);
@@ -34,15 +40,37 @@ const App: React.FC = () => {
     // --- Auto-save: persist work-in-progress to localStorage ---
     const getAutosavePayload = useCallback(() => {
         const s = musicVideoGenerator;
-        // Only save serializable, meaningful state — skip File objects, blob URLs, and transient flags
+        // Strip large base64 data URLs from storyboard to avoid localStorage quota
+        const liteStoryboard = s.storyboard ? {
+            ...s.storyboard,
+            scenes: s.storyboard.scenes.map(scene => ({
+                ...scene,
+                shots: scene.shots.map(shot => ({
+                    ...shot,
+                    preview_image_url: shot.preview_image_url?.startsWith('data:') ? '' : (shot.preview_image_url || ''),
+                    clip_url: shot.clip_url?.startsWith('data:') ? '' : (shot.clip_url || ''),
+                })),
+            })),
+        } : null;
+        const liteBibles = s.bibles ? {
+            ...s.bibles,
+            characters: (s.bibles.characters || []).map(c => ({
+                ...c,
+                source_images: (c.source_images || []).filter((img: string) => !img.startsWith('data:')),
+            })),
+            locations: (s.bibles.locations || []).map(l => ({
+                ...l,
+                source_images: (l.source_images || []).filter((img: string) => !img.startsWith('data:')),
+            })),
+        } : null;
         return {
             currentStep: s.currentStep,
             singerGender: s.singerGender,
             songAnalysis: s.songAnalysis,
             audioUrl: s.audioUrl && !s.audioUrl.startsWith('blob:') ? s.audioUrl : null,
             creativeBrief: s.creativeBrief,
-            bibles: s.bibles,
-            storyboard: s.storyboard,
+            bibles: liteBibles,
+            storyboard: liteStoryboard,
             tokenUsage: s.tokenUsage,
             executiveProducerFeedback: s.executiveProducerFeedback,
             visualContinuityReport: s.visualContinuityReport,
@@ -108,6 +136,29 @@ const App: React.FC = () => {
         };
     }, [getAutosavePayload]);
 
+    const checkBackendCompatibility = useCallback(async () => {
+        const result = await backendService.checkBackendCompatibility();
+        if (result.ok) {
+            setBackendWarning(null);
+            setBackendMeta(result.meta);
+            setBackendWarningDismissed(false);
+            return;
+        }
+
+        setBackendWarning(result.message || 'Backend compatibility check failed.');
+        setBackendMeta(result.meta);
+    }, []);
+
+    useEffect(() => {
+        checkBackendCompatibility();
+
+        const interval = setInterval(() => {
+            checkBackendCompatibility();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [checkBackendCompatibility]);
+
     const renderCurrentStep = () => {
         switch (currentStep) {
             case Step.Upload:
@@ -121,12 +172,15 @@ const App: React.FC = () => {
                 );
             case Step.Plan:
                  return (
-                    <AgentSystemStatus agents={[
-                        { name: "Music Analyst", description: "Deconstructing song structure, rhythm, and mood.", status: 'done' },
-                        { name: "Creative Director", description: "Synthesizing your brief into a vision.", status: 'working' },
-                        { name: "Location Scout", description: "Finding the perfect virtual locations.", status: 'idle' },
-                        { name: "Casting Director", description: "Defining character aesthetics.", status: 'idle' },
-                    ]}/>
+                    <AgentSystemStatus agents={musicVideoGenerator.pipelineAgents.length > 0
+                        ? musicVideoGenerator.pipelineAgents
+                        : [
+                            { name: "Creative Director", description: "Synthesizing your brief into a vision.", status: 'idle' },
+                            { name: "Casting Director", description: "Defining character aesthetics.", status: 'idle' },
+                            { name: "Location Scout", description: "Finding the perfect virtual locations.", status: 'idle' },
+                            { name: "Storyboard Artist", description: "Building the shot-by-shot storyboard.", status: 'idle' },
+                        ]
+                    }/>
                  );
             case Step.Controls:
                 return (
@@ -165,7 +219,9 @@ const App: React.FC = () => {
                         suggestAndApplyBeatSyncedVfx={musicVideoGenerator.suggestAndApplyBeatSyncedVfx}
                         onRegenerateBibleImage={musicVideoGenerator.regenerateBibleImage}
                         updateShotWithFileUpload={musicVideoGenerator.updateShotWithFileUpload}
-                       
+                        onStopGeneration={musicVideoGenerator.stopGeneration}
+                        videoQuality={videoQuality}
+                        onVideoQualityChange={setVideoQuality}
                     />
                 );
             case Step.Review:
@@ -314,6 +370,14 @@ const App: React.FC = () => {
                     <SettingsPage onClose={() => setShowSettings(false)} />
                 ) : (
                     <div className="max-w-7xl mx-auto">
+                        {backendWarning && !backendWarningDismissed && (
+                            <BackendCompatibilityBanner
+                                message={backendWarning}
+                                meta={backendMeta}
+                                onRefresh={checkBackendCompatibility}
+                                onDismiss={() => setBackendWarningDismissed(true)}
+                            />
+                        )}
                         <div className="mb-12 flex justify-center">
                             <Stepper currentStep={currentStep} />
                         </div>

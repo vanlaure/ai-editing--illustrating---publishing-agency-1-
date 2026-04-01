@@ -2,6 +2,8 @@ import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import type { CreativeBrief, StylePreset } from '../types';
 import { STYLE_PRESETS } from '../constants';
+import { useSettings } from '../stores/settingsStore';
+import type { ComfyUIPreflightResult } from '../services/backendService';
 import Spinner from './Spinner';
 
 interface ControlsStepProps {
@@ -177,7 +179,8 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
   onGetDirectorSuggestions,
   isSuggestingBrief
 }) => {
-  const [preflight, setPreflight] = useState<{ ok: boolean; available: boolean; missingNodes: string[]; message?: string } | null>(null);
+  const { settings } = useSettings();
+  const [preflight, setPreflight] = useState<ComfyUIPreflightResult | null>(null);
   const [selectedQuickPreset, setSelectedQuickPreset] = useState<string | null>(null);
   const [prePresetBrief, setPrePresetBrief] = useState<CreativeBrief | null>(null);
   const [styleCategory, setStyleCategory] = useState<string>('all');
@@ -189,14 +192,23 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
     const t = setTimeout(async () => {
       try {
         const mod = await import('../services/backendService');
-        const result = await mod.backendService.comfyPreflight();
+        const result = await mod.backendService.comfyPreflightFor(settings.video.baseUrl);
         if (mounted) setPreflight(result);
       } catch (e) {
-        if (mounted) setPreflight({ ok: false, available: false, missingNodes: ['unknown'], message: e instanceof Error ? e.message : 'Failed to check ComfyUI' });
+        if (mounted) {
+          setPreflight({
+            ok: false,
+            available: false,
+            backendReachable: false,
+            missingNodes: ['unknown'],
+            message: e instanceof Error ? e.message : 'Failed to check ComfyUI preflight',
+            requestedBaseUrl: settings.video.baseUrl,
+          });
+        }
       }
     }, 300);
     return () => { mounted = false; clearTimeout(t); };
-  }, []);
+  }, [settings.video.baseUrl]);
 
   useEffect(() => {
     const matchingPreset = QUICK_PRESETS.find(preset => preset.settings.videoType === brief.videoType);
@@ -255,6 +267,8 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
     e.preventDefault();
     onSubmit();
   };
+
+  const showPreflightBanner = !!preflight && (!preflight.ok || !!preflight.fallbackUsed);
   
   return (
     <div className="flex flex-col items-center w-full">
@@ -263,18 +277,26 @@ const ControlsStep: React.FC<ControlsStepProps> = ({
       
         <form onSubmit={handleSubmit} className="w-full max-w-4xl space-y-8">
             {/* ComfyUI Preflight Banner */}
-            {preflight && (
-              <div className={`p-3 rounded-lg border ${preflight.ok ? 'border-green-700 bg-green-900/20' : 'border-yellow-700 bg-yellow-900/20'} flex items-start gap-3`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${preflight.ok ? 'text-green-400' : 'text-yellow-400'}`} viewBox="0 0 20 20" fill="currentColor">
+            {showPreflightBanner && preflight && (
+              <div className={`p-3 rounded-lg border ${preflight.ok ? 'border-sky-700 bg-sky-900/20' : 'border-yellow-700 bg-yellow-900/20'} flex items-start gap-3`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${preflight.ok ? 'text-sky-400' : 'text-yellow-400'}`} viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-5.25a.75.75 0 001.5 0V9a.75.75 0 00-1.5 0v3.75zM10 7a1 1 0 110-2 1 1 0 010 2z" clipRule="evenodd" />
                 </svg>
                 <div className="text-sm">
-                  <div className="font-semibold text-white">ComfyUI Preflight {preflight.ok ? 'OK' : 'Needs Attention'}</div>
-                  {!preflight.available && (
-                    <div className="text-gray-300">Cannot reach ComfyUI. Check that it’s running at your configured URL.</div>
+                  <div className="font-semibold text-white">
+                    {preflight.ok ? 'ComfyUI Preflight Using Fallback' : 'ComfyUI Preflight Needs Attention'}
+                  </div>
+                  {!preflight.backendReachable && (
+                    <div className="text-gray-300">Cannot reach the backend API, so ComfyUI status cannot be checked right now.</div>
                   )}
-                  {preflight.available && !preflight.ok && (
+                  {preflight.backendReachable && !preflight.available && (
+                    <div className="text-gray-300">Backend is online, but ComfyUI is not reachable at your configured URL.</div>
+                  )}
+                  {preflight.backendReachable && preflight.available && !preflight.ok && (
                     <div className="text-gray-300">Missing nodes: <span className="font-mono">{preflight.missingNodes.join(', ')}</span>. See setup guides: COMFYUI_ANIMATEDIFF_SETUP.md and COMFYUI_HUNYUANVIDEO_SETUP.md</div>
+                  )}
+                  {preflight.ok && preflight.fallbackUsed && preflight.baseUrl && (
+                    <div className="text-gray-300">The backend is using <span className="font-mono">{preflight.baseUrl}</span> instead of your configured URL so generation can continue.</div>
                   )}
                   {preflight.message && <div className="text-gray-400">{preflight.message}</div>}
                 </div>

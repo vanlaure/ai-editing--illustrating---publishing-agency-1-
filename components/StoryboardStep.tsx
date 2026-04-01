@@ -27,6 +27,7 @@ interface StoryboardStepProps {
   onGoToReview: () => void;
   onGenerateAllImages: () => void;
   onGenerateAllClips: (quality?: 'draft' | 'high') => Promise<void> | void;
+  onStopGeneration?: () => void;
   isProcessing: boolean;
   postProductionTasks: PostProductionTasks;
   onSetVfx: (shotId: string, vfx: VFX_PRESET | 'None') => void;
@@ -252,7 +253,7 @@ const ShotCard: React.FC<{ shot: StoryboardShot; bibles: Bibles; brief: Creative
             </div>
             <div className="flex-grow">
                 <h4 className="font-bold text-white flex items-center flex-wrap gap-2">
-                    <span>Shot {shot.id.split('-')[1]}</span>
+                    <span>Shot {shot.id.replace(/\D+/g, '') || shot.id}</span>
                     <span className="text-sm font-normal text-gray-400">({duration.toFixed(1)}s)</span>
                     {/* Vocalist / Duet badges */}
                     {Array.isArray(shot.performer_refs) && shot.performer_refs.length > 0 && (
@@ -385,7 +386,7 @@ const TransitionDisplay: React.FC<{ transition: Transition | null }> = ({ transi
 
 import { webSocketService } from '../services/webSocketService';
 
-const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGenerateAllClips, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, videoQuality, onVideoQualityChange }) => {
+const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboard, bibles, creativeBrief, onRegenerateImage, onEditImage, onGenerateClip, onGenerateAllClips, onGoToReview, onGenerateAllImages, isProcessing, postProductionTasks, onSetVfx, onApplyVfx, onApplyColor, onApplyStabilization, suggestAndApplyBeatSyncedVfx, onRegenerateBibleImage, updateShotWithFileUpload, videoQuality, onVideoQualityChange, onStopGeneration }) => {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState('');
@@ -569,7 +570,7 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
                 const availableTextWidth = pageWidth - textX - margin;
 
                 doc.setFontSize(10).setFont(undefined, 'bold');
-                doc.text(`Shot ${shot.id.split('-')[1]} (${(shot.end - shot.start).toFixed(1)}s)`, textX, textY, { maxWidth: availableTextWidth });
+                doc.text(`Shot ${shot.id.replace(/\D+/g, '') || shot.id} (${(shot.end - shot.start).toFixed(1)}s)`, textX, textY, { maxWidth: availableTextWidth });
                 textY += 5;
 
                 doc.setFontSize(8).setFont(undefined, 'normal');
@@ -916,12 +917,23 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
       </div>
       
       <div className="w-full mt-10 p-4 bg-brand-light-gray rounded-lg sticky bottom-4 shadow-lg">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
               <div>
                   <h4 className="font-bold text-white">Final Review</h4>
                   <p className="text-sm text-gray-400">{generatedImagesCount} of {allShots.length} images generated{generatedClipsCount > 0 ? `, ${generatedClipsCount} clips ready` : ''}.</p>
               </div>
-              <button 
+              {onStopGeneration && (generatedImagesCount < allShots.length || isBatchGenerating) && (
+                <button
+                  onClick={onStopGeneration}
+                  className="flex items-center gap-2 bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-500 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <rect x="4" y="4" width="12" height="12" rx="1" />
+                  </svg>
+                  Stop
+                </button>
+              )}
+              <button
                   onClick={onGoToReview}
                   disabled={(!allClipsGenerated && !allImagesGenerated) || isProcessing}
                   className="w-full max-w-xs flex items-center justify-center bg-brand-cyan text-brand-dark font-bold py-3 px-6 rounded-lg hover:bg-white disabled:bg-gray-500 disabled:cursor-not-allowed transition-all transform hover:scale-105"

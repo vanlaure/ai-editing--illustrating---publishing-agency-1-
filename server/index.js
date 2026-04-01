@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
 import fs from "fs/promises";
+import * as fsSync from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import http from "http";
@@ -11,6 +12,13 @@ import https from "https";
 import { WebSocketServer } from "ws";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import * as db from "./db.js";
+import {
+  editImageWithGemini,
+  generateImageWithProvider,
+  generateWithGemini,
+  generateWithProvider,
+  resolveProviderApiKey,
+} from "./ai-providers.js";
 
 import { fileURLToPath } from "url";
 
@@ -61,6 +69,16 @@ const DEFAULT_PORT = 3002;
 const PORT_ENV = Number(process.env.PORT || process.env.BACKEND_PORT || DEFAULT_PORT);
 // Keep existing reference name used below
 const PORT = PORT_ENV;
+const SERVER_STARTED_AT = new Date().toISOString();
+const BACKEND_FEATURES = [
+  'api_meta_v1',
+  'ai_generate_v1',
+  'ai_image_generate_v1',
+  'ai_image_edit_v1',
+  'provider_models_post_v1',
+  'provider_test_v1',
+  'comfyui_baseurl_v1',
+];
 // Standard backend host and port to be used consistently
 const BACKEND_HOST = 'localhost';
 const BACKEND_PORT = 3002;
@@ -254,7 +272,7 @@ app.get('/api/media/video/:id', async (req, res) => {
     // Fallback to filesystem if binary_data is NULL (hybrid mode)
     const filePath = path.join('data/videos', result.filename);
     try {
-      const stat = await require('fs').promises.stat(filePath);
+      const stat = await fsSync.promises.stat(filePath);
       const total = stat.size;
 
       if (range) {
@@ -270,7 +288,7 @@ app.get('/api/media/video/:id', async (req, res) => {
           'Content-Type': mimeType,
           'Content-Disposition': `inline; filename="${result.filename}"`
         });
-        const stream = require('fs').createReadStream(filePath, { start, end });
+        const stream = fsSync.createReadStream(filePath, { start, end });
         return stream.pipe(res);
       }
 
@@ -279,7 +297,7 @@ app.get('/api/media/video/:id', async (req, res) => {
         'Content-Length': total,
         'Content-Disposition': `inline; filename="${result.filename}"`
       });
-      const stream = require('fs').createReadStream(filePath);
+      const stream = fsSync.createReadStream(filePath);
       return stream.pipe(res);
     } catch (fsError) {
       return res.status(404).json({ error: 'Video file not found' });
@@ -476,9 +494,10 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
     const result = db.insertVideo(
       null, // production_id
       filename,
-      null, // duration
       null, // width
       null, // height
+      null, // duration
+      null, // fps
       format,
       binaryData.length,
       binaryData,
@@ -541,7 +560,7 @@ app.post('/api/video/generate', async (req, res) => {
           if (status < 200 || status >= 300) {
             return reject(new Error(`HTTP ${status} for ${url}`));
           }
-          const file = require('fs').createWriteStream(destPath);
+          const file = fsSync.createWriteStream(destPath);
           response.pipe(file);
           file.on('finish', () => file.close(resolve));
           file.on('error', (err) => reject(err));
@@ -687,9 +706,10 @@ app.post('/api/video/generate', async (req, res) => {
     const result = db.insertVideo(
       null, // production_id
       `output_${jobId}.mp4`,
-      null, // duration
       width,
       height,
+      null, // duration
+      fps,
       'mp4',
       videoBinary.length,
       videoBinary,
@@ -901,15 +921,49 @@ const COMFYUI_OUTPUT_DIR = process.env.COMFYUI_OUTPUT_DIR || '../outputs';
 const HUNYUAN_WORKFLOW_DIR = path.join(__dirname, '..', 'workflows', 'hunyuan');
 const HUNYUAN_WORKFLOW_CACHE = {};
 
+function normalizeComfyUIUrl(url) {
+  if (typeof url === 'string' && url.trim()) {
+    return url.trim().replace(/\/+$/, '');
+  }
+  return COMFYUI_URL.replace(/\/+$/, '');
+}
+
+async function isComfyUIReachable(comfyuiUrl, timeoutMs = 5000) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(`${comfyuiUrl}/queue`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveReachableComfyUIUrl(preferredUrl) {
+  const normalizedPreferred = normalizeComfyUIUrl(preferredUrl);
+  if (await isComfyUIReachable(normalizedPreferred)) {
+    return { url: normalizedPreferred, fallbackUsed: false };
+  }
+
+  const normalizedDefault = normalizeComfyUIUrl(COMFYUI_URL);
+  if (normalizedPreferred !== normalizedDefault && await isComfyUIReachable(normalizedDefault)) {
+    console.warn(`[ComfyUI] Falling back from ${normalizedPreferred} to ${normalizedDefault}`);
+    return { url: normalizedDefault, fallbackUsed: true };
+  }
+
+  return { url: normalizedPreferred, fallbackUsed: false };
+}
+
 // Cache for ComfyUI node registry to avoid repeated calls
 let __comfyNodeCache = null;
 let __comfyNodeCacheAt = 0;
-async function getComfyNodeMap(force = false) {
+async function getComfyNodeMap(force = false, comfyuiUrl = COMFYUI_URL) {
   const now = Date.now();
   const cacheStale = !__comfyNodeCache || (now - __comfyNodeCacheAt > 30_000);
   if (!force && !cacheStale) return __comfyNodeCache;
   try {
-    const resp = await fetch(`${COMFYUI_URL}/object_info`);
+    const resp = await fetch(`${comfyuiUrl}/object_info`);
     if (resp.ok) {
       const info = await resp.json();
       __comfyNodeCache = info?.nodes || info || {};
@@ -921,34 +975,56 @@ async function getComfyNodeMap(force = false) {
   __comfyNodeCacheAt = now;
   return __comfyNodeCache;
 }
-async function comfyHasNode(name) {
-  const nodes = await getComfyNodeMap();
+async function comfyHasNode(name, comfyuiUrl = COMFYUI_URL) {
+  const nodes = await getComfyNodeMap(false, comfyuiUrl);
   return Object.prototype.hasOwnProperty.call(nodes, name);
 }
 
 // Check ComfyUI health
 app.get('/api/comfyui/health', async (req, res) => {
+  const requestedUrl = normalizeComfyUIUrl(req.query.baseUrl);
+  const { url: comfyuiUrl, fallbackUsed } = await resolveReachableComfyUIUrl(requestedUrl);
   try {
-    const response = await fetch(`${COMFYUI_URL}/queue`);
+    const response = await fetch(`${comfyuiUrl}/queue`);
     if (response.ok) {
       const data = await response.json();
       res.json({
         status: 'ok',
         available: true,
         queue_running: data.queue_running?.length || 0,
-        queue_pending: data.queue_pending?.length || 0
+        queue_pending: data.queue_pending?.length || 0,
+        baseUrl: comfyuiUrl,
+        requestedBaseUrl: requestedUrl,
+        fallbackUsed
       });
     } else {
-      res.json({ status: 'error', available: false });
+      res.json({ status: 'error', available: false, baseUrl: comfyuiUrl, requestedBaseUrl: requestedUrl, fallbackUsed });
     }
   } catch (error) {
-    res.json({ status: 'error', available: false, error: error.message });
+    res.json({ status: 'error', available: false, error: error.message, baseUrl: comfyuiUrl, requestedBaseUrl: requestedUrl, fallbackUsed });
+  }
+});
+
+// --- ComfyUI model listing (proxy to avoid CORS) ---
+app.get('/api/comfyui/models', async (req, res) => {
+  const requestedUrl = normalizeComfyUIUrl(req.query.baseUrl);
+  const { url: comfyuiUrl } = await resolveReachableComfyUIUrl(requestedUrl);
+  try {
+    const response = await fetch(`${comfyuiUrl}/object_info/CheckpointLoaderSimple`);
+    if (!response.ok) throw new Error(`ComfyUI returned ${response.status}`);
+    const data = await response.json();
+    const models = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
+    res.json({ models });
+  } catch (error) {
+    console.error('[comfyui/models] Error:', error.message);
+    res.status(502).json({ error: error.message, models: [] });
   }
 });
 
 // --- AI Provider proxy: fetch models from external APIs (avoids browser CORS) ---
-app.get('/api/providers/models', async (req, res) => {
-  const { provider, baseUrl, apiKey } = req.query;
+app.all('/api/providers/models', async (req, res) => {
+  const source = req.method === 'GET' ? req.query : req.body;
+  const { provider, baseUrl, apiKey } = source;
   try {
     if (provider === 'openrouter-full') {
       // Fetch the full 665-model catalog via the frontend endpoint (CORS-restricted for browsers)
@@ -961,7 +1037,8 @@ app.get('/api/providers/models', async (req, res) => {
     // Generic proxy: forward to baseUrl/models with optional auth
     if (!baseUrl) return res.status(400).json({ error: 'baseUrl required' });
     const headers = {};
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const resolvedApiKey = resolveProviderApiKey(provider, apiKey);
+    if (resolvedApiKey) headers['Authorization'] = `Bearer ${resolvedApiKey}`;
     const response = await fetch(`${baseUrl}/models`, { headers });
     if (!response.ok) throw new Error(`Upstream returned ${response.status}`);
     const data = await response.json();
@@ -972,9 +1049,179 @@ app.get('/api/providers/models', async (req, res) => {
   }
 });
 
+app.post('/api/providers/test', async (req, res) => {
+  const { provider, role, baseUrl, apiKey, selectedModel } = req.body || {};
+  const start = Date.now();
+  const headers = {};
+  const resolvedApiKey = resolveProviderApiKey(provider, apiKey);
+  if (resolvedApiKey) headers.Authorization = `Bearer ${resolvedApiKey}`;
+
+  try {
+    if (!baseUrl) {
+      return res.status(400).json({ ok: false, error: 'baseUrl required' });
+    }
+
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    let response;
+
+    if (role === 'thinking' && selectedModel && provider !== 'ollama') {
+      response = await fetch(`${normalizedBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          temperature: 0,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+    } else if (role === 'thinking' && selectedModel && provider === 'ollama') {
+      response = await fetch(`${normalizedBaseUrl}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+    } else {
+      let targetUrl = `${normalizedBaseUrl}/models`;
+      if (provider === 'ollama') targetUrl = `${normalizedBaseUrl}/api/tags`;
+      if (provider === 'comfyui' || provider === 'comfyui-video') targetUrl = `${normalizeComfyUIUrl(baseUrl)}/system_stats`;
+      if (provider === 'huggingface') targetUrl = 'https://huggingface.co/api/whoami-v2';
+
+      response = await fetch(targetUrl, {
+        headers,
+        signal: AbortSignal.timeout(10000)
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    }
+
+    res.json({ ok: true, latencyMs: Date.now() - start });
+  } catch (error) {
+    res.json({ ok: false, latencyMs: Date.now() - start, error: error.message || 'Connection failed' });
+  }
+});
+
+app.post('/api/ai/generate', async (req, res) => {
+  try {
+    const {
+      provider,
+      prompt,
+      system,
+      responseSchema,
+      jsonMode,
+      images,
+      temperature,
+      maxTokens,
+      geminiModel,
+      geminiContents
+    } = req.body || {};
+
+    if (!prompt && !geminiContents) {
+      return res.status(400).json({ error: 'prompt or geminiContents is required' });
+    }
+
+    const result = provider?.enabled && provider?.baseUrl && provider?.selectedModel
+      ? await generateWithProvider(provider, {
+        prompt,
+        system,
+        responseSchema,
+        jsonMode,
+        images,
+        temperature,
+        maxTokens,
+      })
+      : await generateWithGemini({
+        prompt,
+        responseSchema,
+        geminiModel,
+        geminiContents,
+      });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[ai/generate] Error:', error);
+    const upstreamStatus = Number.isInteger(error?.statusCode) ? error.statusCode : undefined;
+    const statusCode = upstreamStatus === 401 || upstreamStatus === 403
+      ? 401
+      : upstreamStatus && upstreamStatus >= 400 && upstreamStatus < 500
+        ? 400
+        : upstreamStatus && upstreamStatus >= 500
+          ? 502
+          : 500;
+
+    res.status(statusCode).json({
+      error: error.message || 'Generation failed',
+      upstreamStatus,
+      provider: error?.providerName,
+    });
+  }
+});
+
+app.post('/api/ai/image/generate', async (req, res) => {
+  try {
+    const { provider, prompt, width, height } = req.body || {};
+    if (!provider?.selectedModel || !provider?.baseUrl) {
+      return res.status(400).json({ error: 'A configured provider is required.' });
+    }
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required.' });
+    }
+
+    const result = await generateImageWithProvider(provider, { prompt, width, height });
+    // Unwrap {url: "..."} objects that some providers return
+    let imageUrl = typeof result.imageUrl === 'object' && result.imageUrl?.url
+      ? result.imageUrl.url
+      : result.imageUrl;
+
+    if (typeof imageUrl === 'string' && /^https?:\/\//.test(imageUrl)) {
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      imageUrl = `data:${imageResponse.headers.get('content-type') || 'image/png'};base64,${imageBuffer.toString('base64')}`;
+    }
+
+    res.json({
+      imageUrl,
+      tokenUsage: result.tokenUsage || 0,
+    });
+  } catch (error) {
+    console.error('[ai/image/generate] Error:', error);
+    res.status(500).json({ error: error.message || 'Image generation failed' });
+  }
+});
+
+app.post('/api/ai/image/edit', async (req, res) => {
+  try {
+    const { imageDataUrl, prompt } = req.body || {};
+    if (!imageDataUrl || !prompt) {
+      return res.status(400).json({ error: 'imageDataUrl and prompt are required.' });
+    }
+    const result = await editImageWithGemini({ imageDataUrl, prompt });
+    res.json(result);
+  } catch (error) {
+    console.error('[ai/image/edit] Error:', error);
+    res.status(500).json({ error: error.message || 'Image editing failed' });
+  }
+});
+
 // Helper: Create ComfyUI workflow with ultra-realistic settings and optional IP-Adapter face consistency
 function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, cfg, seed, init_image = null, denoising_strength = 1.0, reference_face_image = null, ipadapter_weight = 0.85 }) {
-  const ckpt_name = "realvisxlV40.safetensors";
+  const ckpt_name = "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors";
 
   const workflow = {
     "1": {
@@ -1589,10 +1836,10 @@ async function buildHunyuanPresetWorkflow({
 
 
 // Helper: Get ComfyUI progress for a prompt
-async function getComfyUIProgress(promptId) {
+async function getComfyUIProgress(promptId, comfyuiUrl = COMFYUI_URL) {
   try {
     // Check queue for current progress
-    const queueResponse = await fetch(`${COMFYUI_URL}/queue`);
+    const queueResponse = await fetch(`${comfyuiUrl}/queue`);
     const queueData = await queueResponse.json();
 
     // Check if prompt is in running queue
@@ -1612,7 +1859,7 @@ async function getComfyUIProgress(promptId) {
     }
 
     // Check history for completion
-    const historyResponse = await fetch(`${COMFYUI_URL}/history/${promptId}`);
+    const historyResponse = await fetch(`${comfyuiUrl}/history/${promptId}`);
     const history = await historyResponse.json();
 
     if (history[promptId]) {
@@ -1633,11 +1880,48 @@ async function getComfyUIProgress(promptId) {
 }
 
 // Helper: Poll ComfyUI for completion
-async function pollComfyUICompletion(promptId, maxAttempts = 120, intervalMs = 2000) {
+async function pollComfyUICompletion(promptId, maxAttempts = 120, intervalMs = 2000, comfyuiUrl = COMFYUI_URL) {
   console.log(`ComfyUI: Starting poll for prompt_id: ${promptId}, max wait: ${maxAttempts * intervalMs / 1000}s`);
 
+  let noProgressCount = 0;
+  const MAX_NO_PROGRESS = 15; // 30 seconds with no queue movement = likely stuck
+
   for (let i = 0; i < maxAttempts; i++) {
-    const response = await fetch(`${COMFYUI_URL}/history/${promptId}`);
+    // Check queue status to detect stuck jobs
+    try {
+      const queueResp = await fetch(`${comfyuiUrl}/queue`);
+      const queue = await queueResp.json();
+      const pending = (queue.queue_pending || []).length;
+      const running = (queue.queue_running || []).length;
+
+      if (i % 5 === 0) {
+        console.log(`ComfyUI: Queue status — ${running} running, ${pending} pending`);
+      }
+
+      // Check if our prompt is actually in the queue or running
+      const isInPending = (queue.queue_pending || []).some(item => item[1] === promptId);
+      const isInRunning = (queue.queue_running || []).some(item => item[1] === promptId);
+
+      // If our prompt is actively running or pending, it's not stuck
+      if (isInRunning || isInPending) {
+        noProgressCount = 0;
+      }
+
+      if (i > 5 && !isInPending && !isInRunning) {
+        // Not in queue and not in history = check history one more time
+        const histResp = await fetch(`${comfyuiUrl}/history/${promptId}`);
+        const hist = await histResp.json();
+        if (!hist[promptId]) {
+          console.error(`ComfyUI: Prompt ${promptId} disappeared from queue and history — likely rejected`);
+          throw new Error('ComfyUI rejected the workflow — the prompt disappeared from the queue. Check if the model and nodes are installed correctly.');
+        }
+      }
+    } catch (queueError) {
+      if (queueError.message.includes('rejected')) throw queueError;
+      console.warn('ComfyUI: Queue check failed:', queueError.message);
+    }
+
+    const response = await fetch(`${comfyuiUrl}/history/${promptId}`);
     const history = await response.json();
 
     if (history[promptId]) {
@@ -1649,10 +1933,18 @@ async function pollComfyUICompletion(promptId, maxAttempts = 120, intervalMs = 2
         return history[promptId];
       }
       if (status.status_str === 'error') {
-        throw new Error(`ComfyUI generation failed: ${JSON.stringify(status.messages)}`);
+        const messages = status.messages || [];
+        const errorDetail = messages.map(m => typeof m === 'string' ? m : JSON.stringify(m)).join('; ');
+        throw new Error(`ComfyUI generation failed: ${errorDetail || 'Unknown error'}`);
       }
+      noProgressCount = 0; // Reset — we got a valid status
     } else {
-      console.log(`ComfyUI: Poll attempt ${i + 1}/${maxAttempts} - No history entry yet`);
+      noProgressCount++;
+      console.log(`ComfyUI: Poll attempt ${i + 1}/${maxAttempts} - No history entry yet (${noProgressCount}/${MAX_NO_PROGRESS} before timeout)`);
+
+      if (noProgressCount >= MAX_NO_PROGRESS) {
+        throw new Error(`ComfyUI appears stuck — no progress for ${noProgressCount * intervalMs / 1000}s. Check ComfyUI console for errors (missing model, out of VRAM, etc.)`);
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, intervalMs));
@@ -1662,7 +1954,7 @@ async function pollComfyUICompletion(promptId, maxAttempts = 120, intervalMs = 2
 }
 
 // Helper: Save image for ComfyUI
-async function uploadImageToComfyUI(base64DataUri) {
+async function uploadImageToComfyUI(base64DataUri, _comfyuiUrl = COMFYUI_URL) {
   if (!base64DataUri || !base64DataUri.startsWith('data:image/')) {
     throw new Error('Invalid base64 data URI');
   }
@@ -1705,6 +1997,7 @@ async function uploadImageToComfyUI(base64DataUri) {
 app.post('/api/comfyui/generate', async (req, res) => {
   try {
     const {
+      baseUrl,
       prompt,
       negative_prompt = 'blurry, low quality, worst quality, bad anatomy, extra limbs, watermark, text, deformed',
       width = 1024,
@@ -1722,6 +2015,8 @@ app.post('/api/comfyui/generate', async (req, res) => {
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
+
+    const comfyuiUrl = normalizeComfyUIUrl(baseUrl);
 
     // If shotId provided, check if we already have a successful image for this shot (dedup/recovery)
     if (shotId) {
@@ -1750,14 +2045,14 @@ app.post('/api/comfyui/generate', async (req, res) => {
       cfg: cfg_scale,
       size: `${width}x${height}`,
       hasReferenceImage: isImg2Img,
-      url: COMFYUI_URL
+      url: comfyuiUrl
     });
 
     // If img2img, upload the reference image to ComfyUI
     let imageFilename = null;
     if (init_image) {
       try {
-        imageFilename = await uploadImageToComfyUI(init_image);
+        imageFilename = await uploadImageToComfyUI(init_image, comfyuiUrl);
         console.log(`ComfyUI: Reference image uploaded as ${imageFilename}`);
       } catch (error) {
         console.error('ComfyUI: Failed to upload reference image:', error);
@@ -1769,7 +2064,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
     let faceImageFilename = null;
     if (reference_face_image) {
       try {
-        faceImageFilename = await uploadImageToComfyUI(reference_face_image);
+        faceImageFilename = await uploadImageToComfyUI(reference_face_image, comfyuiUrl);
         console.log(`ComfyUI: Face reference image uploaded as ${faceImageFilename}`);
       } catch (error) {
         console.warn('ComfyUI: Failed to upload face reference image, continuing without IP-Adapter:', error.message);
@@ -1801,9 +2096,9 @@ app.post('/api/comfyui/generate', async (req, res) => {
     // Submit workflow
     let submitResponse;
     try {
-      console.log('ComfyUI: Submitting workflow to', `${COMFYUI_URL}/prompt`);
+      console.log('ComfyUI: Submitting workflow to', `${comfyuiUrl}/prompt`);
       console.log('ComfyUI: Workflow JSON:', JSON.stringify(workflow, null, 2));
-      submitResponse = await fetch(`${COMFYUI_URL}/prompt`, {
+      submitResponse = await fetch(`${comfyuiUrl}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: workflow })
@@ -1818,7 +2113,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
     } catch (error) {
       console.error('ComfyUI: Network error during submit:', error);
       console.error('ComfyUI: Workflow that failed:', JSON.stringify(workflow, null, 2));
-      throw new Error(`Failed to connect to ComfyUI at ${COMFYUI_URL}: ${error.message}`);
+      throw new Error(`Failed to connect to ComfyUI at ${comfyuiUrl}: ${error.message}`);
     }
 
     let submitResult;
@@ -1841,7 +2136,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
     // Poll for completion
     let result;
     try {
-      result = await pollComfyUICompletion(promptId);
+      result = await pollComfyUICompletion(promptId, 120, 2000, comfyuiUrl);
       console.log('ComfyUI: Generation completed');
     } catch (error) {
       console.error('ComfyUI: Polling failed:', error);
@@ -1860,7 +2155,7 @@ app.post('/api/comfyui/generate', async (req, res) => {
 
     const filename = images[0].filename;
     console.log('ComfyUI: Generated filename:', filename);
-    const imageUrl = `${COMFYUI_URL}/view?filename=${filename}&type=output`;
+    const imageUrl = `${comfyuiUrl}/view?filename=${filename}&type=output`;
 
     // Download image and store in database
     try {
@@ -2116,7 +2411,7 @@ app.post('/api/comfyui/generate-batch', async (req, res) => {
 app.get('/api/comfyui/progress/:promptId', async (req, res) => {
   try {
     const { promptId } = req.params;
-    const progressData = await getComfyUIProgress(promptId);
+    const progressData = await getComfyUIProgress(promptId, videoPromptOrigins.get(promptId) || COMFYUI_URL);
     res.json(progressData);
   } catch (error) {
     console.error('Error getting progress:', error);
@@ -2131,25 +2426,33 @@ app.get('/api/comfyui/progress/:promptId', async (req, res) => {
 // Generate video clip using ComfyUI (AnimateDiff or HunyuanVideo)
 app.post('/api/comfyui/generate-video-clip', async (req, res) => {
   try {
+    const requestedUrl = normalizeComfyUIUrl(req.body?.baseUrl);
+    const { url: comfyuiUrl, fallbackUsed } = await resolveReachableComfyUIUrl(requestedUrl);
     // Check ComfyUI availability first
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const healthCheck = await fetch(`${COMFYUI_URL}/queue`, { signal: controller.signal });
+      const healthCheck = await fetch(`${comfyuiUrl}/queue`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!healthCheck.ok) {
         return res.status(503).json({
           error: 'ComfyUI service unavailable',
-          details: `ComfyUI at ${COMFYUI_URL} returned status ${healthCheck.status}. Please ensure ComfyUI is running.`
+          details: `ComfyUI at ${comfyuiUrl} returned status ${healthCheck.status}. Please ensure ComfyUI is running.`,
+          requestedBaseUrl: requestedUrl,
+          baseUrl: comfyuiUrl,
+          fallbackUsed
         });
       }
     } catch (healthError) {
       console.error('ComfyUI health check failed:', healthError);
       return res.status(503).json({
         error: 'Cannot connect to ComfyUI',
-        details: `Failed to connect to ComfyUI at ${COMFYUI_URL}. Error: ${healthError.message}. Please ensure ComfyUI is running and accessible.`
+        details: `Failed to connect to ComfyUI at ${comfyuiUrl}. Error: ${healthError.message}. Please ensure ComfyUI is running and accessible.`,
+        requestedBaseUrl: requestedUrl,
+        baseUrl: comfyuiUrl,
+        fallbackUsed
       });
     }
 
@@ -2249,9 +2552,9 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
     if (imageUrl) {
       try {
         if (imageUrl.startsWith('data:image')) {
-          comfyImageName = await uploadImageToComfyUI(imageUrl);
-        } else if (imageUrl.includes('localhost:8188/view')) {
-          // Handle ComfyUI view URL: http://localhost:8188/view?filename=X
+          comfyImageName = await uploadImageToComfyUI(imageUrl, comfyuiUrl);
+        } else if (imageUrl.includes('/view?filename=')) {
+          // Handle ComfyUI view URL: http://host:port/view?filename=X
           const url = new URL(imageUrl);
           const filename = url.searchParams.get('filename');
           if (!filename) {
@@ -2264,7 +2567,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
           }
           const imageBuffer = await imageResponse.arrayBuffer();
           const base64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`;
-          comfyImageName = await uploadImageToComfyUI(base64);
+          comfyImageName = await uploadImageToComfyUI(base64, comfyuiUrl);
         } else if (imageUrl.startsWith(`http://localhost:${PORT}/api/media/image/`)) {
           // Handle database image URL
           const imageId = imageUrl.split('/').pop();
@@ -2273,14 +2576,14 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
             return res.status(404).json({ error: 'Image not found in database' });
           }
           const base64 = `data:${imageData.mime_type};base64,${imageData.binary_data.toString('base64')}`;
-          comfyImageName = await uploadImageToComfyUI(base64);
+          comfyImageName = await uploadImageToComfyUI(base64, comfyuiUrl);
         } else if (imageUrl.startsWith('http://localhost')) {
           // Handle legacy local backend URL
           const filename = imageUrl.split('/').pop();
           const localPath = path.join('data/images', filename);
           const imageBuffer = await fs.readFile(localPath);
           const base64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-          comfyImageName = await uploadImageToComfyUI(base64);
+          comfyImageName = await uploadImageToComfyUI(base64, comfyuiUrl);
         } else {
           return res.status(400).json({
             error: 'Unsupported image URL format',
@@ -2306,7 +2609,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       // Detect if VHS_VideoCombine exists; if not, we'll save frames and combine via ffmpeg
       let hasVHS = false;
       try {
-        hasVHS = await comfyHasNode('VHS_VideoCombine');
+        hasVHS = await comfyHasNode('VHS_VideoCombine', comfyuiUrl);
       } catch (vhsError) {
         console.warn('ComfyUI: Failed to check for VHS_VideoCombine:', vhsError.message);
       }
@@ -2318,7 +2621,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
         console.log('ComfyUI: Building HunyuanVideo workflow...');
 
         // Check if HunyuanVideo nodes are available
-        const hasHunyuan = await comfyHasNode('HyVideoModelLoader');
+        const hasHunyuan = await comfyHasNode('HyVideoModelLoader', comfyuiUrl);
         if (!hasHunyuan) {
           return res.status(503).json({
             error: 'HunyuanVideo not available',
@@ -2354,7 +2657,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
         console.log('ComfyUI: Building AnimateDiff workflow...');
 
         // Check if AnimateDiff nodes are available
-        const hasAnimateDiff = await comfyHasNode('ADE_LoadAnimateDiffModel');
+        const hasAnimateDiff = await comfyHasNode('ADE_LoadAnimateDiffModel', comfyuiUrl);
         if (!hasAnimateDiff) {
           return res.status(503).json({
             error: 'AnimateDiff not available',
@@ -2410,7 +2713,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
 
     let queueResponse;
     try {
-      queueResponse = await fetch(`${COMFYUI_URL}/prompt`, {
+      queueResponse = await fetch(`${comfyuiUrl}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: workflow })
@@ -2444,12 +2747,18 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
     }
 
     console.log(`ComfyUI: Workflow queued with prompt_id: ${promptId}`);
+    videoPromptOrigins.set(promptId, comfyuiUrl);
 
     // Return prompt_id immediately for progress polling
     res.json({
       success: true,
       promptId,
-      message: 'Video generation started. Poll /api/comfyui/video-status/:promptId for progress.'
+      message: fallbackUsed
+        ? `Video generation started using fallback ComfyUI at ${comfyuiUrl}. Poll /api/comfyui/video-status/:promptId for progress.`
+        : 'Video generation started. Poll /api/comfyui/video-status/:promptId for progress.',
+      baseUrl: comfyuiUrl,
+      requestedBaseUrl: requestedUrl,
+      fallbackUsed
     });
 
     // Continue processing in background (don't await)
@@ -2457,7 +2766,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
       try {
         // Poll for completion (longer timeout for HunyuanVideo)
         const maxAttempts = quality === 'high' ? 300 : 180;
-        const history = await pollComfyUICompletion(promptId, maxAttempts, 3000);
+        const history = await pollComfyUICompletion(promptId, maxAttempts, 3000, comfyuiUrl);
 
         // Extract video file from outputs
         const outputs = history.outputs;
@@ -2663,6 +2972,7 @@ app.post('/api/comfyui/generate-video-clip', async (req, res) => {
 
 // In-memory storage for video generation results
 const videoResults = new Map();
+const videoPromptOrigins = new Map();
 
 // Get video generation status/result
 app.get('/api/comfyui/video-status/:promptId', async (req, res) => {
@@ -2674,11 +2984,12 @@ app.get('/api/comfyui/video-status/:promptId', async (req, res) => {
       const result = videoResults.get(promptId);
       // Clean up after retrieving
       videoResults.delete(promptId);
+      videoPromptOrigins.delete(promptId);
       return res.json(result);
     }
 
     // Otherwise, check progress
-    const progressData = await getComfyUIProgress(promptId);
+    const progressData = await getComfyUIProgress(promptId, videoPromptOrigins.get(promptId) || COMFYUI_URL);
     res.json(progressData);
   } catch (error) {
     console.error('Error getting video status:', error);
@@ -2703,6 +3014,8 @@ app.get('/api/media/library', (req, res) => {
     const images = db.queries.getAllImagesUnfiltered.all();
     const videos = db.queries.getAllVideosUnfiltered.all();
 
+    const safeSize = (v) => typeof v === 'number' ? v : (Buffer.isBuffer(v) ? v.length : null);
+
     const imageList = images.map(img => ({
       id: img.id,
       type: 'image',
@@ -2710,7 +3023,7 @@ app.get('/api/media/library', (req, res) => {
       filename: img.filename,
       width: img.width,
       height: img.height,
-      size: img.size,
+      size: safeSize(img.size),
       created_at: img.created_at
     }));
 
@@ -2722,7 +3035,7 @@ app.get('/api/media/library', (req, res) => {
       width: vid.width,
       height: vid.height,
       duration: vid.duration,
-      size: vid.size,
+      size: safeSize(vid.size),
       created_at: vid.created_at
     }));
 
@@ -2733,11 +3046,21 @@ app.get('/api/media/library', (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching media library:', error);
-    res.status(500).json({ error: 'Failed to fetch media library' });
+    res.status(500).json({ error: 'Failed to fetch media library', detail: error?.message || String(error) });
   }
 });
 
 // ==================== HEALTH CHECK ====================
+
+app.get('/api/meta', async (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'ai-music-video-backend',
+    startedAt: SERVER_STARTED_AT,
+    port: PORT,
+    features: BACKEND_FEATURES,
+  });
+});
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -2780,17 +3103,19 @@ app.get('/api/health', async (req, res) => {
 
 // Verify ComfyUI is reachable and required nodes exist
 app.get('/api/comfyui/preflight', async (req, res) => {
+  const requestedUrl = normalizeComfyUIUrl(req.query.baseUrl);
+  const { url: comfyuiUrl, fallbackUsed } = await resolveReachableComfyUIUrl(requestedUrl);
   try {
     // Quick availability check
-    const healthResp = await fetch(`${COMFYUI_URL}/queue`).catch(() => null);
+    const healthResp = await fetch(`${comfyuiUrl}/queue`).catch(() => null);
     if (!healthResp || !healthResp.ok) {
-      return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: `Cannot reach ComfyUI at ${COMFYUI_URL}` });
+      return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: `Cannot reach ComfyUI at ${comfyuiUrl}`, baseUrl: comfyuiUrl, requestedBaseUrl: requestedUrl, fallbackUsed });
     }
 
     // Try to list object info (available nodes)
     let nodes = {};
     try {
-      const infoResp = await fetch(`${COMFYUI_URL}/object_info`);
+      const infoResp = await fetch(`${comfyuiUrl}/object_info`);
       if (infoResp.ok) {
         const info = await infoResp.json();
         nodes = info?.nodes || info || {};
@@ -2822,6 +3147,9 @@ app.get('/api/comfyui/preflight', async (req, res) => {
         available: true,
         missingNodes,
         message: 'ComfyUI is up, but required custom nodes are missing.',
+        baseUrl: comfyuiUrl,
+        requestedBaseUrl: requestedUrl,
+        fallbackUsed,
         docs: {
           animatediff: '/COMFYUI_ANIMATEDIFF_SETUP.md',
           hunyuan: '/COMFYUI_HUNYUANVIDEO_SETUP.md',
@@ -2830,10 +3158,10 @@ app.get('/api/comfyui/preflight', async (req, res) => {
       });
     }
 
-    return res.json({ ok: true, available: true, missingNodes: [], warnings: missingRecommended.length ? { missingRecommended } : undefined });
+    return res.json({ ok: true, available: true, missingNodes: [], warnings: missingRecommended.length ? { missingRecommended } : undefined, baseUrl: comfyuiUrl, requestedBaseUrl: requestedUrl, fallbackUsed });
   } catch (error) {
     console.error('Preflight error:', error);
-    return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: error.message });
+    return res.json({ ok: false, available: false, missingNodes: ['AnimateDiff', 'HunyuanVideo'], message: error.message, baseUrl: comfyuiUrl, requestedBaseUrl: requestedUrl, fallbackUsed });
   }
 });
 

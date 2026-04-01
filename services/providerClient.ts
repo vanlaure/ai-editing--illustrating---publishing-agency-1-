@@ -4,6 +4,7 @@
  * Falls back to Gemini only when no thinking provider is configured.
  */
 import type { AIProvider, AIProviderSettings } from '../types';
+import { backendService } from './backendService';
 // Type enum import removed — we use raw string mapping instead
 
 // --- Gemini Type → JSON Schema conversion ---
@@ -99,126 +100,16 @@ export async function generateWithProvider(
     provider: AIProvider,
     options: GenerateOptions
 ): Promise<GenerateResult> {
-    const { prompt, system, responseSchema, jsonMode, images, temperature, maxTokens } = options;
-
-    // Build messages array
-    const messages: any[] = [];
-
-    if (system) {
-        messages.push({ role: 'system', content: system });
-    }
-
-    // Build user message content
-    if (images && images.length > 0) {
-        // Multimodal: text + images
-        const content: any[] = images.map(img => ({
-            type: 'image_url',
-            image_url: {
-                url: img.data.startsWith('data:') ? img.data : `data:${img.mimeType};base64,${img.data}`,
-            }
-        }));
-        content.push({ type: 'text', text: prompt });
-        messages.push({ role: 'user', content });
-    } else {
-        messages.push({ role: 'user', content: prompt });
-    }
-
-    // Build request body
-    const body: any = {
-        model: provider.selectedModel,
-        messages,
-        temperature: temperature ?? 0.7,
-        stream: false,
-    };
-
-    if (maxTokens) {
-        body.max_tokens = maxTokens;
-    }
-
-    // Determine endpoint — Ollama uses /api/chat, others use OpenAI-compatible /chat/completions
-    const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-    const isOllama = provider.id === 'ollama' || baseUrl.includes(':11434');
-
-    // Handle structured output
-    if (responseSchema) {
-        if (isOllama) {
-            // Ollama uses format: "json" for JSON output
-            body.format = 'json';
-        } else {
-            const jsonSchema = geminiSchemaToJsonSchema(responseSchema);
-            body.response_format = {
-                type: 'json_schema',
-                json_schema: {
-                    name: 'response',
-                    strict: false,
-                    schema: jsonSchema,
-                }
-            };
-        }
-    } else if (jsonMode) {
-        if (isOllama) {
-            body.format = 'json';
-        } else {
-            body.response_format = { type: 'json_object' };
-        }
-    }
-    const endpoint = isOllama ? `${baseUrl}/api/chat` : `${baseUrl}/chat/completions`;
-
-    // Build headers
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-    };
-    if (provider.apiKey) {
-        headers['Authorization'] = `Bearer ${provider.apiKey}`;
-    }
-
-    console.log(`[ProviderClient] Calling ${provider.name} model: ${body.model} (hasApiKey: ${!!provider.apiKey}, keyPrefix: ${provider.apiKey?.substring(0, 8) || 'NONE'})`);
-
-    let response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
+    return backendService.generateAiText({
+        provider,
+        prompt: options.prompt,
+        system: options.system,
+        responseSchema: options.responseSchema,
+        jsonMode: options.jsonMode,
+        images: options.images,
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
     });
-
-    // OpenRouter: if model not found, retry with :free suffix (common mismatch from model list)
-    if (response.status === 404 && !body.model.includes(':') && provider.baseUrl.includes('openrouter')) {
-        console.log(`[ProviderClient] Model not found, retrying with :free suffix`);
-        body.model = body.model + ':free';
-        response = await fetch(endpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        });
-    }
-
-    if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(`${provider.name} API error ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    // Ollama returns { message: { content } }, OpenAI-compatible returns { choices: [{ message: { content } }] }
-    const content = data.choices?.[0]?.message?.content || data.message?.content;
-    if (!content) {
-        throw new Error(`${provider.name} returned empty response`);
-    }
-
-    let text = content;
-    const usage = data.usage || {};
-    const tokenUsage = (usage.prompt_tokens || usage.prompt_eval_count || 0) + (usage.completion_tokens || usage.eval_count || 0);
-
-    // Strip thinking/reasoning tags (Qwen, DeepSeek, etc. wrap reasoning in <think> tags)
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-    // If response should be JSON but has extra text around it, extract the JSON
-    if (responseSchema || jsonMode) {
-        const jsonMatch = text.match(/(\{[\s\S]*\})/);
-        if (jsonMatch) {
-            text = jsonMatch[1];
-        }
-    }
-
-    return { text, tokenUsage };
 }
 
 /**
