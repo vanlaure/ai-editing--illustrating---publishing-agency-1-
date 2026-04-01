@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } f
 import { VideoClip, TitleDesign, ClosingCredits, CinematicEffects } from '../types';
 import { formatDuration, downloadBlob } from '../utils/videoUtils';
 import { VIDEO_FILTERS, FONT_STYLES } from '../constants';
+import { renderIntroFrame, renderOutroFrame, type IntroConfig, type OutroConfig, type Particle } from '../utils/introOutroRenderer';
 
 export interface PlayerRef {
   startRecording: () => Promise<void>;
@@ -21,6 +22,8 @@ interface PlayerProps {
   closingCredits?: ClosingCredits;
   cinematicEffects?: CinematicEffects;
   backingTrackUrl?: string;
+  introConfig?: IntroConfig;
+  outroConfig?: OutroConfig;
   onClipChange: (id: string) => void;
   onPlaybackComplete: () => void;
 }
@@ -28,14 +31,16 @@ interface PlayerProps {
 const TRANSITION_DURATION = 1000; // ms
 const TITLE_DURATION = 4000; // ms to show title
 
-const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, activeFilter, activeTransition, transitionMap, titleDesign, closingCredits, cinematicEffects, backingTrackUrl, onClipChange, onPlaybackComplete }, ref) => {
+type PlaybackPhase = 'idle' | 'intro' | 'clips' | 'outro';
+
+const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, activeFilter, activeTransition, transitionMap, titleDesign, closingCredits, cinematicEffects, backingTrackUrl, introConfig, outroConfig, onClipChange, onPlaybackComplete }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const grainCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  
+
   // Ghost canvas to hold the last frame of the previous video for transitions
   const ghostCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  
+
   // Audio context for mixing
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -44,14 +49,19 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
   const backingSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
-  
+
+  // Intro/Outro playback phase
+  const [playbackPhase, setPlaybackPhase] = useState<PlaybackPhase>('idle');
+  const phaseStartTimeRef = useRef<number>(0);
+  const introParticlesRef = useRef<Particle[] | undefined>(undefined);
+
   // Transition state
   const transitionStartTimeRef = useRef<number>(0);
   const isTransitioningRef = useRef<boolean>(false);
@@ -118,7 +128,7 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
   }, []);
 
   useEffect(() => {
-    setTotalDuration(clips.reduce((acc, c) => acc + c.duration, 0));
+    setTotalDuration(clips.reduce((acc, c) => acc + getEffectiveDuration(c), 0));
   }, [clips]);
 
   useEffect(() => {
@@ -177,6 +187,16 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
     if (clip) {
       video.src = clip.url;
       video.load();
+
+      // If clip has a trimIn offset, seek to that point once metadata is ready
+      if (clip.trimIn && clip.trimIn > 0) {
+        const seekOnLoad = () => {
+          video.currentTime = clip.trimIn!;
+          video.removeEventListener('loadedmetadata', seekOnLoad);
+        };
+        video.addEventListener('loadedmetadata', seekOnLoad);
+      }
+
       if (isPlaying) {
         // Small timeout to ensure load starts before play
         const p = video.play().catch(console.error);
@@ -214,6 +234,61 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
 
   // Rendering Loop for Canvas (Visual Stitching)
   const drawFrame = () => {
+    // --- INTRO/OUTRO PHASE RENDERING ---
+    if (playbackPhase === 'intro' && introConfig) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = 1280;
+          canvas.height = 720;
+          const elapsed = (performance.now() - phaseStartTimeRef.current) / 1000;
+          introParticlesRef.current = renderIntroFrame(ctx, introConfig, elapsed, introParticlesRef.current);
+          if (elapsed >= introConfig.duration) {
+            setPlaybackPhase('clips');
+            introParticlesRef.current = undefined;
+            // Start playing clips
+            if (clips.length > 0) {
+              onClipChange(clips[0].id);
+              setTimeout(() => {
+                if (videoRef.current) {
+                  videoRef.current.currentTime = 0;
+                  videoRef.current.play().catch(() => {});
+                }
+              }, 50);
+            }
+          }
+        }
+      }
+      requestRef.current = requestAnimationFrame(drawFrame);
+      return;
+    }
+
+    if (playbackPhase === 'outro' && outroConfig) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = 1280;
+          canvas.height = 720;
+          const elapsed = (performance.now() - phaseStartTimeRef.current) / 1000;
+          renderOutroFrame(ctx, outroConfig, elapsed);
+          if (elapsed >= outroConfig.duration) {
+            setPlaybackPhase('idle');
+            setIsPlaying(false);
+            syncBackingTrack(false);
+            onPlaybackComplete();
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+            return; // Stop animation loop
+          }
+        }
+      }
+      requestRef.current = requestAnimationFrame(drawFrame);
+      return;
+    }
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
@@ -526,13 +601,22 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
     return () => {
         if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [activeFilter, titleDesign, closingCredits, cinematicEffects]); 
+  }, [activeFilter, titleDesign, closingCredits, cinematicEffects, playbackPhase, introConfig, outroConfig]);
 
-  const handleVideoEnded = () => {
+  // Effective playback duration for a clip — respects trim points and storyboard expected duration
+  const getEffectiveDuration = (clip: VideoClip): number => {
+    if (clip.trimOut != null) return clip.trimOut - (clip.trimIn || 0);
+    if (clip.expectedDuration != null) return Math.min(clip.duration, clip.expectedDuration);
+    return clip.duration;
+  };
+
+  const advanceToNextClip = () => {
     const currentIndex = clips.findIndex(c => c.id === activeClipId);
     if (currentIndex >= 0 && currentIndex < clips.length - 1) {
-      // Play next
       onClipChange(clips[currentIndex + 1].id);
+    } else if (outroConfig) {
+      setPlaybackPhase('outro');
+      phaseStartTimeRef.current = performance.now();
     } else {
       setIsPlaying(false);
       syncBackingTrack(false);
@@ -543,16 +627,34 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
     }
   };
 
+  const handleVideoEnded = () => {
+    // Clip ended naturally — if it's shorter than expected, we still advance
+    advanceToNextClip();
+  };
+
   const handleTimeUpdate = () => {
       if (!videoRef.current) return;
       const currentClipIndex = clips.findIndex(c => c.id === activeClipId);
       if (currentClipIndex === -1) return;
 
+      const currentClip = clips[currentClipIndex];
+      const currentTime = videoRef.current.currentTime;
+      const trimIn = currentClip.trimIn || 0;
+
+      // Editor splice: if clip exceeds its trim/expected boundary, cut to next
+      const effectiveDur = getEffectiveDuration(currentClip);
+      if (isPlaying && (currentTime - trimIn) >= effectiveDur) {
+          videoRef.current.pause();
+          advanceToNextClip();
+          return;
+      }
+
+      // Calculate progress using effective durations for accurate timeline
       let timeBefore = 0;
       for (let i = 0; i < currentClipIndex; i++) {
-          timeBefore += clips[i].duration;
+          timeBefore += getEffectiveDuration(clips[i]);
       }
-      setProgress(timeBefore + videoRef.current.currentTime);
+      setProgress(timeBefore + Math.min(currentTime - trimIn, effectiveDur));
   };
 
   const syncBackingTrack = (shouldPlay: boolean) => {
@@ -587,19 +689,30 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
   useImperativeHandle(ref, () => ({
     playSequence: () => {
         if (!clips.length) return;
-        if (!activeClipId) onClipChange(clips[0].id);
-        
+
         setIsPlaying(true);
-        setTimeout(() => {
-            initAudio();
-            if (audioCtxRef.current?.state === 'suspended') {
-                audioCtxRef.current.resume();
-            }
-            if (videoRef.current) {
-                videoRef.current.play();
-            }
-            syncBackingTrack(true);
-        }, 100);
+        initAudio();
+        if (audioCtxRef.current?.state === 'suspended') {
+            audioCtxRef.current.resume();
+        }
+
+        if (introConfig) {
+            // Start with intro animation phase
+            setPlaybackPhase('intro');
+            phaseStartTimeRef.current = performance.now();
+            introParticlesRef.current = undefined;
+            // Clips will auto-start when intro finishes (in drawFrame)
+        } else {
+            // No intro — jump straight to clips
+            setPlaybackPhase('clips');
+            if (!activeClipId) onClipChange(clips[0].id);
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.play();
+                }
+                syncBackingTrack(true);
+            }, 100);
+        }
     },
     pauseSequence: () => {
         setIsPlaying(false);
@@ -644,16 +757,23 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
 
         mediaRecorderRef.current = recorder;
         recorder.start();
-
-        onClipChange(clips[0].id);
         setIsPlaying(true);
-        setTimeout(() => {
-             if (videoRef.current) {
-                 videoRef.current.currentTime = 0;
-                 videoRef.current.play();
-             }
-             syncBackingTrack(true);
-        }, 200);
+
+        if (introConfig) {
+            setPlaybackPhase('intro');
+            phaseStartTimeRef.current = performance.now();
+            introParticlesRef.current = undefined;
+        } else {
+            setPlaybackPhase('clips');
+            onClipChange(clips[0].id);
+            setTimeout(() => {
+                 if (videoRef.current) {
+                     videoRef.current.currentTime = 0;
+                     videoRef.current.play();
+                 }
+                 syncBackingTrack(true);
+            }, 200);
+        }
     },
     stopRecording: () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -732,6 +852,16 @@ const Player = forwardRef<PlayerRef, PlayerProps>(({ clips, activeClipId, active
                 {cinematicEffects?.applyLetterbox && (
                    <div className="px-3 py-1 bg-yellow-600/30 border border-yellow-500/50 rounded-full text-xs text-yellow-200 font-medium backdrop-blur-md">
                        Cinema Scope
+                   </div>
+                )}
+                {playbackPhase === 'intro' && (
+                   <div className="px-3 py-1 bg-emerald-600/30 border border-emerald-500/50 rounded-full text-xs text-emerald-200 font-medium backdrop-blur-md animate-pulse">
+                       Intro
+                   </div>
+                )}
+                {playbackPhase === 'outro' && (
+                   <div className="px-3 py-1 bg-emerald-600/30 border border-emerald-500/50 rounded-full text-xs text-emerald-200 font-medium backdrop-blur-md animate-pulse">
+                       Outro
                    </div>
                 )}
               </div>

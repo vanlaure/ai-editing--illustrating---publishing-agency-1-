@@ -86,7 +86,14 @@ const upload = multer({
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:4001', 'http://localhost:4100'], // Frontend (4001) and StitchStream (4100)
+  origin: function (origin, callback) {
+    // Allow any localhost origin (any port) and non-browser requests (no origin)
+    if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length']
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -939,10 +946,34 @@ app.get('/api/comfyui/health', async (req, res) => {
   }
 });
 
-// Helper: Create ComfyUI workflow with ultra-realistic settings
-function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, cfg, seed, init_image = null, denoising_strength = 1.0 }) {
-  // Use RealVisXL which is available. If it fails, users can switch to RealisticVision manually in a real setup, but here we hardcode the best available.
-  // Note: RealVisXL is SDXL, so it needs resolution ~1024x1024.
+// --- AI Provider proxy: fetch models from external APIs (avoids browser CORS) ---
+app.get('/api/providers/models', async (req, res) => {
+  const { provider, baseUrl, apiKey } = req.query;
+  try {
+    if (provider === 'openrouter-full') {
+      // Fetch the full 665-model catalog via the frontend endpoint (CORS-restricted for browsers)
+      const response = await fetch('https://openrouter.ai/api/frontend/models');
+      if (!response.ok) throw new Error(`OpenRouter frontend returned ${response.status}`);
+      const data = await response.json();
+      return res.json(data);
+    }
+
+    // Generic proxy: forward to baseUrl/models with optional auth
+    if (!baseUrl) return res.status(400).json({ error: 'baseUrl required' });
+    const headers = {};
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const response = await fetch(`${baseUrl}/models`, { headers });
+    if (!response.ok) throw new Error(`Upstream returned ${response.status}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[providers/models] Error:', error.message);
+    res.status(502).json({ error: error.message });
+  }
+});
+
+// Helper: Create ComfyUI workflow with ultra-realistic settings and optional IP-Adapter face consistency
+function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, cfg, seed, init_image = null, denoising_strength = 1.0, reference_face_image = null, ipadapter_weight = 0.85 }) {
   const ckpt_name = "realvisxlV40.safetensors";
 
   const workflow = {
@@ -960,31 +991,63 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
     }
   };
 
-  if (init_image) {
-    // img2img workflow with DPM++ 2M Karras sampler for quality
-    workflow["4"] = {
+  // The model output to feed into KSampler — will be overridden by IP-Adapter if active
+  let modelOutput = ["1", 0];
+
+  // IP-Adapter face consistency: inject reference face into the model conditioning
+  if (reference_face_image) {
+    // Load CLIP Vision model (encodes the reference image)
+    workflow["20"] = {
+      inputs: { clip_name: "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors" },
+      class_type: "CLIPVisionLoader"
+    };
+    // Load the reference face image
+    workflow["21"] = {
+      inputs: { image: reference_face_image, upload: "image" },
+      class_type: "LoadImage"
+    };
+    // Load IP-Adapter Plus Face model
+    workflow["22"] = {
+      inputs: { ipadapter_file: "ip-adapter-plus-face_sdxl_vit-h.safetensors" },
+      class_type: "IPAdapterModelLoader"
+    };
+    // Apply IP-Adapter: fuse reference face features into the diffusion model
+    workflow["23"] = {
       inputs: {
-        image: init_image,
-        upload: "image"
+        model: ["1", 0],
+        ipadapter: ["22", 0],
+        image: ["21", 0],
+        clip_vision: ["20", 0],
+        weight: ipadapter_weight,
+        weight_type: "style transfer precise",
+        start_at: 0.0,
+        end_at: 1.0,
+        combine_embeds: "concat",
+        embeds_scaling: "V only"
       },
+      class_type: "IPAdapterAdvanced"
+    };
+    modelOutput = ["23", 0];
+    console.log(`ComfyUI: IP-Adapter face consistency enabled (weight: ${ipadapter_weight})`);
+  }
+
+  if (init_image) {
+    // img2img workflow with IP-Adapter face + init image for composition
+    workflow["4"] = {
+      inputs: { image: init_image, upload: "image" },
       class_type: "LoadImage"
     };
     workflow["5"] = {
-      inputs: {
-        pixels: ["4", 0],
-        vae: ["1", 2]
-      },
+      inputs: { pixels: ["4", 0], vae: ["1", 2] },
       class_type: "VAEEncode"
     };
     workflow["6"] = {
       inputs: {
-        seed,
-        steps,
-        cfg,
+        seed, steps, cfg,
         sampler_name: "dpmpp_2m_sde",
         scheduler: "karras",
         denoise: denoising_strength,
-        model: ["1", 0],
+        model: modelOutput,
         positive: ["2", 0],
         negative: ["3", 0],
         latent_image: ["5", 0]
@@ -992,34 +1055,26 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
       class_type: "KSampler"
     };
     workflow["7"] = {
-      inputs: {
-        samples: ["6", 0],
-        vae: ["1", 2]
-      },
+      inputs: { samples: ["6", 0], vae: ["1", 2] },
       class_type: "VAEDecode"
     };
     workflow["8"] = {
-      inputs: {
-        filename_prefix: "comfyui",
-        images: ["7", 0]  // Only save the decoded latent, not the original image
-      },
+      inputs: { filename_prefix: "comfyui", images: ["7", 0] },
       class_type: "SaveImage"
     };
   } else {
-    // txt2img workflow: EmptyLatentImage -> KSampler
+    // txt2img workflow with IP-Adapter face consistency
     workflow["4"] = {
       inputs: { width, height, batch_size: 1 },
       class_type: "EmptyLatentImage"
     };
     workflow["5"] = {
       inputs: {
-        seed,
-        steps,
-        cfg,
+        seed, steps, cfg,
         sampler_name: "dpmpp_2m_sde",
         scheduler: "karras",
         denoise: 1.0,
-        model: ["1", 0],
+        model: modelOutput,
         positive: ["2", 0],
         negative: ["3", 0],
         latent_image: ["4", 0]
@@ -1039,23 +1094,42 @@ function createComfyUIWorkflow({ prompt, negative_prompt, width, height, steps, 
   return workflow;
 }
 
-// Helper: Enhance prompt with camera motion instructions
+// Helper: Enhance prompt with expert director camera motion instructions
 function enhancePromptWithMotion(prompt, cameraMotion) {
-  // Concise tokens (LLaMA-3 8B optimal: <512 tokens total)
+  // Expert cinematographer motion vocabulary — concise for LLaMA-3 8B (<512 tokens)
   const motionDescriptions = {
-    'zoom_in': 'zoom in:1.3',
-    'slow push-in': 'slow push in:1.3',
-    'zoom_out': 'zoom out:1.3',
-    'pan_left': 'pan left:1.3',
-    'pan_right': 'pan right:1.3',
-    'dynamic steadicam reveal': 'steadicam reveal:1.4',
-    'static': 'static camera:1.2'
+    'zoom_in': 'smooth zoom in, lens push:1.3',
+    'slow_push_in': 'slow deliberate push in, creeping dolly forward:1.3',
+    'zoom_out': 'gradual zoom out, widening reveal:1.3',
+    'pan_left': 'smooth pan left, lateral camera sweep:1.3',
+    'pan_right': 'smooth pan right, lateral camera sweep:1.3',
+    'tilt_up': 'slow tilt up, vertical camera rise revealing sky:1.3',
+    'tilt_down': 'slow tilt down, descending vertical reveal:1.3',
+    'dolly_in': 'dolly forward through space, parallax depth:1.4',
+    'dolly_out': 'dolly pull back, retreating through space:1.3',
+    'tracking_left': 'tracking shot moving left, subject centered, lateral dolly:1.4',
+    'tracking_right': 'tracking shot moving right, subject centered, lateral dolly:1.4',
+    'crane_up': 'crane shot rising upward, ascending wide reveal:1.4',
+    'crane_down': 'crane shot descending, intimate approach from above:1.4',
+    'steadicam_follow': 'steadicam following subject, fluid handheld tracking:1.4',
+    'steadicam_reveal': 'steadicam reveal, smooth orbiting discovery:1.4',
+    'orbit_left': 'camera orbiting left around subject, arc shot:1.4',
+    'orbit_right': 'camera orbiting right around subject, arc shot:1.4',
+    'handheld': 'subtle handheld movement, organic micro-shake, documentary feel:1.2',
+    'whip_pan': 'fast whip pan, motion blur transition:1.3',
+    'rack_focus': 'rack focus shift, depth of field pull:1.2',
+    'boom_up': 'boom shot rising, vertical jib ascent:1.3',
+    'boom_down': 'boom shot lowering, vertical jib descent:1.3',
+    'push_in_rotate': 'push in with subtle rotation, vertigo effect:1.4',
+    'parallax': 'lateral parallax movement, foreground-background separation:1.3',
+    'static': 'locked off static tripod, stable composition:1.2'
   };
 
-  let motionDesc = motionDescriptions[cameraMotion?.toLowerCase()] || motionDescriptions['static'];
+  const key = (cameraMotion || 'static').toLowerCase().replace(/[\s-]+/g, '_');
+  let motionDesc = motionDescriptions[key] || motionDescriptions['static'];
 
-  // Subject action takes priority
-  if (cameraMotion && !motionDescriptions[cameraMotion.toLowerCase()]) {
+  // Unrecognized artistic direction — pass through as subject action with high weight
+  if (cameraMotion && !motionDescriptions[key]) {
     const truncatedAction = cameraMotion.length > 40 ? cameraMotion.substring(0, 37) + '...' : cameraMotion;
     return `${truncatedAction}:1.5, ${prompt}, ${motionDesc}`;
   }
@@ -1638,17 +1712,40 @@ app.post('/api/comfyui/generate', async (req, res) => {
       steps = 30,
       cfg_scale = 7.0,
       init_image = null,
-      denoising_strength = 0.45
+      denoising_strength = 0.45,
+      reference_face_image = null,
+      ipadapter_weight = 0.85,
+      shotId = null,
+      generationType = 'shot'
     } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
+    // If shotId provided, check if we already have a successful image for this shot (dedup/recovery)
+    if (shotId) {
+      const existing = db.getImageByShotId(shotId);
+      if (existing) {
+        console.log(`ComfyUI: Shot ${shotId} already has image id=${existing.id}, returning cached result`);
+        return res.json({
+          success: true,
+          imageUrl: `http://localhost:${PORT}/api/media/image/${existing.id}`,
+          promptId: existing.comfyui_prompt_id,
+          filename: existing.filename,
+          id: existing.id,
+          cached: true
+        });
+      }
+    }
+
     const isImg2Img = !!init_image;
+    const hasIPAdapter = !!reference_face_image;
     console.log('ComfyUI: Starting generation', {
       mode: isImg2Img ? 'img2img' : 'txt2img',
+      ipadapter: hasIPAdapter ? `face consistency (weight: ${ipadapter_weight})` : 'off',
       prompt: prompt.substring(0, 100),
+      shotId: shotId || 'none',
       steps,
       cfg: cfg_scale,
       size: `${width}x${height}`,
@@ -1668,6 +1765,17 @@ app.post('/api/comfyui/generate', async (req, res) => {
       }
     }
 
+    // If IP-Adapter face reference, upload the face image to ComfyUI
+    let faceImageFilename = null;
+    if (reference_face_image) {
+      try {
+        faceImageFilename = await uploadImageToComfyUI(reference_face_image);
+        console.log(`ComfyUI: Face reference image uploaded as ${faceImageFilename}`);
+      } catch (error) {
+        console.warn('ComfyUI: Failed to upload face reference image, continuing without IP-Adapter:', error.message);
+      }
+    }
+
     // Create workflow
     let workflow;
     try {
@@ -1679,8 +1787,10 @@ app.post('/api/comfyui/generate', async (req, res) => {
         steps,
         cfg: cfg_scale,
         seed: Date.now(),
-        init_image: imageFilename, // Pass filename instead of base64
-        denoising_strength
+        init_image: imageFilename,
+        denoising_strength,
+        reference_face_image: faceImageFilename,
+        ipadapter_weight
       });
       console.log('ComfyUI: Workflow created successfully');
     } catch (error) {
@@ -1766,8 +1876,8 @@ app.post('/api/comfyui/generate', async (req, res) => {
       const timestamp = Date.now();
       const localFilename = `${timestamp}.png`;
 
-      // Insert into database
-      const result = db.insertImage(
+      // Insert into database with shot tracking
+      const result = db.insertImageTracked(
         null, // production_id - can be linked later
         localFilename,
         null, // width
@@ -1775,11 +1885,14 @@ app.post('/api/comfyui/generate', async (req, res) => {
         'png',
         binaryData.length,
         binaryData,
-        'image/png'
+        'image/png',
+        shotId,
+        promptId,
+        generationType
       );
 
       const dbImageId = result.lastInsertRowid;
-      console.log('ComfyUI: Image saved to database with id:', dbImageId);
+      console.log(`ComfyUI: Image saved to database id=${dbImageId}, shotId=${shotId || 'none'}, promptId=${promptId}`);
 
       const localImageUrl = `http://localhost:${PORT}/api/media/image/${dbImageId}`;
 
@@ -1788,7 +1901,8 @@ app.post('/api/comfyui/generate', async (req, res) => {
         imageUrl: localImageUrl,
         promptId,
         filename: localFilename,
-        id: dbImageId
+        id: dbImageId,
+        shotId
       });
     } catch (error) {
       console.error('ComfyUI: Image download/save failed:', error);
@@ -1803,6 +1917,94 @@ app.post('/api/comfyui/generate', async (req, res) => {
       details: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  }
+});
+
+// Recover orphaned images: look up by shotId or scan ComfyUI history
+app.post('/api/comfyui/recover-images', async (req, res) => {
+  try {
+    const { shotIds } = req.body;
+    if (!shotIds || !Array.isArray(shotIds) || shotIds.length === 0) {
+      return res.status(400).json({ error: 'shotIds array is required' });
+    }
+
+    console.log(`ComfyUI Recovery: Checking ${shotIds.length} shots for orphaned images`);
+    const recovered = {};
+
+    for (const shotId of shotIds) {
+      // Check DB first — the image may have been saved but never delivered to frontend
+      const dbImage = db.getImageByShotId(shotId);
+      if (dbImage) {
+        recovered[shotId] = {
+          imageUrl: `http://localhost:${PORT}/api/media/image/${dbImage.id}`,
+          source: 'database',
+          id: dbImage.id
+        };
+        console.log(`  Shot ${shotId}: Found in DB (id=${dbImage.id})`);
+      }
+    }
+
+    const recoveredCount = Object.keys(recovered).length;
+    console.log(`ComfyUI Recovery: Recovered ${recoveredCount}/${shotIds.length} images from DB`);
+
+    // For shots still missing, scan recent ComfyUI history
+    const missingShotIds = shotIds.filter(id => !recovered[id]);
+    if (missingShotIds.length > 0) {
+      try {
+        const historyResp = await fetch(`${COMFYUI_URL}/history?max_items=50`);
+        const history = await historyResp.json();
+
+        for (const [promptId, entry] of Object.entries(history)) {
+          if (!entry.status?.completed) continue;
+          const outputs = entry.outputs || {};
+
+          for (const nodeId in outputs) {
+            const images = outputs[nodeId]?.images;
+            if (!images || images.length === 0) continue;
+
+            const filename = images[0].filename;
+            const comfyImageUrl = `${COMFYUI_URL}/view?filename=${filename}&type=output`;
+
+            // Download and store in DB for any missing shot
+            // We can't map ComfyUI history to shot IDs unless we tagged them,
+            // so just log what's available for manual recovery
+            console.log(`  ComfyUI history: promptId=${promptId}, file=${filename}`);
+          }
+        }
+        console.log(`ComfyUI Recovery: Scanned ${Object.keys(history).length} recent ComfyUI history entries`);
+      } catch (e) {
+        console.warn('ComfyUI Recovery: Failed to scan ComfyUI history:', e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      recovered,
+      total: shotIds.length,
+      found: recoveredCount,
+      missing: shotIds.filter(id => !recovered[id])
+    });
+  } catch (error) {
+    console.error('ComfyUI Recovery: Error:', error);
+    res.status(500).json({ error: 'Recovery failed', details: error.message });
+  }
+});
+
+// Look up a single image by shot ID
+app.get('/api/comfyui/image-by-shot/:shotId', (req, res) => {
+  const { shotId } = req.params;
+  const image = db.getImageByShotId(shotId);
+  if (image) {
+    res.json({
+      success: true,
+      imageUrl: `http://localhost:${PORT}/api/media/image/${image.id}`,
+      id: image.id,
+      shotId: image.shot_id,
+      promptId: image.comfyui_prompt_id,
+      createdAt: image.created_at
+    });
+  } else {
+    res.status(404).json({ success: false, error: `No image found for shot ${shotId}` });
   }
 });
 

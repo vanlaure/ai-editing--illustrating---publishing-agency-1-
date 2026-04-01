@@ -4,7 +4,10 @@ export interface VideoClip {
   file?: File;
   url: string;
   thumbnail: string; // Base64
-  duration: number; // Seconds
+  duration: number; // Seconds — actual video file duration
+  expectedDuration?: number; // Seconds — storyboard-expected duration (shot.end - shot.start)
+  trimIn?: number; // Seconds — start offset into the clip (default 0)
+  trimOut?: number; // Seconds — end offset from start (default = duration)
   name: string;
 }
 

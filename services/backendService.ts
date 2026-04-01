@@ -181,6 +181,27 @@ export const backendService = {
     }
   },
 
+  async recoverImages(shotIds: string[]): Promise<{ recovered: Record<string, { imageUrl: string; id: number }>; missing: string[] }> {
+    const response = await fetch(`${BACKEND_URL}/api/comfyui/recover-images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shotIds })
+    });
+    if (!response.ok) throw new Error('Recovery request failed');
+    return response.json();
+  },
+
+  async getImageByShotId(shotId: string): Promise<{ imageUrl: string; id: number } | null> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/comfyui/image-by-shot/${shotId}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.success ? data : null;
+    } catch {
+      return null;
+    }
+  },
+
   async generateImageWithA1111(params: {
     prompt: string;
     negative_prompt?: string;
@@ -190,6 +211,10 @@ export const backendService = {
     cfg_scale?: number;
     init_image?: string;
     denoising_strength?: number;
+    reference_face_image?: string;
+    ipadapter_weight?: number;
+    shotId?: string;
+    generationType?: string;
   }): Promise<{ imageUrl: string }> {
     const comfyParams = {
       prompt: params.prompt,
@@ -199,7 +224,11 @@ export const backendService = {
       steps: params.steps || 20,
       cfg_scale: params.cfg_scale || 7.0,
       init_image: params.init_image,
-      denoising_strength: params.denoising_strength || 0.45
+      denoising_strength: params.denoising_strength || 0.45,
+      reference_face_image: params.reference_face_image,
+      ipadapter_weight: params.ipadapter_weight || 0.85,
+      shotId: params.shotId,
+      generationType: params.generationType || 'shot'
     };
 
     const response = await fetch(`${BACKEND_URL}/api/comfyui/generate`, {

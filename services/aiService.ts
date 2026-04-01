@@ -1,7 +1,8 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile } from '../types';
+import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile, AIProviderSettings } from '../types';
 import { VFX_PRESETS } from "../constants";
 import { backendService } from './backendService';
+import { getProfileForModel, adaptPromptForModel, buildThinkingModelKnowledge, buildResearchPrompt, cacheResearchedProfile, parseResearchResponse } from './promptOptimizer';
 
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
@@ -75,6 +76,38 @@ function chooseVideoModel(
     return { video_model, render_profile, video_model_reason, workflow_hint };
 }
 
+// --- CHARACTER IDENTITY LOCK ---
+// Builds a dense, reproducible character description from bible data.
+// Used in EVERY prompt to enforce visual consistency across shots.
+const buildCharacterIdentityBlock = (char: CharacterBible, level: 'full' | 'concise' = 'full'): string => {
+    const pa = char.physical_appearance;
+    const cos = char.costuming_and_props;
+
+    if (level === 'concise') {
+        // For token-limited models — still includes the critical face + hair + clothing anchors
+        return [
+            `(${char.name}:1.3)`,
+            `(${pa.skin_tone} skin, ${pa.face_shape} face, ${pa.nose_description} nose, ${pa.lip_description}, ${pa.brow_description}, ${pa.jawline_description}:1.3)`,
+            `(${pa.hair_style_and_color}, ${pa.hair_texture}:1.3)`,
+            `(${pa.eye_shape} ${pa.eye_color} eyes:1.2)`,
+            pa.key_facial_features ? `(${pa.key_facial_features}:1.1)` : '',
+            `(wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}:1.2)`,
+        ].filter(Boolean).join(', ');
+    }
+
+    // Full natural-language block for detailed-prompt models (Waver, Step-Video, etc.)
+    return [
+        `Character "${char.name}":`,
+        `${pa.gender_presentation}, ${pa.ethnicity}, ${pa.age_range} years old, ${pa.body_type} build.`,
+        `FACE (must be photorealistic and identical in every frame): ${pa.skin_tone} skin, ${pa.face_shape} face. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}. Eyes: ${pa.eye_shape}, ${pa.eye_color}.`,
+        pa.key_facial_features ? `Distinguishing features: ${pa.key_facial_features}.` : '',
+        `HAIR (must remain consistent): ${pa.hair_style_and_color}, ${pa.hair_texture} texture.`,
+        `OUTFIT (must remain identical): ${cos.outfit_style} — ${cos.specific_clothing_items.join(', ')}.`,
+        cos.signature_props.length > 0 ? `Props: ${cos.signature_props.join(', ')}.` : '',
+        `Performance: ${char.performance_and_demeanor.performance_style}.`,
+    ].filter(Boolean).join(' ');
+};
+
 // --- PROMPT GENERATION HELPERS (for UI display) ---
 
 // Enhanced prompt builder for ComfyUI with ultra-realistic quality tags
@@ -84,17 +117,17 @@ const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: 
     const characterRef = shot.character_refs[0];
     const char = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
 
-    // CRITICAL: Include character NAME and physical traits
+    // Full identity-locked character description for facial consistency
     const charDesc = char
-        ? `${char.name}, a ${char.physical_appearance.age_range.split('-')[0]}yo ${char.physical_appearance.gender_presentation.toLowerCase()} man`
-        : 'person';
+        ? buildCharacterIdentityBlock(char, 'concise')
+        : '(person:1.1)';
 
     // Location: Just setting type and time of day
     const loc = bibles.locations.find(l => l.name === shot.location_ref);
     const locDesc = loc ? `${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}` : '';
 
     // Ultra-realistic quality tags optimized for SDXL
-    const qualityTags = 'photorealistic, 8k uhd, high quality, film grain, Fujifilm XT3, sharp focus, professional photography, studio lighting, physically-based rendering, extreme detail description, raw photo, cinematic lighting';
+    const qualityTags = 'photorealistic, 8k uhd, RAW photo, ultra-realistic skin texture, visible pores, subsurface scattering, film grain, Fujifilm XT3, sharp focus, professional photography, physically-based rendering, extreme facial detail, cinematic lighting, anatomically correct face';
 
     // EXPLICIT prompt with quality enhancement
     const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}, ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, ${qualityTags}`.trim();
@@ -109,8 +142,8 @@ const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: 
 export const getPromptForImageShot = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief): string => {
     const characterDetails = shot.character_refs.map(ref => {
         const char = bibles.characters.find(c => c.name === ref);
-        return char ? `Character "${char.name}" (${char.physical_appearance.gender_presentation}, wearing ${char.costuming_and_props.outfit_style})` : '';
-    }).join(', ');
+        return char ? buildCharacterIdentityBlock(char, 'full') : '';
+    }).filter(Boolean).join('\n');
 
     const locationDetails = (() => {
         const loc = bibles.locations.find(l => l.name === shot.location_ref);
@@ -118,13 +151,14 @@ export const getPromptForImageShot = (shot: StoryboardShot, bibles: Bibles, brie
     })();
 
     const prompt = `
-A cinematic, 16:9 aspect ratio photo.
+A cinematic, 16:9 aspect ratio photo. Ultra-realistic, photorealistic skin, visible pores, anatomically correct face.
 - Visual Style: ${brief.style}, ${brief.feel}.
 - Subject: ${shot.subject}.
 - Shot Description: ${shot.shot_type}, ${shot.composition}.
 - Camera: Using a ${shot.cinematic_enhancements.camera_lens}, performing a ${shot.cinematic_enhancements.camera_motion}.
 - Lighting: ${shot.cinematic_enhancements.lighting_style}.
-- Character(s): ${characterDetails || 'None'}.
+- Character(s) — MUST match this description EXACTLY:
+${characterDetails || 'None'}.
 - Location: ${locationDetails}.
 - Important Colors: ${brief.color_palette?.join(', ')}.
     `;
@@ -138,17 +172,16 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
     const isStylized = renderProfile === 'stylized' || model === 'wan2_2';
     const isPortrait = renderProfile === 'portrait';
 
-    // Build character descriptions from bible data
+    // Build character descriptions from bible data — using identity-locked blocks for consistency
     const characterDetails = shot.character_refs.map(ref => {
         const char = bibles.characters.find(c => c.name === ref);
         if (!char) return '';
 
         if (shouldUseDetailed) {
-            return `Character "${char.name}": ${char.physical_appearance.gender_presentation}, ${char.physical_appearance.age_range} years old, ${char.physical_appearance.body_type} build, ${char.physical_appearance.key_facial_features}, ${char.physical_appearance.hair_style_and_color}. Wearing ${char.costuming_and_props.outfit_style}. Performance style: ${char.performance_and_demeanor.performance_style}.`;
+            return buildCharacterIdentityBlock(char, 'full');
         }
 
-        const emphasis = isPortrait ? ':1.4' : ':1.3';
-        return `(${char.name}, ${char.physical_appearance.gender_presentation}, wearing ${char.costuming_and_props.outfit_style}${emphasis})`;
+        return buildCharacterIdentityBlock(char, 'concise');
     }).filter(Boolean).join(', ');
 
     // Build location description from bible data
@@ -170,8 +203,8 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
     if (shouldUseDetailed) {
         // Waver / Step-Video detailed prompt
         const parts = [
-            `Animate this ${isPortrait ? 'portrait-focused' : 'cinematic'} shot for a music video.`,
-            characterDetails ? `Characters: ${characterDetails}` : '',
+            `Animate this ${isPortrait ? 'portrait-focused' : 'cinematic'} shot for a music video. The character's face, hair, and clothing MUST be ultra-realistic and identical to the reference description in every single frame — no morphing, no drift.`,
+            characterDetails ? `Characters (IDENTITY-LOCKED — render EXACTLY as described): ${characterDetails}` : '',
             locationDetails ? `Setting: ${locationDetails}` : '',
             `Subject: ${shot.subject}`,
             shot.action ? `Character Action: ${shot.action}` : '',
@@ -199,7 +232,8 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
                 : model === 'videocrafter2'
                     ? '(environment plate, atmospheric depth:1.1)'
                     : '(high quality:1.2)';
-    const consistencyTags = model === 'videocrafter2' ? '' : '(consistent face, identity lock, no morphing:1.2)';
+    const consistencyTags = model === 'videocrafter2' ? '' : '(consistent face across all frames, identity lock, no face morphing, no feature drift, same person throughout:1.3)';
+    const realismTags = '(ultra-realistic skin texture, visible pores, photorealistic face, anatomically correct:1.2)';
 
     const parts = [
         characterDetails || '(figure:1.1)',
@@ -209,12 +243,104 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
         `(${styleLine})`,
         modelTags,
         consistencyTags,
+        realismTags,
         pacing
     ].filter(Boolean);
 
     return parts.join(', ');
 };
 
+
+// --- MODEL-AWARE PROMPT GENERATION ---
+// These wrap the existing prompt builders but adapt output to match the selected model's
+// optimal prompt format using the prompt engineering knowledge base.
+
+/**
+ * Generate an image prompt optimized for the currently selected image model.
+ * Falls back to the existing getEnhancedPromptForA1111 / getPromptForImageShot if no settings provided.
+ */
+export const getOptimizedImagePrompt = (
+    shot: StoryboardShot,
+    bibles: Bibles,
+    brief: CreativeBrief,
+    settings?: AIProviderSettings
+): { prompt: string; negativePrompt: string } => {
+    if (!settings?.image?.selectedModel) {
+        // No model selected — use legacy prompt
+        return { prompt: getEnhancedPromptForA1111(shot, bibles, brief), negativePrompt: '' };
+    }
+
+    const profile = getProfileForModel(settings.image.selectedModel, 'image');
+    if (profile) {
+        return adaptPromptForModel({ shot, bibles, brief, characterBlock: '', locationBlock: '' }, profile);
+    }
+
+    // Unknown model — use natural-language fallback (thinking LLM will research later)
+    return { prompt: getPromptForImageShot(shot, bibles, brief), negativePrompt: '' };
+};
+
+/**
+ * Generate a video prompt optimized for the currently selected video model.
+ * Falls back to the existing getPromptForClipShot if no settings provided.
+ */
+export const getOptimizedVideoPrompt = (
+    shot: StoryboardShot,
+    bibles: Bibles,
+    brief: CreativeBrief,
+    settings?: AIProviderSettings
+): { prompt: string; negativePrompt: string } => {
+    if (!settings?.video?.selectedModel) {
+        // No model selected — use legacy prompt
+        return { prompt: getPromptForClipShot(shot, bibles, brief), negativePrompt: '' };
+    }
+
+    const profile = getProfileForModel(settings.video.selectedModel, 'video');
+    if (profile) {
+        return adaptPromptForModel({ shot, bibles, brief, characterBlock: '', locationBlock: '' }, profile);
+    }
+
+    // Unknown model — use detailed natural-language fallback
+    return { prompt: getPromptForClipShot(shot, bibles, brief, true), negativePrompt: '' };
+};
+
+/**
+ * Get the prompt engineering knowledge block to inject into thinking LLM system prompts.
+ * This teaches the LLM about the selected image/video models so it creates optimal prompts
+ * during storyboard generation, creative direction, and shot planning.
+ */
+export const getPromptEngineeringKnowledge = (settings?: AIProviderSettings): string => {
+    if (!settings) return '';
+    return buildThinkingModelKnowledge(settings);
+};
+
+/**
+ * Ask the thinking LLM to research optimal prompt engineering for an unknown model.
+ * Caches the result so subsequent prompts for the same model are optimized.
+ */
+export const researchModelPromptStyle = async (
+    modelId: string,
+    outputType: 'image' | 'video'
+): Promise<void> => {
+    // Skip if already known
+    if (getProfileForModel(modelId, outputType)) return;
+
+    try {
+        const ai = getAiClient();
+        const researchPromptText = buildResearchPrompt(modelId, outputType);
+        const result = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: researchPromptText,
+        });
+        const text = result.text || '';
+        const profile = parseResearchResponse(modelId, text);
+        if (profile) {
+            cacheResearchedProfile(modelId, outputType, profile);
+            console.log(`[promptOptimizer] Researched and cached profile for ${outputType} model: ${modelId} (family: ${profile.family})`);
+        }
+    } catch (e) {
+        console.warn(`[promptOptimizer] Failed to research model ${modelId}:`, e);
+    }
+};
 
 // --- API FUNCTIONS ---
 
@@ -901,8 +1027,19 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
 
       For each Character, provide:
       - role_in_story: Their purpose in the narrative.
-      - physical_appearance: Go beyond basics. Describe facial features, body type, ethnicity, etc.
-      - costuming_and_props: Define a clear style and list specific items.
+      - physical_appearance: You MUST be EXTREMELY SPECIFIC about every facial feature. This is critical for visual consistency across shots.
+        * skin_tone: Exact shade (e.g., "warm golden-brown", "pale ivory with light freckles across the nose bridge")
+        * face_shape: Precise bone structure (e.g., "oval face with prominent high cheekbones and a narrow chin")
+        * nose_description: Exact nose shape (e.g., "slightly upturned button nose with a narrow bridge", "broad flat nose with flared nostrils")
+        * lip_description: Exact lip shape (e.g., "full plump lips with a pronounced cupid's bow", "thin straight lips")
+        * brow_description: Exact brow shape (e.g., "thick dark arched brows with a slight gap", "thin blonde straight brows")
+        * jawline_description: Exact jaw shape (e.g., "sharp angular jawline with a cleft chin", "soft rounded jaw tapering to a small chin")
+        * key_facial_features: Any distinguishing marks — scars, dimples, moles, wrinkles, piercings
+        * hair_style_and_color: Extremely detailed (e.g., "shoulder-length jet-black hair with a side part, swept behind the left ear")
+        * hair_texture: Specific curl pattern/texture (e.g., "3B loose curls", "pin-straight and glossy", "thick wavy")
+        * eye_color: Specific shade (e.g., "hazel-green with amber flecks around the pupil")
+        * eye_shape: Exact shape (e.g., "large almond-shaped eyes with a slight upturn at the outer corners")
+      - costuming_and_props: Define ONE CONSISTENT outfit that the character wears throughout the video. Be hyper-specific about every clothing item — brand aesthetic, fabric, color, fit, layering. This outfit must remain IDENTICAL in every shot unless a wardrobe change is narratively justified. List EVERY visible item from head to toe.
       - performance_and_demeanor: How do they act? What is their emotional journey?
       - cinematic_style: How should they be filmed? Specify lenses, lighting, and colors that define their presence.
 
@@ -950,11 +1087,19 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
                                         gender_presentation: { type: Type.STRING },
                                         ethnicity: { type: Type.STRING },
                                         body_type: { type: Type.STRING },
-                                        key_facial_features: { type: Type.STRING },
-                                        hair_style_and_color: { type: Type.STRING },
-                                        eye_color: { type: Type.STRING },
+                                        skin_tone: { type: Type.STRING, description: "Exact skin shade, e.g. 'warm olive', 'deep brown with golden undertones'" },
+                                        face_shape: { type: Type.STRING, description: "Precise bone structure, e.g. 'oval with high cheekbones'" },
+                                        nose_description: { type: Type.STRING, description: "Exact nose shape and size" },
+                                        lip_description: { type: Type.STRING, description: "Exact lip shape and fullness" },
+                                        brow_description: { type: Type.STRING, description: "Exact eyebrow shape, thickness, color" },
+                                        jawline_description: { type: Type.STRING, description: "Exact jaw and chin shape" },
+                                        key_facial_features: { type: Type.STRING, description: "Distinguishing marks: scars, dimples, moles, piercings" },
+                                        hair_style_and_color: { type: Type.STRING, description: "Ultra-specific hairstyle, color, parting, length" },
+                                        hair_texture: { type: Type.STRING, description: "Curl pattern/texture, e.g. '3B curls', 'pin-straight'" },
+                                        eye_color: { type: Type.STRING, description: "Specific shade with detail" },
+                                        eye_shape: { type: Type.STRING, description: "Exact eye shape" },
                                     },
-                                    required: ['age_range', 'gender_presentation', 'ethnicity', 'body_type', 'key_facial_features', 'hair_style_and_color', 'eye_color']
+                                    required: ['age_range', 'gender_presentation', 'ethnicity', 'body_type', 'skin_tone', 'face_shape', 'nose_description', 'lip_description', 'brow_description', 'jawline_description', 'key_facial_features', 'hair_style_and_color', 'hair_texture', 'eye_color', 'eye_shape']
                                 },
                                 costuming_and_props: {
                                     type: Type.OBJECT,
@@ -1045,7 +1190,7 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
 };
 
 
-export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, modelTier: 'freemium' | 'premium'): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
+export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
     console.log(`AI Service: Generating Storyboard with ${modelTier} tier...`);
     const ai = getAiClient();
     const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
@@ -1107,7 +1252,26 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       - A detailed description for 'subject' and 'composition'.
       - **action**: CRITICAL - Specify exactly what the character/subject is doing (e.g., "smiling radiantly at camera", "looking pensively at horizon", "turning head slowly left", "dancing energetically"). This controls character behavior in the video.
       - Reference characters and locations from the bibles by name.
-      - **cinematic_enhancements**: Be specific. Define a 'lighting_style' (e.g., "High-key, soft fill light"), a 'camera_lens' (e.g., "85mm prime lens", "Wide-angle 24mm"), and a 'camera_motion' (e.g., "Slow push-in on subject", "Static tripod shot").
+      - **camera_move**: Specify the primary camera movement using professional cinematography language. Think like an expert director — VARY your camera work across shots to create visual rhythm and narrative tension. Available movement vocabulary:
+        * DEPTH moves: "Slow push-in", "Dolly in", "Dolly out", "Zoom in", "Zoom out", "Pull back"
+        * HORIZONTAL moves: "Pan left", "Pan right", "Tracking left", "Tracking right", "Whip pan"
+        * VERTICAL moves: "Tilt up", "Tilt down", "Crane up", "Crane down", "Boom up", "Boom down"
+        * ORBITAL moves: "Orbit left", "Orbit right", "Arc shot around subject"
+        * STABILIZED moves: "Steadicam follow", "Steadicam reveal", "Handheld"
+        * SPECIALTY: "Rack focus", "Parallax", "Push in with rotation (vertigo effect)"
+        * STATIC: "Static tripod" — use sparingly and intentionally, not as a default
+
+        **DIRECTOR'S RULES FOR CAMERA MOVEMENT**:
+        - Never use the same camera move for more than 2 consecutive shots
+        - Establishing/wide shots: use crane up, dolly out, or tracking shots to reveal the space
+        - Emotional close-ups: use slow push-in or dolly in to build intimacy
+        - High-energy chorus/drop sections: use whip pans, tracking shots, handheld, or orbit shots for kinetic energy
+        - Transitions between story beats: use crane moves or steadicam reveals
+        - Quiet/introspective moments: use static tripod or slow rack focus
+        - When cutting between two characters: alternate between tracking left/right or orbit directions
+        - Match camera energy to musical energy — slow deliberate moves for verses, dynamic moves for choruses
+
+      - **cinematic_enhancements**: Be specific. Define a 'lighting_style' (e.g., "High-key, soft fill light"), a 'camera_lens' (e.g., "85mm prime lens", "Wide-angle 24mm"), and a 'camera_motion' that complements the camera_move (e.g., "Slow push-in on subject", "Handheld with subtle shake"). The camera_motion should elaborate on the camera_move with more descriptive detail.
       - **design_agent_feedback**: Provide a critical evaluation. The 'sync_score' (1-10) should reflect how well the shot matches the song's energy at that moment. The 'cohesion_score' (1-10) should reflect how well it fits the overall creative brief. Provide constructive 'feedback'.
       - **lyric_overlay**: If a key lyric is sung during the shot, include it with a suggested 'animation_style' that matches the emotion (e.g., "Aggressive punch-in", "Gentle fade").
       - Set 'preview_image_url' to an empty string.
@@ -1117,6 +1281,13 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       - 'description': A slightly more detailed summary of the scene's content and mood.
       - 'transitions': Set this to an empty array. It will be filled in later.
       
+      ${providerSettings ? `
+      **PROMPT ENGINEERING FOR DOWNSTREAM MODELS**:
+      When writing the 'subject', 'action', 'composition', and 'cinematic_enhancements' fields for each shot, keep in mind that these will be used to construct prompts for the image and video generation models described below. Write descriptions that align with their optimal prompt style.
+
+      ${getPromptEngineeringKnowledge(providerSettings)}
+      ` : ''}
+
       Song Analysis: ${JSON.stringify(analysis, null, 2)}
       Creative Brief: ${JSON.stringify(brief, null, 2)}
       Visual Bibles: ${JSON.stringify(bibles, null, 2)}
@@ -1294,12 +1465,59 @@ function ensureStoryboardCoverage(
                     }
                 }
 
+                // Expert director: rotate camera moves per shot to avoid monotony
+                const sectionLower = sectionName.toLowerCase();
+                const isChorus = /chorus|hook|drop/.test(sectionLower);
+                const isBridge = /bridge|break|interlude/.test(sectionLower);
+                const isOutro = /outro|ending|coda/.test(sectionLower);
+                const isIntro = /intro|opening/.test(sectionLower);
+
+                // Camera move palette — varied by section energy like an expert editor
+                const verseMoves = [
+                    { move: 'Slow push-in', motion: 'Slow dolly in on subject', lens: '85mm prime', shot: 'Medium close-up' },
+                    { move: 'Tracking left', motion: 'Lateral tracking following subject', lens: '50mm prime', shot: 'Medium shot' },
+                    { move: 'Rack focus', motion: 'Focus pull from foreground to subject', lens: '85mm prime', shot: 'Close-up' },
+                    { move: 'Static tripod', motion: 'Locked off static composition', lens: '35mm wide', shot: 'Wide shot' },
+                    { move: 'Tilt up', motion: 'Slow vertical tilt revealing subject', lens: '50mm prime', shot: 'Low angle medium' },
+                    { move: 'Dolly out', motion: 'Gradual pull back revealing environment', lens: '35mm wide', shot: 'Medium wide' },
+                ];
+                const chorusMoves = [
+                    { move: 'Orbit right', motion: 'Dynamic arc around subject', lens: '24mm wide-angle', shot: 'Dynamic medium' },
+                    { move: 'Crane up', motion: 'Rising crane revealing wide scene', lens: '24mm wide-angle', shot: 'Wide establishing' },
+                    { move: 'Whip pan', motion: 'Fast whip pan with motion blur', lens: '35mm wide', shot: 'Dynamic wide' },
+                    { move: 'Steadicam follow', motion: 'Fluid steadicam tracking subject', lens: '35mm wide', shot: 'Tracking medium' },
+                    { move: 'Handheld', motion: 'Energetic handheld with organic shake', lens: '50mm prime', shot: 'Close-up' },
+                    { move: 'Tracking right', motion: 'Fast lateral track matching energy', lens: '24mm wide-angle', shot: 'Dynamic medium' },
+                ];
+                const bridgeMoves = [
+                    { move: 'Steadicam reveal', motion: 'Smooth orbiting reveal of subject', lens: '50mm prime', shot: 'Medium shot' },
+                    { move: 'Crane down', motion: 'Descending crane approaching subject', lens: '85mm prime', shot: 'Close-up' },
+                    { move: 'Parallax', motion: 'Lateral parallax with depth separation', lens: '85mm prime', shot: 'Medium close-up' },
+                ];
+                const introMoves = [
+                    { move: 'Crane up', motion: 'Rising crane establishing the scene', lens: '24mm wide-angle', shot: 'Wide establishing' },
+                    { move: 'Dolly in', motion: 'Slow dolly forward approaching subject', lens: '35mm wide', shot: 'Wide to medium' },
+                    { move: 'Tilt down', motion: 'Descending tilt revealing subject', lens: '50mm prime', shot: 'Medium shot' },
+                ];
+                const outroMoves = [
+                    { move: 'Dolly out', motion: 'Slow pull back retreating from subject', lens: '35mm wide', shot: 'Medium to wide' },
+                    { move: 'Crane up', motion: 'Ascending crane for final wide shot', lens: '24mm wide-angle', shot: 'Wide establishing' },
+                    { move: 'Static tripod', motion: 'Locked off contemplative composition', lens: '85mm prime', shot: 'Close-up' },
+                ];
+
+                const movePool = isChorus ? chorusMoves
+                    : isBridge ? bridgeMoves
+                    : isIntro ? introMoves
+                    : isOutro ? outroMoves
+                    : verseMoves;
+                const pick = movePool[shotIndex % movePool.length];
+
                 const newShot: StoryboardShot = {
                     id,
                     start: rawStart,
                     end: finalEnd,
-                    shot_type: 'Performance close-up',
-                    camera_move: 'Subtle dolly-in',
+                    shot_type: pick.shot,
+                    camera_move: pick.move,
                     composition: 'Rule of thirds, shallow depth of field',
                     subject: brief.videoType === 'Concert Performance' ? 'Singer performing on stage with dynamic lights' : 'Subject expressing lyric emotion',
                     location_ref: loc || 'Primary Location',
@@ -1309,8 +1527,8 @@ function ensureStoryboardCoverage(
                     preview_image_url: '',
                     cinematic_enhancements: {
                         lighting_style: 'Cinematic key light with soft fill',
-                        camera_lens: '85mm prime',
-                        camera_motion: 'Slow push-in'
+                        camera_lens: pick.lens,
+                        camera_motion: pick.motion
                     },
                     design_agent_feedback: {
                         sync_score: 8,
@@ -1366,8 +1584,10 @@ function ensureStoryboardCoverage(
     }
 }
 
-export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
-    const prompt = getPromptForImageShot(shot, bibles, brief);
+export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium', providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
+    // Use model-optimized prompt if provider settings are available
+    const optimized = providerSettings ? getOptimizedImagePrompt(shot, bibles, brief, providerSettings) : null;
+    const prompt = optimized?.prompt || getPromptForImageShot(shot, bibles, brief);
 
     // Premium tier: Use Google Imagen (high quality, paid)
     if (modelTier === 'premium') {
@@ -1409,12 +1629,13 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             // Get character reference image from bible if available
             const characterRef = shot.character_refs[0]; // Primary character
             const character = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
-            const referenceImageUrl = character?.source_images?.[0]; // Use first source image
+            // Use the character's bible portrait (stored in source_images after generation) for IP-Adapter face consistency
+            const referenceImageUrl = character?.source_images?.[0];
 
             const enhancedPrompt = getEnhancedPromptForA1111(shot, bibles, brief);
             console.log("AI Service: Enhanced prompt length:", enhancedPrompt.length);
             console.log("AI Service: Enhanced prompt preview:", enhancedPrompt.substring(0, 200));
-            console.log("AI Service: Using character reference image:", referenceImageUrl ? "YES" : "NO");
+            console.log("AI Service: Character reference for IP-Adapter:", referenceImageUrl ? "YES" : "NO");
 
             const params: any = {
                 prompt: enhancedPrompt,
@@ -1422,42 +1643,39 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
                 width: 1024,
                 height: 576,
                 steps: 50,
-                cfg_scale: 7.5
+                cfg_scale: 7.5,
+                shotId: shot.id,
+                generationType: 'shot'
             };
 
-            // Add img2img parameters if reference image exists
-            // High denoising_strength (0.85) means: use reference for style/composition hints only,
-            // but generate mostly new content based on prompt (avoids copying collage structure)
-            if (referenceImageUrl) {
-                // If the reference image is a URL (e.g. from DB), fetch and convert to base64
-                let initImageBase64 = referenceImageUrl;
-                if (referenceImageUrl.startsWith('http')) {
+            // IP-Adapter face consistency: use the character's bible portrait
+            // This keeps the character's face consistent across all shots
+            const faceRefUrl = referenceImageUrl;
+            if (faceRefUrl) {
+                let faceBase64 = faceRefUrl;
+                if (faceRefUrl.startsWith('http')) {
                     try {
-                        const resp = await fetch(referenceImageUrl);
+                        const resp = await fetch(faceRefUrl);
                         const blob = await resp.blob();
                         const reader = new FileReader();
-                        initImageBase64 = await new Promise((resolve) => {
+                        faceBase64 = await new Promise((resolve) => {
                             reader.onload = () => resolve(reader.result as string);
                             reader.readAsDataURL(blob);
                         });
-                        console.log("AI Service: Converted reference image URL to base64");
+                        console.log("AI Service: Converted face reference to base64 for IP-Adapter");
                     } catch (e) {
-                        console.warn("AI Service: Failed to convert reference image URL to base64", e);
-                        // Continue without reference image or let it fail?
-                        // Let's unset it to be safe so we don't crash the backend
-                        initImageBase64 = "";
+                        console.warn("AI Service: Failed to convert face reference to base64", e);
+                        faceBase64 = "";
                     }
                 }
 
-                if (initImageBase64) {
-                    params.init_image = initImageBase64;
-                    params.denoising_strength = 0.85;
-                    console.log("AI Service: Using img2img mode with denoising_strength:", params.denoising_strength);
-                } else {
-                    console.log("AI Service: Reference image processing failed - using txt2img mode");
+                if (faceBase64) {
+                    params.reference_face_image = faceBase64;
+                    params.ipadapter_weight = 0.85;
+                    console.log("AI Service: IP-Adapter face consistency enabled");
                 }
             } else {
-                console.log("AI Service: NO REFERENCE IMAGE - using txt2img mode");
+                console.log("AI Service: No character portrait — generating without IP-Adapter face lock");
             }
 
             const result = await backendService.generateImageWithA1111(params);
@@ -1507,12 +1725,17 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
     const cin = character.cinematic_style;
 
     const prompt = `
-      A cinematic 3:4 aspect ratio character concept art photo.
+      A cinematic 3:4 aspect ratio character reference photo. Ultra-realistic, photorealistic skin with visible pores, anatomically perfect face.
       - Style: ${brief.style}, ${brief.feel}.
       - Character Name: ${character.name}.
-      - Appearance: ${pa.gender_presentation}, ${pa.ethnicity}, ${pa.age_range} years old. ${pa.key_facial_features}.
-      - Hair and Eyes: ${pa.hair_style_and_color}, ${pa.eye_color} eyes.
-      - Costume Style: ${cos.outfit_style}, specifically wearing ${cos.specific_clothing_items.join(', ')}.
+      - Gender/Ethnicity: ${pa.gender_presentation}, ${pa.ethnicity}, ${pa.age_range} years old, ${pa.body_type} build.
+      - Skin: ${pa.skin_tone}.
+      - Face: ${pa.face_shape} face shape. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}.
+      - Eyes: ${pa.eye_shape}, ${pa.eye_color}.
+      - Distinguishing features: ${pa.key_facial_features || 'none'}.
+      - Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
+      - Outfit (head to toe): ${cos.outfit_style} — ${cos.specific_clothing_items.join(', ')}.
+      ${cos.signature_props.length > 0 ? `- Props: ${cos.signature_props.join(', ')}.` : ''}
       - Cinematic Lighting: ${cin.lighting_style}.
     `;
 
@@ -1524,24 +1747,26 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
             if (health.available) {
                 console.log("AI Service: Generating character image with ComfyUI...", character.name);
 
-                // Enhanced prompt with full character details
+                // Enhanced prompt with full granular character details for identity lock
                 const enhancedPrompt = `
-Cinematic ${brief.style} character portrait, ${brief.feel} mood, 3:4 aspect ratio.
+Cinematic ${brief.style} character reference portrait, ${brief.feel} mood, 3:4 aspect ratio.
 ${character.name}: ${pa.gender_presentation} ${pa.ethnicity} person, ${pa.age_range} years old, ${pa.body_type} build.
-Face: ${pa.key_facial_features}.
-Hair: ${pa.hair_style_and_color}.
-Eyes: ${pa.eye_color}.
+Skin: ${pa.skin_tone}.
+Face: ${pa.face_shape} face. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}.
+Eyes: ${pa.eye_shape}, ${pa.eye_color}.
+${pa.key_facial_features ? `Distinguishing features: ${pa.key_facial_features}.` : ''}
+Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
 Wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}.
 ${cos.signature_props.length > 0 ? `Props: ${cos.signature_props.join(', ')}.` : ''}
 Expression: ${character.performance_and_demeanor.emotional_arc}.
 Lighting: ${cin.lighting_style}.
 Style: ${cin.color_dominants_in_shots.join(', ')} color palette.
-Professional character concept art, high detail, sharp focus, photorealistic, ${cin.camera_lenses}.
+Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurface scattering, anatomically perfect face, sharp focus, ${cin.camera_lenses}.
                 `.trim().replace(/^ +/gm, '');
 
                 const result = await backendService.generateImageWithA1111({
                     prompt: enhancedPrompt,
-                    negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions",
+                    negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions, plastic skin, airbrushed, smooth skin, doll-like, uncanny valley, asymmetric eyes, wrong eye color, face morphing, hair color change, outfit change",
                     width: 768,
                     height: 1024,
                     steps: 50,
@@ -1558,12 +1783,14 @@ Professional character concept art, high detail, sharp focus, photorealistic, ${
         console.log("AI Service: Generating bible character with Pollinations AI (Freemium fallback)...", character.name);
         try {
             const enhancedPrompt = `
-Cinematic ${brief.style} character portrait, ${brief.feel} mood, 3:4 aspect ratio.
+Cinematic ${brief.style} character reference portrait, ${brief.feel} mood, 3:4 aspect ratio.
 ${character.name}: ${pa.gender_presentation} ${pa.ethnicity} person, ${pa.age_range} years old, ${pa.body_type} build.
-Face: ${pa.key_facial_features}. Hair: ${pa.hair_style_and_color}. Eyes: ${pa.eye_color}.
+Skin: ${pa.skin_tone}. Face: ${pa.face_shape} face, ${pa.nose_description} nose, ${pa.lip_description}, ${pa.brow_description}, ${pa.jawline_description}.
+Eyes: ${pa.eye_shape}, ${pa.eye_color}. ${pa.key_facial_features ? `Features: ${pa.key_facial_features}.` : ''}
+Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
 Wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}.
 Expression: ${character.performance_and_demeanor.emotional_arc}. Lighting: ${cin.lighting_style}.
-Professional character concept art, high detail, sharp focus, photorealistic.
+Ultra-realistic RAW photo, photorealistic skin texture, visible pores, sharp focus, anatomically perfect face.
             `.trim().replace(/\n/g, ' ');
 
             const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=768&height=1024&model=flux&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
@@ -1761,17 +1988,61 @@ export const generateClipForShot = async (
     image: string,
     bibles: Bibles,
     brief: CreativeBrief,
-    modelTier: 'freemium' | 'premium'
+    modelTier: 'freemium' | 'premium',
+    providerSettings?: AIProviderSettings
 ): Promise<{ clipUrl: string, tokenUsage: number }> => {
     console.log(`AI Service: Generating clip for shot with ${modelTier} tier...`, shot.id);
 
-    // Helper: map shot camera hints to backend-friendly motion tag
+    // Helper: map shot camera hints to backend-friendly motion tag (expert director vocabulary)
     const mapCameraMotion = (cameraMove: string, cinematicMotion?: string): string => {
         const combined = `${cameraMove || ''} ${cinematicMotion || ''}`.toLowerCase();
-        if (combined.includes('zoom in') || combined.includes('dolly in')) return 'zoom_in';
-        if (combined.includes('zoom out') || combined.includes('dolly out')) return 'zoom_out';
-        if (combined.includes('pan left')) return 'pan_left';
-        if (combined.includes('pan right')) return 'pan_right';
+
+        // Zoom / Dolly depth moves
+        if (combined.includes('zoom in') || combined.includes('push in') || combined.includes('push-in')) {
+            return combined.includes('slow') ? 'slow_push_in' : 'zoom_in';
+        }
+        if (combined.includes('dolly in') || combined.includes('dolly forward') || combined.includes('creep in')) return 'dolly_in';
+        if (combined.includes('zoom out') || combined.includes('pull back') || combined.includes('pulling back')) return 'zoom_out';
+        if (combined.includes('dolly out') || combined.includes('dolly back') || combined.includes('retreat')) return 'dolly_out';
+
+        // Pan (horizontal rotation)
+        if (combined.includes('pan left') || combined.includes('panning left')) return 'pan_left';
+        if (combined.includes('pan right') || combined.includes('panning right')) return 'pan_right';
+        if (combined.includes('whip pan') || combined.includes('swish pan')) return 'whip_pan';
+
+        // Tilt (vertical rotation)
+        if (combined.includes('tilt up') || combined.includes('tilting up')) return 'tilt_up';
+        if (combined.includes('tilt down') || combined.includes('tilting down')) return 'tilt_down';
+
+        // Tracking / lateral dolly
+        if (combined.includes('tracking left') || combined.includes('track left') || combined.includes('crab left')) return 'tracking_left';
+        if (combined.includes('tracking right') || combined.includes('track right') || combined.includes('crab right')) return 'tracking_right';
+        if (combined.includes('tracking') || combined.includes('follow')) return 'steadicam_follow';
+
+        // Crane / Jib
+        if (combined.includes('crane up') || combined.includes('jib up') || combined.includes('boom up') || combined.includes('rising')) return 'crane_up';
+        if (combined.includes('crane down') || combined.includes('jib down') || combined.includes('boom down') || combined.includes('descending')) return 'crane_down';
+
+        // Orbit / Arc
+        if (combined.includes('orbit left') || combined.includes('arc left') || combined.includes('circling left')) return 'orbit_left';
+        if (combined.includes('orbit right') || combined.includes('arc right') || combined.includes('circling right')) return 'orbit_right';
+        if (combined.includes('orbit') || combined.includes('arc shot') || combined.includes('circling')) return 'orbit_left';
+
+        // Steadicam / Stabilized
+        if (combined.includes('steadicam') || combined.includes('gimbal')) {
+            return combined.includes('reveal') ? 'steadicam_reveal' : 'steadicam_follow';
+        }
+
+        // Handheld
+        if (combined.includes('handheld') || combined.includes('shaky') || combined.includes('documentary')) return 'handheld';
+
+        // Specialty
+        if (combined.includes('rack focus') || combined.includes('focus pull')) return 'rack_focus';
+        if (combined.includes('parallax')) return 'parallax';
+        if (combined.includes('vertigo') || combined.includes('contra-zoom')) return 'push_in_rotate';
+
+        if (combined.includes('static') || combined.includes('locked') || combined.includes('tripod')) return 'static';
+
         return 'static';
     };
 
@@ -1785,7 +2056,9 @@ export const generateClipForShot = async (
         const fps = Math.max(12, Math.min(24, Math.round(bpm / 6)));
         const width = 1280;
         const height = 720;
-        const prompt = getPromptForClipShot(shot, bibles, brief, false);
+        // Use model-optimized prompt if provider settings are available
+        const optimized = providerSettings ? getOptimizedVideoPrompt(shot, bibles, brief, providerSettings) : null;
+        const prompt = optimized?.prompt || getPromptForClipShot(shot, bibles, brief, false);
         const camera_motion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements?.camera_motion);
 
         const { promptId } = await backendService.generateVideoClip({

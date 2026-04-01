@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Step } from './types';
 import { useMusicVideoGenerator } from './hooks/useMusicVideoGenerator';
 import Stepper from './components/Stepper';
@@ -13,17 +13,102 @@ import HeaderActions from './components/HeaderActions';
 import AutosaveIndicator from './components/AutosaveIndicator';
 import ConfirmationModal from './components/ConfirmationModal';
 import ApiErrorModal from './components/ApiErrorModal';
+import SettingsPage from './components/SettingsPage';
 
 // FIX: Removed conflicting global declaration. Type definitions for window.aistudio, window.jspdf, and window.JSZip are assumed to be provided elsewhere in the project.
 
+const AUTOSAVE_KEY = 'ai_music_video_autosave';
+const AUTOSAVE_DEBOUNCE_MS = 3000;
 
 const App: React.FC = () => {
     const musicVideoGenerator = useMusicVideoGenerator();
     const { currentStep, isProcessing, apiError, clearApiError } = musicVideoGenerator;
 
     const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
-    
+    const [showSettings, setShowSettings] = useState(false);
+
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasRestoredRef = useRef(false);
+
+    // --- Auto-save: persist work-in-progress to localStorage ---
+    const getAutosavePayload = useCallback(() => {
+        const s = musicVideoGenerator;
+        // Only save serializable, meaningful state — skip File objects, blob URLs, and transient flags
+        return {
+            currentStep: s.currentStep,
+            singerGender: s.singerGender,
+            modelTier: s.modelTier,
+            songAnalysis: s.songAnalysis,
+            audioUrl: s.audioUrl && !s.audioUrl.startsWith('blob:') ? s.audioUrl : null,
+            creativeBrief: s.creativeBrief,
+            bibles: s.bibles,
+            storyboard: s.storyboard,
+            tokenUsage: s.tokenUsage,
+            executiveProducerFeedback: s.executiveProducerFeedback,
+            visualContinuityReport: s.visualContinuityReport,
+            _savedAt: Date.now(),
+        };
+    }, [
+        musicVideoGenerator.currentStep,
+        musicVideoGenerator.singerGender,
+        musicVideoGenerator.modelTier,
+        musicVideoGenerator.songAnalysis,
+        musicVideoGenerator.audioUrl,
+        musicVideoGenerator.creativeBrief,
+        musicVideoGenerator.bibles,
+        musicVideoGenerator.storyboard,
+        musicVideoGenerator.tokenUsage,
+        musicVideoGenerator.executiveProducerFeedback,
+        musicVideoGenerator.visualContinuityReport,
+    ]);
+
+    // Restore from localStorage on first mount
+    useEffect(() => {
+        if (hasRestoredRef.current) return;
+        hasRestoredRef.current = true;
+
+        try {
+            const raw = localStorage.getItem(AUTOSAVE_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            // Only restore if there's meaningful progress (past the upload step)
+            if (!saved || saved.currentStep === Step.Upload || (!saved.songAnalysis && !saved.bibles)) return;
+
+            console.log('Auto-save: Restoring saved session from', new Date(saved._savedAt).toLocaleString());
+            musicVideoGenerator.loadProductionFile(
+                new File([JSON.stringify(saved)], 'autosave.json', { type: 'application/json' })
+            );
+            setSaveStatus('saved');
+        } catch (e) {
+            console.warn('Auto-save: Failed to restore saved session', e);
+        }
+    }, []);
+
+    // Debounced auto-save on state changes
+    useEffect(() => {
+        // Don't save if still on upload step with no analysis
+        if (musicVideoGenerator.currentStep === Step.Upload && !musicVideoGenerator.songAnalysis) return;
+
+        if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+
+        autosaveTimerRef.current = setTimeout(() => {
+            try {
+                setSaveStatus('saving');
+                const payload = getAutosavePayload();
+                localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+                setSaveStatus('saved');
+                console.log('Auto-save: Session saved');
+            } catch (e) {
+                console.warn('Auto-save: Failed to save session', e);
+                setSaveStatus('idle');
+            }
+        }, AUTOSAVE_DEBOUNCE_MS);
+
+        return () => {
+            if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+        };
+    }, [getAutosavePayload]);
 
     const renderCurrentStep = () => {
         switch (currentStep) {
@@ -199,7 +284,7 @@ const App: React.FC = () => {
             <ConfirmationModal
                 isOpen={isRestartModalOpen}
                 onClose={() => setIsRestartModalOpen(false)}
-                onConfirm={musicVideoGenerator.restart}
+                onConfirm={() => { localStorage.removeItem(AUTOSAVE_KEY); musicVideoGenerator.restart(); }}
                 title="Are you sure?"
                 message={<p>This will clear all progress and start a new project. This action cannot be undone.</p>}
                 confirmText="Clear & Restart"
@@ -210,6 +295,16 @@ const App: React.FC = () => {
                 <div className="flex items-center space-x-4">
                     <AutosaveIndicator status={saveStatus} />
                     <TokenCounter tokenUsage={musicVideoGenerator.tokenUsage} />
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className={`p-2 rounded-full transition-colors ${showSettings ? 'text-brand-cyan bg-brand-cyan/10' : 'text-gray-400 hover:text-white hover:bg-brand-light-gray'}`}
+                        title="AI Provider Settings"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </button>
                     <HeaderActions
                         currentStep={currentStep}
                         modelTier={musicVideoGenerator.modelTier}
@@ -220,12 +315,16 @@ const App: React.FC = () => {
                 </div>
             </header>
             <main className="p-8">
-                <div className="max-w-7xl mx-auto">
-                    <div className="mb-12 flex justify-center">
-                        <Stepper currentStep={currentStep} />
+                {showSettings ? (
+                    <SettingsPage onClose={() => setShowSettings(false)} />
+                ) : (
+                    <div className="max-w-7xl mx-auto">
+                        <div className="mb-12 flex justify-center">
+                            <Stepper currentStep={currentStep} />
+                        </div>
+                        {renderCurrentStep()}
                     </div>
-                    {renderCurrentStep()}
-                </div>
+                )}
             </main>
         </div>
     );

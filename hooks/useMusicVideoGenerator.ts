@@ -19,22 +19,63 @@ import * as aiService from '../services/aiService';
 import { backendService } from '../services/backendService';
 import { webSocketService } from '../services/webSocketService';
 import { runVisualContinuityAudit } from '../services/visualAgentService';
+import { useSettings } from '../stores/settingsStore';
 
 function mapCameraMotion(cameraMove: string, cinematicMotion: string): string {
   const combined = `${cameraMove} ${cinematicMotion}`.toLowerCase();
 
-  if (combined.includes('zoom in') || combined.includes('zooming in') || combined.includes('dolly in')) {
-    return 'zoom_in';
+  // Zoom / Dolly depth moves
+  if (combined.includes('zoom in') || combined.includes('zooming in') || combined.includes('push in') || combined.includes('push-in')) {
+    return combined.includes('slow') ? 'slow_push_in' : 'zoom_in';
   }
-  if (combined.includes('zoom out') || combined.includes('zooming out') || combined.includes('dolly out') || combined.includes('pulling back')) {
+  if (combined.includes('dolly in') || combined.includes('dolly forward') || combined.includes('creep in')) {
+    return 'dolly_in';
+  }
+  if (combined.includes('zoom out') || combined.includes('zooming out') || combined.includes('pull back') || combined.includes('pulling back')) {
     return 'zoom_out';
   }
-  if (combined.includes('pan left') || combined.includes('panning left')) {
-    return 'pan_left';
+  if (combined.includes('dolly out') || combined.includes('dolly back') || combined.includes('retreat')) {
+    return 'dolly_out';
   }
-  if (combined.includes('pan right') || combined.includes('panning right')) {
-    return 'pan_right';
+
+  // Pan moves (horizontal rotation on tripod)
+  if (combined.includes('pan left') || combined.includes('panning left')) return 'pan_left';
+  if (combined.includes('pan right') || combined.includes('panning right')) return 'pan_right';
+  if (combined.includes('whip pan') || combined.includes('whip-pan') || combined.includes('swish pan')) return 'whip_pan';
+
+  // Tilt moves (vertical rotation on tripod)
+  if (combined.includes('tilt up') || combined.includes('tilting up') || combined.includes('tilt-up')) return 'tilt_up';
+  if (combined.includes('tilt down') || combined.includes('tilting down') || combined.includes('tilt-down')) return 'tilt_down';
+
+  // Tracking / lateral dolly (camera physically moves sideways)
+  if (combined.includes('tracking left') || combined.includes('track left') || combined.includes('crab left')) return 'tracking_left';
+  if (combined.includes('tracking right') || combined.includes('track right') || combined.includes('crab right')) return 'tracking_right';
+  if (combined.includes('tracking') || combined.includes('follow')) return 'steadicam_follow';
+
+  // Crane / Jib (vertical physical movement)
+  if (combined.includes('crane up') || combined.includes('jib up') || combined.includes('boom up') || combined.includes('rising')) return 'crane_up';
+  if (combined.includes('crane down') || combined.includes('jib down') || combined.includes('boom down') || combined.includes('descending')) return 'crane_down';
+
+  // Orbit / Arc (camera circles subject)
+  if (combined.includes('orbit left') || combined.includes('arc left') || combined.includes('circling left')) return 'orbit_left';
+  if (combined.includes('orbit right') || combined.includes('arc right') || combined.includes('circling right')) return 'orbit_right';
+  if (combined.includes('orbit') || combined.includes('arc shot') || combined.includes('circling')) return 'orbit_left';
+
+  // Steadicam / Stabilized movement
+  if (combined.includes('steadicam') || combined.includes('steady cam') || combined.includes('gimbal')) {
+    return combined.includes('reveal') ? 'steadicam_reveal' : 'steadicam_follow';
   }
+
+  // Handheld organic feel
+  if (combined.includes('handheld') || combined.includes('hand-held') || combined.includes('shaky') || combined.includes('documentary')) return 'handheld';
+
+  // Specialty moves
+  if (combined.includes('rack focus') || combined.includes('focus pull') || combined.includes('shift focus')) return 'rack_focus';
+  if (combined.includes('parallax') || combined.includes('foreground separation')) return 'parallax';
+  if (combined.includes('vertigo') || combined.includes('contra-zoom') || combined.includes('push in rotate')) return 'push_in_rotate';
+
+  // Static / locked off
+  if (combined.includes('static') || combined.includes('locked') || combined.includes('tripod') || combined.includes('still')) return 'static';
 
   return 'static';
 }
@@ -86,11 +127,11 @@ function deriveModelGenerationPreferences(shot: StoryboardShot, duration: number
   };
 
   const negativePromptMap: Record<string, string> = {
-    waver: 'text, subtitles, watermark, logo, blurry, low quality, distorted face, extra limbs, duplicate faces',
-    step_video_ti2v: 'text, subtitles, watermark, logo, blurry, low quality, face distortion, extra limbs, duplicate faces',
-    animatediff_v3: 'text, subtitles, watermark, logo, flicker, warped limbs, bad hands, bad feet, multiple faces, face melting',
-    wan2_2: 'text, watermark, logo, low detail eyes, off-model face, flicker, extra limbs, bad hands',
-    videocrafter2: 'text, watermark, logo, muddy details, low contrast, overexposed, underexposed'
+    waver: 'text, subtitles, watermark, logo, blurry, low quality, distorted face, extra limbs, duplicate faces, face morphing, identity drift, changing hairstyle, changing clothes, plastic skin, airbrushed face, wrong eye color, asymmetric features',
+    step_video_ti2v: 'text, subtitles, watermark, logo, blurry, low quality, face distortion, extra limbs, duplicate faces, face morphing, identity shift between frames, hair color change, outfit change, plastic doll skin, uncanny valley, wrong facial features',
+    animatediff_v3: 'text, subtitles, watermark, logo, flicker, warped limbs, bad hands, bad feet, multiple faces, face melting, face morphing, identity drift, changing appearance, hair change, costume change, smooth plastic skin',
+    wan2_2: 'text, watermark, logo, low detail eyes, off-model face, flicker, extra limbs, bad hands, face morphing, identity drift, hair change, outfit change, wrong features',
+    videocrafter2: 'text, watermark, logo, muddy details, low contrast, overexposed, underexposed, face distortion, identity shift'
   };
 
   const modelKey = shot.video_model || 'waver';
@@ -109,7 +150,11 @@ function deriveModelGenerationPreferences(shot: StoryboardShot, duration: number
       'group shot',
       'extra faces',
       'inconsistent skin tone',
-      'body duplication'
+      'body duplication',
+      'different person between frames',
+      'changing facial features',
+      'different hairstyle between cuts',
+      'different outfit between cuts'
     ].filter(Boolean).join(', ')
   };
 }
@@ -399,6 +444,7 @@ const reducer = (state: State, action: Action): State => {
         ...initialState,
         currentStep: payload.currentStep || Step.Upload,
         songFile: payload.songFile || null,
+        audioUrl: payload.audioUrl || null,
         singerGender: payload.singerGender || 'unspecified',
         songAnalysis: payload.songAnalysis || null,
         creativeBrief: payload.creativeBrief ? { ...initialState.creativeBrief, ...payload.creativeBrief } : initialState.creativeBrief,
@@ -406,6 +452,8 @@ const reducer = (state: State, action: Action): State => {
         storyboard: hydratedStoryboard,
         tokenUsage: payload.tokenUsage ? { ...initialState.tokenUsage, ...payload.tokenUsage } : initialState.tokenUsage,
         modelTier: payload.modelTier || 'freemium',
+        executiveProducerFeedback: payload.executiveProducerFeedback || null,
+        visualContinuityReport: payload.visualContinuityReport || null,
       };
     }
     case 'RESET':
@@ -419,6 +467,17 @@ const reducer = (state: State, action: Action): State => {
 export const useMusicVideoGenerator = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const storyboardRef = useRef<Storyboard | null>(null);
+  const { settings: providerSettings } = useSettings();
+
+  // Auto-research unknown models when provider settings change
+  useEffect(() => {
+    if (providerSettings?.image?.selectedModel) {
+      aiService.researchModelPromptStyle(providerSettings.image.selectedModel, 'image');
+    }
+    if (providerSettings?.video?.selectedModel) {
+      aiService.researchModelPromptStyle(providerSettings.video.selectedModel, 'video');
+    }
+  }, [providerSettings?.image?.selectedModel, providerSettings?.video?.selectedModel]);
 
   useEffect(() => {
     storyboardRef.current = state.storyboard;
@@ -595,7 +654,7 @@ export const useMusicVideoGenerator = () => {
 
       generateBibleImages(bibles, state.creativeBrief);
 
-      const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, state.modelTier);
+      const { storyboard, tokenUsage: storyboardTokens } = await aiService.generateStoryboard(state.songAnalysis, state.creativeBrief, bibles, state.modelTier, providerSettings);
       dispatch({ type: 'SET_STORYBOARD', payload: storyboard });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { storyboard: storyboardTokens } });
 
@@ -612,18 +671,46 @@ export const useMusicVideoGenerator = () => {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
     const allShots = state.storyboard.scenes.flatMap(s => s.shots);
 
-    for (const shot of allShots) {
-      if (shot.preview_image_url) continue; // Skip if already generated or generating
+    // Recovery pass: check if backend already has images for shots missing on frontend
+    const missingShots = allShots.filter(s => !s.preview_image_url || s.preview_image_url === 'error');
+    if (missingShots.length > 0) {
       try {
-        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
+        const result = await backendService.recoverImages(missingShots.map(s => s.id));
+        for (const [shotId, data] of Object.entries(result.recovered || {})) {
+          const shot = allShots.find(s => s.id === shotId);
+          if (shot && data?.imageUrl) {
+            console.log(`Recovered image for shot ${shotId} from backend (id=${(data as any).id})`);
+            dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: (data as any).imageUrl } });
+          }
+        }
+      } catch (e) {
+        console.warn('Image recovery check failed, proceeding with generation:', e);
+      }
+    }
+
+    // Generate remaining missing images
+    for (const shot of allShots) {
+      if (shot.preview_image_url && shot.preview_image_url !== 'error') continue;
+      try {
+        const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
         dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
       } catch (e) {
+        // On failure, check if ComfyUI actually saved the image but delivery to frontend failed
+        try {
+          const recovered = await backendService.getImageByShotId(shot.id);
+          if (recovered) {
+            console.log(`Shot ${shot.id}: delivery failed but found in backend (id=${recovered.id})`);
+            dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: recovered.imageUrl } });
+            continue;
+          }
+        } catch { /* recovery check also failed */ }
+
         console.error(`Failed to generate image for shot ${shot.id}`, e);
         dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: 'error' } });
         dispatch({ type: 'SET_API_ERROR', payload: e instanceof Error ? e.message : `Image generation failed for shot ${shot.id}.` });
       }
-      await delay(1500); // Wait to avoid rate limiting
+      await delay(1500);
     }
   }, [state.storyboard, state.bibles, state.creativeBrief, state.modelTier]);
 
@@ -635,7 +722,7 @@ export const useMusicVideoGenerator = () => {
 
     dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: '' } }); // Set to loading state
     try {
-      const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier);
+      const { imageUrl, tokenUsage } = await aiService.generateImageForShot(shot, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
       dispatch({ type: 'UPDATE_SHOT', payload: { ...shot, preview_image_url: imageUrl } });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { imageGeneration: tokenUsage } });
     } catch (e) {
@@ -701,7 +788,11 @@ export const useMusicVideoGenerator = () => {
       const rawDuration = (typeof shot.end === 'number' ? shot.end : 0) - (typeof shot.start === 'number' ? shot.start : 0);
       const duration = Math.max(6, Math.min(8, rawDuration || 6));
 
-      const prompt = aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
+      // Use model-optimized prompt if provider settings have a video model selected
+      const optimized = providerSettings?.video?.selectedModel
+        ? aiService.getOptimizedVideoPrompt(shot, state.bibles!, state.creativeBrief, providerSettings)
+        : null;
+      const prompt = optimized?.prompt || aiService.getPromptForClipShot(shot, state.bibles, state.creativeBrief, quality === 'high');
 
       const mappedCameraMotion = mapCameraMotion(shot.camera_move, shot.cinematic_enhancements.camera_motion);
       const modelPrefs = deriveModelGenerationPreferences(shot, duration);

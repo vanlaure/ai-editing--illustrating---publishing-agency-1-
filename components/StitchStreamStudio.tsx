@@ -5,6 +5,7 @@ import Timeline from '../stitchstream/components/Timeline';
 import Player, { PlayerRef } from '../stitchstream/components/Player';
 import { analyzeMontage } from '../stitchstream/services/geminiService';
 import { FILTER_LABELS, TRANSITION_LABELS, FONT_STYLES } from '../stitchstream/constants';
+import type { IntroConfig, OutroConfig } from '../stitchstream/utils/introOutroRenderer';
 import type {
   VideoClip,
   AIAnalysis,
@@ -89,7 +90,79 @@ const StitchStreamStudio: React.FC<StitchStreamStudioProps> = ({ storyboard, son
   });
 
   const [backingTrackUrl, setBackingTrackUrl] = useState<string>();
+  const [introConfig, setIntroConfig] = useState<IntroConfig | undefined>();
+  const [outroConfig, setOutroConfig] = useState<OutroConfig | undefined>();
   const playerRef = useRef<PlayerRef>(null);
+
+  // Auto-generate intro/outro configs from song analysis and creative brief
+  useEffect(() => {
+    if (!songAnalysis && !creativeBrief) return;
+
+    const title = songAnalysis?.title || storyboard?.title || 'Untitled';
+    const artist = songAnalysis?.artist || 'Unknown Artist';
+    const mood = creativeBrief?.mood || [];
+    const style = creativeBrief?.style || '';
+    const feel = creativeBrief?.feel || '';
+
+    // Pick intro style based on creative brief mood/feel
+    const moodLower = [...mood, feel, style].join(' ').toLowerCase();
+    let introStyle: IntroConfig['style'] = 'cinematic';
+    if (moodLower.includes('glitch') || moodLower.includes('cyber') || moodLower.includes('tech')) {
+      introStyle = 'glitch';
+    } else if (moodLower.includes('neon') || moodLower.includes('synthwave') || moodLower.includes('retro')) {
+      introStyle = 'neon';
+    } else if (moodLower.includes('dream') || moodLower.includes('ethereal') || moodLower.includes('ambient')) {
+      introStyle = 'particles';
+    } else if (moodLower.includes('minimal') || moodLower.includes('clean') || moodLower.includes('simple')) {
+      introStyle = 'minimal';
+    }
+
+    // Pick color palette from creative brief
+    const colorMap: Record<string, { primary: string; secondary: string; accent: string }> = {
+      warm: { primary: '#ffffff', secondary: '#d4a574', accent: '#ff6b35' },
+      cool: { primary: '#e0f0ff', secondary: '#8bb8d0', accent: '#4a9eff' },
+      dark: { primary: '#ffffff', secondary: '#888888', accent: '#ff0040' },
+      neon: { primary: '#ffffff', secondary: '#ff00ff', accent: '#00f0ff' },
+      vintage: { primary: '#f5e6d3', secondary: '#c4a882', accent: '#d4956a' },
+    };
+    const paletteKey = moodLower.includes('warm') ? 'warm'
+      : moodLower.includes('cool') ? 'cool'
+      : moodLower.includes('dark') || moodLower.includes('grit') ? 'dark'
+      : moodLower.includes('neon') || moodLower.includes('synth') ? 'neon'
+      : moodLower.includes('vintage') || moodLower.includes('retro') ? 'vintage'
+      : 'cool';
+    const palette = colorMap[paletteKey];
+
+    setIntroConfig({
+      songTitle: title,
+      artistName: artist,
+      subtitle: feel || undefined,
+      style: introStyle,
+      duration: 5,
+      colorPrimary: palette.primary,
+      colorSecondary: palette.secondary,
+      colorAccent: palette.accent,
+    });
+
+    // Pick outro style
+    let outroStyle: OutroConfig['style'] = 'cinematic';
+    if (introStyle === 'glitch') outroStyle = 'modern';
+    else if (introStyle === 'minimal' || introStyle === 'particles') outroStyle = 'minimal';
+
+    setOutroConfig({
+      songTitle: title,
+      artistName: artist,
+      credits: [
+        { role: 'Music', name: artist },
+        { role: 'Video', name: 'AI Music Video Generator' },
+        { role: 'Directed by', name: 'AI Director' },
+      ],
+      style: outroStyle,
+      duration: 7,
+      colorPrimary: palette.primary,
+      colorSecondary: palette.secondary,
+    });
+  }, [songAnalysis, creativeBrief, storyboard]);
   const contextText = useMemo(() => {
     const parts: string[] = [];
     if (songAnalysis?.title) parts.push(`Song: ${songAnalysis.title}`);
@@ -146,11 +219,17 @@ const StitchStreamStudio: React.FC<StitchStreamStudioProps> = ({ storyboard, son
             shot.preview_image_url,
             (shot.end || 0) - (shot.start || 0)
           );
+          const shotExpected = Math.max(2, (shot.end || 0) - (shot.start || 0));
+          const actualDur = duration || shotExpected;
           hydrated.push({
             id: shot.id || `shot-${i + 1}`,
             url: shot.clip_url,
             thumbnail: thumbnail || shot.preview_image_url || '',
-            duration: duration || Math.max(2, (shot.end || 0) - (shot.start || 0)),
+            duration: actualDur,
+            expectedDuration: shotExpected,
+            // If clip is longer than expected, trim it to fit the storyboard timing
+            trimIn: 0,
+            trimOut: actualDur > shotExpected ? shotExpected : undefined,
             name: shot.subject || shot.lyric_overlay?.text || `Shot ${i + 1}`
           });
         } catch (error) {
@@ -400,6 +479,8 @@ const StitchStreamStudio: React.FC<StitchStreamStudioProps> = ({ storyboard, son
             closingCredits={aiEnabled ? credits : undefined}
             cinematicEffects={aiEnabled ? cinematicEffects : undefined}
             backingTrackUrl={backingTrackUrl}
+            introConfig={aiEnabled ? introConfig : undefined}
+            outroConfig={aiEnabled ? outroConfig : undefined}
             onClipChange={setActiveClipId}
             onPlaybackComplete={onPlaybackComplete}
           />

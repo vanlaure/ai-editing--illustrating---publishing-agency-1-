@@ -10,6 +10,12 @@ interface TimelineProps {
   activeClipId?: string;
 }
 
+const getEffectiveDuration = (clip: VideoClip): number => {
+  if (clip.trimOut != null) return clip.trimOut - (clip.trimIn || 0);
+  if (clip.expectedDuration != null) return Math.min(clip.duration, clip.expectedDuration);
+  return clip.duration;
+};
+
 const Timeline: React.FC<TimelineProps> = ({ clips, onRemoveClip, onReorderClips, onPlayClip, activeClipId }) => {
   const [draggedIndex, setDraggedIndex] = React.useState<number | null>(null);
 
@@ -42,7 +48,7 @@ const Timeline: React.FC<TimelineProps> = ({ clips, onRemoveClip, onReorderClips
     <div className="w-full space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Timeline</h3>
-        <span className="text-xs text-slate-500">{clips.length} Clips | {formatDuration(clips.reduce((acc, c) => acc + c.duration, 0))} Total</span>
+        <span className="text-xs text-slate-500">{clips.length} Clips | {formatDuration(clips.reduce((acc, c) => acc + getEffectiveDuration(c), 0))} Total</span>
       </div>
       
       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x">
@@ -63,7 +69,7 @@ const Timeline: React.FC<TimelineProps> = ({ clips, onRemoveClip, onReorderClips
             <div className="aspect-video relative bg-black">
               <img src={clip.thumbnail} alt={clip.name} className="w-full h-full object-cover" />
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
-                {formatDuration(clip.duration)}
+                {formatDuration(getEffectiveDuration(clip))}
               </div>
               
               {/* Overlay Play Icon */}

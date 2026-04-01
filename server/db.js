@@ -79,7 +79,23 @@ const initializeDatabase = () => {
     CREATE INDEX IF NOT EXISTS idx_images_production ON images(production_id);
     CREATE INDEX IF NOT EXISTS idx_videos_production ON videos(production_id);
     CREATE INDEX IF NOT EXISTS idx_audio_production ON audio(production_id);
+
+    -- Shot tracking columns for ComfyUI sync (added idempotently)
   `);
+
+  // Add shot_id and comfyui_prompt_id columns if they don't exist
+  const imageColumns = db.pragma('table_info(images)').map(c => c.name);
+  if (!imageColumns.includes('shot_id')) {
+    db.exec(`ALTER TABLE images ADD COLUMN shot_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_images_shot ON images(shot_id)`);
+  }
+  if (!imageColumns.includes('comfyui_prompt_id')) {
+    db.exec(`ALTER TABLE images ADD COLUMN comfyui_prompt_id TEXT`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_images_comfyui ON images(comfyui_prompt_id)`);
+  }
+  if (!imageColumns.includes('generation_type')) {
+    db.exec(`ALTER TABLE images ADD COLUMN generation_type TEXT DEFAULT 'shot'`);
+  }
 
   console.log('Database initialized successfully at:', DB_PATH);
 };
@@ -106,8 +122,28 @@ const queries = {
   `),
   
   getAllImagesUnfiltered: db.prepare(`
-    SELECT id, production_id, filename, width, height, format, size, mime_type, created_at
+    SELECT id, production_id, filename, width, height, format, size, mime_type, shot_id, comfyui_prompt_id, generation_type, created_at
     FROM images ORDER BY created_at DESC
+  `),
+
+  getImageByShotId: db.prepare(`
+    SELECT id, production_id, filename, width, height, format, size, mime_type, shot_id, comfyui_prompt_id, generation_type, created_at
+    FROM images WHERE shot_id = ? ORDER BY created_at DESC LIMIT 1
+  `),
+
+  getImageByPromptId: db.prepare(`
+    SELECT id, production_id, filename, width, height, format, size, mime_type, shot_id, comfyui_prompt_id, generation_type, created_at
+    FROM images WHERE comfyui_prompt_id = ? ORDER BY created_at DESC LIMIT 1
+  `),
+
+  getImagesByShotIds: db.prepare(`
+    SELECT id, shot_id, comfyui_prompt_id, generation_type, created_at
+    FROM images WHERE shot_id IN (SELECT value FROM json_each(?)) ORDER BY created_at DESC
+  `),
+
+  insertImageTracked: db.prepare(`
+    INSERT INTO images (production_id, filename, width, height, format, size, binary_data, mime_type, shot_id, comfyui_prompt_id, generation_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   
   insertVideo: db.prepare(`
@@ -195,6 +231,11 @@ const getImage = (id) => queries.getImage.get(id);
 const getImageBinary = (id) => queries.getImageBinary.get(id);
 const getAllImages = (productionId) => queries.getAllImages.all(productionId);
 const getAllImagesUnfiltered = () => queries.getAllImagesUnfiltered.all();
+const getImageByShotId = (shotId) => queries.getImageByShotId.get(shotId);
+const getImageByPromptId = (promptId) => queries.getImageByPromptId.get(promptId);
+const getImagesByShotIds = (shotIds) => queries.getImagesByShotIds.all(JSON.stringify(shotIds));
+const insertImageTracked = (productionId, filename, width, height, format, size, binaryData, mimeType, shotId, comfyuiPromptId, generationType) =>
+  queries.insertImageTracked.run(productionId, filename, width, height, format, size, binaryData, mimeType, shotId, comfyuiPromptId, generationType);
 
 const insertVideo = (productionId, filename, width, height, duration, fps, format, size, binaryData, mimeType) =>
   queries.insertVideo.run(productionId, filename, width, height, duration, fps, format, size, binaryData, mimeType);
@@ -232,6 +273,10 @@ export {
   getImageBinary,
   getAllImages,
   getAllImagesUnfiltered,
+  getImageByShotId,
+  getImageByPromptId,
+  getImagesByShotIds,
+  insertImageTracked,
   insertVideo,
   getVideo,
   getVideoBinary,

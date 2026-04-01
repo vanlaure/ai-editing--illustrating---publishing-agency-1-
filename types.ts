@@ -343,9 +343,17 @@ export interface CharacterBible {
         gender_presentation: string;
         ethnicity: string;
         body_type: string;
-        key_facial_features: string;
+        skin_tone: string;              // e.g., "warm olive", "deep brown", "pale ivory with freckles"
+        face_shape: string;             // e.g., "oval with high cheekbones", "square-jawed"
+        nose_description: string;       // e.g., "broad with a rounded tip", "narrow and aquiline"
+        lip_description: string;        // e.g., "full lips with defined cupid's bow"
+        brow_description: string;       // e.g., "thick arched brows", "thin straight brows"
+        jawline_description: string;    // e.g., "sharp angular jawline", "soft rounded jaw"
+        key_facial_features: string;    // overall summary / distinguishing marks (scars, dimples, moles)
         hair_style_and_color: string;
+        hair_texture: string;           // e.g., "tight coils 4C", "straight and silky", "loose waves"
         eye_color: string;
+        eye_shape: string;              // e.g., "almond-shaped", "deep-set hooded", "large round"
     };
     costuming_and_props: {
         outfit_style: string;
@@ -612,4 +620,54 @@ export interface VisualContinuityReport {
         visualQuality: string;
     };
     issues: VisualContinuityIssue[];
+}
+
+// --- AI Provider Settings ---
+
+export type AIProviderRole = 'thinking' | 'image' | 'video';
+
+export interface AIProviderModel {
+    id: string;
+    name: string;
+    description?: string;
+    /** Modality string from OpenRouter, e.g. "text->text", "text+image->text" */
+    modality?: string;
+    /** Max context window in tokens */
+    contextLength?: number;
+    /** Price per million prompt tokens (USD) */
+    promptPrice?: number;
+    /** Price per million completion tokens (USD) */
+    completionPrice?: number;
+    /** Grouping category derived from modality (for UI filtering) */
+    category?: string;
+}
+
+export interface AIProvider {
+    id: string;
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    models: AIProviderModel[];
+    selectedModel: string;
+    enabled: boolean;
+}
+
+export interface AIProviderSettings {
+    thinking: AIProvider;
+    image: AIProvider;
+    video: AIProvider;
+}
+
+export type ProviderPreset = 'openrouter' | 'nvidia' | 'ollama'
+    | 'comfyui' | 'huggingface'
+    | 'comfyui-video'
+    | 'custom';
+
+export interface ProviderPresetConfig {
+    id: ProviderPreset;
+    name: string;
+    defaultBaseUrl: string;
+    roles: AIProviderRole[];
+    requiresApiKey: boolean;
+    modelListEndpoint?: string;
 }
