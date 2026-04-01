@@ -202,7 +202,7 @@ export const backendService = {
     }
   },
 
-  async generateImageWithA1111(params: {
+  async generateImageWithComfyUI(params: {
     prompt: string;
     negative_prompt?: string;
     width?: number;
@@ -246,7 +246,7 @@ export const backendService = {
     return { imageUrl: data.imageUrl };
   },
 
-  async generateBatchImagesWithA1111(prompts: Array<{
+  async generateBatchImagesWithComfyUI(prompts: Array<{
     prompt: string;
     negative_prompt?: string;
     width?: number;

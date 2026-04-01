@@ -283,9 +283,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ models, selectedModel, on
                                                     {group.category} ({group.models.length})
                                                 </div>
                                             )}
-                                            {group.models.map(m => (
+                                            {group.models.map((m, idx) => (
                                                 <button
-                                                    key={m.id}
+                                                    key={`${m.id}-${idx}`}
                                                     onClick={() => {
                                                         onSelect(m.id);
                                                         setIsOpen(false);

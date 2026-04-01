@@ -472,10 +472,10 @@ export const useMusicVideoGenerator = () => {
   // Auto-research unknown models when provider settings change
   useEffect(() => {
     if (providerSettings?.image?.selectedModel) {
-      aiService.researchModelPromptStyle(providerSettings.image.selectedModel, 'image');
+      aiService.researchModelPromptStyle(providerSettings.image.selectedModel, 'image', providerSettings);
     }
     if (providerSettings?.video?.selectedModel) {
-      aiService.researchModelPromptStyle(providerSettings.video.selectedModel, 'video');
+      aiService.researchModelPromptStyle(providerSettings.video.selectedModel, 'video', providerSettings);
     }
   }, [providerSettings?.image?.selectedModel, providerSettings?.video?.selectedModel]);
 
@@ -541,7 +541,7 @@ export const useMusicVideoGenerator = () => {
         console.warn('Audio upload failed; continuing without audio URL', e);
       }
 
-      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.singerGender, data.modelTier);
+      const { analysis, tokenUsage } = await aiService.analyzeSong(file, data.lyrics, data.title, data.artist, data.singerGender, data.modelTier, providerSettings);
       dispatch({ type: 'SET_ANALYSIS', payload: analysis });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { analysis: tokenUsage } });
     } catch (e) {
@@ -575,7 +575,7 @@ export const useMusicVideoGenerator = () => {
           data: await fileToBase64(file),
         }))
       );
-      const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, state.modelTier);
+      const { briefUpdate, tokenUsage } = await aiService.analyzeMoodboardImages(imagePayloads, state.modelTier, providerSettings);
       dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: briefUpdate });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { moodboardAnalysis: tokenUsage } });
     } catch (e) {
@@ -589,7 +589,7 @@ export const useMusicVideoGenerator = () => {
     if (!state.songAnalysis) return;
     dispatch({ type: 'START_BRIEF_SUGGESTION' });
     try {
-      const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, state.modelTier);
+      const { suggestions, tokenUsage } = await aiService.getDirectorSuggestions(state.songAnalysis, state.creativeBrief, state.modelTier, providerSettings);
       dispatch({ type: 'UPDATE_CREATIVE_BRIEF', payload: suggestions });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: tokenUsage } }); // Using 'bibles' category for this for now
     } catch (e) {
@@ -632,7 +632,7 @@ export const useMusicVideoGenerator = () => {
     if (!state.bibles || !state.creativeBrief) return;
     for (const scene of storyboard.scenes) {
       try {
-        const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, state.modelTier);
+        const { transitions, tokenUsage } = await aiService.generateTransitions(scene, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
         dispatch({ type: 'SET_TRANSITIONS_FOR_SCENE', payload: { sceneId: scene.id, transitions } });
         dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { transitions: tokenUsage } });
       } catch (e) {
@@ -648,7 +648,7 @@ export const useMusicVideoGenerator = () => {
     dispatch({ type: 'SET_STEP', payload: Step.Plan });
 
     try {
-      const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier);
+      const { bibles, tokenUsage: biblesTokens } = await aiService.generateBibles(state.songAnalysis, state.creativeBrief, state.singerGender, state.modelTier, providerSettings);
       dispatch({ type: 'SET_BIBLES', payload: bibles });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { bibles: biblesTokens } });
 
@@ -944,7 +944,7 @@ export const useMusicVideoGenerator = () => {
     if (!state.songAnalysis || !state.storyboard) return;
     dispatch({ type: 'SET_POST_PRODUCTION_STATUS', payload: { task: 'vfx', status: 'processing' } });
     try {
-      const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, state.modelTier);
+      const { suggestions, tokenUsage } = await aiService.suggestBeatSyncedVfx(state.songAnalysis, state.storyboard, state.modelTier, providerSettings);
 
       const allShotsMap = new Map(state.storyboard.scenes.flatMap(s => s.shots).map(shot => [shot.id, shot]));
 
@@ -966,7 +966,7 @@ export const useMusicVideoGenerator = () => {
   const runExecutiveProducerReview = useCallback(async () => {
     if (!state.storyboard || !state.bibles || !state.creativeBrief) return;
     try {
-      const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, state.modelTier);
+      const { feedback, tokenUsage } = await aiService.generateExecutiveProducerFeedback(state.storyboard, state.bibles, state.creativeBrief, state.modelTier, providerSettings);
       dispatch({ type: 'SET_EXECUTIVE_PRODUCER_FEEDBACK', payload: feedback });
       dispatch({ type: 'UPDATE_TOKEN_USAGE', payload: { executiveReview: tokenUsage } });
     } catch (e) {

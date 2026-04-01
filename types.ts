@@ -294,6 +294,8 @@ export interface SongAnalysis {
         imagery_style: 'literal' | 'metaphorical' | 'surreal' | 'symbolic';
         emotional_arc: string;              // e.g., "builds from introspective to triumphant"
         key_visual_elements: string[];     // Visual concepts mentioned in lyrics
+        character_insights: string;        // Deep reading of who the characters are based on lyrics
+        line_by_line_story: string;        // Section-by-section summary of what's happening in the lyrics
     };
     recommended_video_types?: {
         primary: VideoType;

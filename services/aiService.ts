@@ -1,19 +1,61 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
-import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile, AIProviderSettings } from '../types';
+import type { SongAnalysis, Bibles, Storyboard, CreativeBrief, StoryboardShot, TranscriptEntry, VFX_PRESET, CharacterBible, LocationBible, StoryboardScene, Transition, ExecutiveProducerFeedback, EnhancedSongAnalysis, Beat, VideoGenerationModel, RenderProfile, AIProviderSettings, AIProvider } from '../types';
 import { VFX_PRESETS } from "../constants";
 import { backendService } from './backendService';
 import { getProfileForModel, adaptPromptForModel, buildThinkingModelKnowledge, buildResearchPrompt, cacheResearchedProfile, parseResearchResponse } from './promptOptimizer';
+import { generateThinking, hasThinkingProvider } from './providerClient';
 
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-const isA1111Enabled = (): boolean => {
-    // Check localStorage first (user toggle), then fall back to env var
-    const localStorageValue = typeof window !== 'undefined' ? localStorage.getItem('USE_A1111') : null;
-    if (localStorageValue !== null) {
-        return localStorageValue === 'true';
+/**
+ * Unified text generation: tries configured thinking provider first (OpenRouter, etc.),
+ * falls back to Gemini if no provider is configured or if the provider call fails.
+ */
+const generateText = async (
+    options: {
+        prompt: string;
+        system?: string;
+        responseSchema?: any;
+        images?: { data: string; mimeType: string }[];
+        providerSettings?: AIProviderSettings;
+        geminiModel?: string;
+        /** Gemini-specific: multipart contents array (for audio, etc.) */
+        geminiContents?: any;
     }
-    return process.env.USE_A1111 === 'true';
+): Promise<{ text: string; tokenUsage: number }> => {
+    const { prompt, system, responseSchema, images, providerSettings, geminiModel, geminiContents } = options;
+
+    // Use configured provider — no Gemini fallback
+    if (hasThinkingProvider(providerSettings)) {
+        const result = await generateThinking(providerSettings, {
+            prompt,
+            system,
+            responseSchema,
+            images,
+        });
+        if (result) return result;
+        throw new Error('Configured thinking provider returned no result');
+    }
+
+    // No provider configured — use Gemini as last resort
+    const ai = getAiClient();
+    const model = geminiModel || 'gemini-2.5-flash';
+
+    const config: any = {};
+    if (responseSchema) {
+        config.responseMimeType = 'application/json';
+        config.responseSchema = responseSchema;
+    }
+
+    const response = await ai.models.generateContent({
+        model,
+        contents: geminiContents || prompt,
+        config,
+    });
+
+    return { text: response.text || '', tokenUsage: 0 };
 };
+
 
 // --- VIDEO MODEL ROUTING HELPERS ---
 
@@ -111,8 +153,8 @@ const buildCharacterIdentityBlock = (char: CharacterBible, level: 'full' | 'conc
 // --- PROMPT GENERATION HELPERS (for UI display) ---
 
 // Enhanced prompt builder for ComfyUI with ultra-realistic quality tags
-const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief): string => {
-    console.log('=== getEnhancedPromptForA1111 CALLED ===');
+const getEnhancedPromptForComfyUI = (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief): string => {
+    console.log('=== getEnhancedPromptForComfyUI CALLED ===');
 
     const characterRef = shot.character_refs[0];
     const char = characterRef ? bibles.characters.find(c => c.name === characterRef) : null;
@@ -126,11 +168,19 @@ const getEnhancedPromptForA1111 = (shot: StoryboardShot, bibles: Bibles, brief: 
     const loc = bibles.locations.find(l => l.name === shot.location_ref);
     const locDesc = loc ? `${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}` : '';
 
-    // Ultra-realistic quality tags optimized for SDXL
-    const qualityTags = 'photorealistic, 8k uhd, RAW photo, ultra-realistic skin texture, visible pores, subsurface scattering, film grain, Fujifilm XT3, sharp focus, professional photography, physically-based rendering, extreme facial detail, cinematic lighting, anatomically correct face';
+    // Action and composition from the storyboard shot
+    const actionDesc = shot.action ? `Action: ${shot.action}.` : '';
+    const compositionDesc = shot.composition ? `Composition: ${shot.composition}.` : '';
+    const cameraDesc = shot.cinematic_enhancements.camera_motion ? `Camera: ${shot.cinematic_enhancements.camera_motion}.` : '';
 
-    // EXPLICIT prompt with quality enhancement
-    const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}, ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, ${qualityTags}`.trim();
+    // Quality tags - cinematic but not portrait-biased, respects shot type
+    const isCloseUp = /close.?up|macro|portrait/i.test(shot.shot_type || '');
+    const qualityTags = isCloseUp
+        ? 'photorealistic, 8k uhd, RAW photo, ultra-realistic skin texture, visible pores, subsurface scattering, film grain, Fujifilm XT3, sharp focus, professional photography, cinematic lighting, anatomically correct face'
+        : 'photorealistic, 8k uhd, RAW photo, film grain, Fujifilm XT3, sharp focus, professional photography, physically-based rendering, cinematic lighting, dynamic composition, full scene visible';
+
+    // Build prompt with action and composition included
+    const prompt = `${shot.shot_type} of ${charDesc}, ${shot.subject}. ${actionDesc} ${compositionDesc} ${cameraDesc} ${locDesc}, ${shot.cinematic_enhancements.lighting_style}, ${qualityTags}`.replace(/\s+/g, ' ').trim();
 
     console.log('=== OPTIMIZED COMFYUI PROMPT (length:', prompt.length, 'chars) ===');
     console.log(prompt);
@@ -257,7 +307,7 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
 
 /**
  * Generate an image prompt optimized for the currently selected image model.
- * Falls back to the existing getEnhancedPromptForA1111 / getPromptForImageShot if no settings provided.
+ * Falls back to the existing getEnhancedPromptForComfyUI/getPromptForImageShot if no settings provided.
  */
 export const getOptimizedImagePrompt = (
     shot: StoryboardShot,
@@ -267,7 +317,7 @@ export const getOptimizedImagePrompt = (
 ): { prompt: string; negativePrompt: string } => {
     if (!settings?.image?.selectedModel) {
         // No model selected — use legacy prompt
-        return { prompt: getEnhancedPromptForA1111(shot, bibles, brief), negativePrompt: '' };
+        return { prompt: getEnhancedPromptForComfyUI(shot, bibles, brief), negativePrompt: '' };
     }
 
     const profile = getProfileForModel(settings.image.selectedModel, 'image');
@@ -319,17 +369,18 @@ export const getPromptEngineeringKnowledge = (settings?: AIProviderSettings): st
  */
 export const researchModelPromptStyle = async (
     modelId: string,
-    outputType: 'image' | 'video'
+    outputType: 'image' | 'video',
+    providerSettings?: AIProviderSettings
 ): Promise<void> => {
     // Skip if already known
     if (getProfileForModel(modelId, outputType)) return;
 
     try {
-        const ai = getAiClient();
         const researchPromptText = buildResearchPrompt(modelId, outputType);
-        const result = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: researchPromptText,
+        const result = await generateText({
+            prompt: researchPromptText,
+            providerSettings,
+            geminiModel: 'gemini-2.5-flash',
         });
         const text = result.text || '';
         const profile = parseResearchResponse(modelId, text);
@@ -360,10 +411,9 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
-export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, singerGender: string, modelTier: 'freemium' | 'premium'): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
+export const analyzeSong = async (file: File, lyrics: string, title: string | undefined, artist: string | undefined, singerGender: string, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ analysis: SongAnalysis, tokenUsage: number }> => {
     console.log(`AI Service: Analyzing song with ${modelTier} tier...`, { title, artist, singerGender });
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     // Convert audio file to base64 for Gemini "listening"
     const audioBase64 = await fileToBase64(file);
@@ -390,13 +440,21 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
       - Verify if it is a solo, duet (male/female, male/male, female/female), or quartet/group.
       - Provide vocalist entries with gender, role, and time segments where each vocalist sings.
       
-      **LYRIC ANALYSIS (CRITICAL FOR CREATIVE VARIETY):**
-      Deeply analyze the lyrics to understand the song's meaning and visual potential:
+      **LYRIC ANALYSIS (CRITICAL — READ THE WORDS CAREFULLY):**
+      You MUST read every line of the lyrics closely and extract meaning, not just skim for keywords. The lyrics are the primary source of truth for the music video's story, characters, and world.
+
       - primary_themes: Array of 2-5 main thematic elements (e.g., "love", "heartbreak", "celebration", "social justice", "personal growth", "loneliness", "adventure", "rebellion", "spirituality", "nostalgia")
       - narrative_structure: The storytelling approach - "linear story", "vignettes", "stream of consciousness", "dialogue-based", "metaphorical journey", "non-narrative/abstract", "testimonial", or "descriptive"
       - imagery_style: How to interpret the lyrics visually - "literal" (show exactly what's said), "metaphorical" (symbolic interpretation), "surreal" (dreamlike/abstract), "symbolic" (deeper meaning), "mixed" (combination)
       - emotional_arc: Describe how emotions progress through the song (e.g., "starts melancholic, builds to hopeful", "maintains energetic celebration throughout", "alternates between anger and reflection")
       - key_visual_elements: Array of 3-7 specific visual concepts, symbols, or imagery mentioned in or suggested by the lyrics (e.g., "ocean waves", "city streets at night", "broken mirrors", "dancing figures", "mountain peaks", "vintage photographs")
+      - character_insights: A detailed paragraph describing WHO the people in this song are, based on what the lyrics actually say. Include:
+        * Their approximate age/life stage (young lovers in their 20s? middle-aged looking back? teenagers?)
+        * Their relationship to each other (new love? long-term? unrequited? friends becoming more?)
+        * Their emotional state and personality as revealed by the words they sing
+        * Specific lyrics that support these interpretations (quote them)
+        * The world/setting the lyrics imply (urban nightlife? suburban? rural? specific locations mentioned?)
+      - line_by_line_story: For each verse/chorus/bridge, write 1-2 sentences summarizing what is literally happening or being expressed in that section. This ensures every lyric is accounted for in the visual storytelling.
       
       **VIDEO TYPE RECOMMENDATIONS (CRITICAL FOR CREATIVE DIVERSITY):**
       Based on the lyric themes, emotional content, and song characteristics, recommend the most appropriate video format(s):
@@ -422,9 +480,104 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
       ---
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [
+    const songAnalysisSchema = {
+        type: Type.OBJECT,
+        properties: {
+            title: { type: Type.STRING },
+            artist: { type: Type.STRING },
+            bpm: { type: Type.INTEGER },
+            mood: { type: Type.ARRAY, items: { type: Type.STRING } },
+            genre: { type: Type.STRING },
+            instrumentation: { type: Type.ARRAY, items: { type: Type.STRING } },
+            structure: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        start: { type: Type.NUMBER },
+                        end: { type: Type.NUMBER },
+                    },
+                    required: ['name', 'start', 'end'],
+                },
+            },
+            beats: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        time: { type: Type.NUMBER },
+                        energy: { type: Type.NUMBER },
+                    },
+                    required: ['time', 'energy'],
+                }
+            },
+            vocals: {
+                type: Type.OBJECT,
+                properties: {
+                    count: { type: Type.INTEGER },
+                    type: { type: Type.STRING },
+                    duet_pairing: { type: Type.STRING },
+                    vocalists: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: { type: Type.STRING },
+                                display_name: { type: Type.STRING },
+                                gender: { type: Type.STRING },
+                                role: { type: Type.STRING },
+                                segments: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            start: { type: Type.NUMBER },
+                                            end: { type: Type.NUMBER },
+                                        },
+                                        required: ['start', 'end']
+                                    }
+                                }
+                            },
+                            required: ['id', 'display_name', 'gender', 'role', 'segments']
+                        }
+                    }
+                }
+            },
+            lyric_analysis: {
+                type: Type.OBJECT,
+                properties: {
+                    primary_themes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    narrative_structure: { type: Type.STRING },
+                    imagery_style: { type: Type.STRING },
+                    emotional_arc: { type: Type.STRING },
+                    key_visual_elements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    character_insights: { type: Type.STRING },
+                    line_by_line_story: { type: Type.STRING }
+                },
+                required: ['primary_themes', 'narrative_structure', 'imagery_style', 'emotional_arc', 'key_visual_elements', 'character_insights', 'line_by_line_story']
+            },
+            recommended_video_types: {
+                type: Type.OBJECT,
+                properties: {
+                    primary: { type: Type.STRING },
+                    alternatives: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    reasoning: { type: Type.STRING }
+                },
+                required: ['primary', 'alternatives', 'reasoning']
+            }
+        },
+        required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'beats', 'lyric_analysis', 'recommended_video_types'],
+    };
+
+    // Provider path: text+lyrics only (no audio — most LLMs don't support audio input)
+    // Gemini fallback: includes audio for "listening"
+    const result = await generateText({
+        prompt,
+        responseSchema: songAnalysisSchema,
+        providerSettings,
+        geminiModel,
+        geminiContents: [
             { role: 'user', parts: [{ text: prompt }] },
             {
                 role: 'user',
@@ -436,100 +589,10 @@ export const analyzeSong = async (file: File, lyrics: string, title: string | un
                 }]
             }
         ],
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING },
-                    artist: { type: Type.STRING },
-                    bpm: { type: Type.INTEGER },
-                    mood: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    genre: { type: Type.STRING },
-                    instrumentation: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    structure: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING },
-                                start: { type: Type.NUMBER },
-                                end: { type: Type.NUMBER },
-                            },
-                            required: ['name', 'start', 'end'],
-                        },
-                    },
-                    beats: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                time: { type: Type.NUMBER },
-                                energy: { type: Type.NUMBER },
-                            },
-                            required: ['time', 'energy'],
-                        }
-                    },
-                    vocals: {
-                        type: Type.OBJECT,
-                        properties: {
-                            count: { type: Type.INTEGER },
-                            type: { type: Type.STRING },
-                            duet_pairing: { type: Type.STRING },
-                            vocalists: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        id: { type: Type.STRING },
-                                        display_name: { type: Type.STRING },
-                                        gender: { type: Type.STRING },
-                                        role: { type: Type.STRING },
-                                        segments: {
-                                            type: Type.ARRAY,
-                                            items: {
-                                                type: Type.OBJECT,
-                                                properties: {
-                                                    start: { type: Type.NUMBER },
-                                                    end: { type: Type.NUMBER },
-                                                },
-                                                required: ['start', 'end']
-                                            }
-                                        }
-                                    },
-                                    required: ['id', 'display_name', 'gender', 'role', 'segments']
-                                }
-                            }
-                        }
-                    },
-                    lyric_analysis: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary_themes: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            narrative_structure: { type: Type.STRING },
-                            imagery_style: { type: Type.STRING },
-                            emotional_arc: { type: Type.STRING },
-                            key_visual_elements: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ['primary_themes', 'narrative_structure', 'imagery_style', 'emotional_arc', 'key_visual_elements']
-                    },
-                    recommended_video_types: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary: { type: Type.STRING },
-                            alternatives: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            reasoning: { type: Type.STRING }
-                        },
-                        required: ['primary', 'alternatives', 'reasoning']
-                    }
-                },
-                required: ['title', 'artist', 'bpm', 'mood', 'genre', 'instrumentation', 'structure', 'beats', 'lyric_analysis', 'recommended_video_types'],
-            }
-        }
     });
 
-    const analysis = JSON.parse(response.text) as SongAnalysis;
-    return { analysis, tokenUsage: 1500 };
+    const analysis = JSON.parse(result.text) as SongAnalysis;
+    return { analysis, tokenUsage: result.tokenUsage || 1500 };
 };
 
 /**
@@ -1014,20 +1077,30 @@ async function generateBasicAnalysisFromBeats(
     };
 }
 
-export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrief, singerGender: 'male' | 'female' | 'unspecified', modelTier: 'freemium' | 'premium'): Promise<{ bibles: Bibles, tokenUsage: number }> => {
+export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrief, singerGender: 'male' | 'female' | 'unspecified', modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ bibles: Bibles, tokenUsage: number }> => {
     console.log(`AI Service: Generating Bibles with ${modelTier} tier...`, brief);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
       Act as a world-class cinematographer and production designer. Based on the provided song analysis and creative brief, generate HYPER-DETAILED "visual bibles" for a music video. The output must be a valid JSON object adhering to the specified schema.
 
       The goal is MAXIMUM DETAIL to ensure visual consistency. Be extremely specific and descriptive.
-      const primary singer's gender is ${singerGender}. This should influence the main character's gender presentation unless the song's lyrics or mood strongly suggest otherwise.
+      The primary singer's gender is ${singerGender}. This should influence the main character's gender presentation unless the song's lyrics or mood strongly suggest otherwise.
+
+      **LYRICS ARE YOUR PRIMARY SOURCE OF TRUTH:**
+      Before designing ANY character or location, carefully read the lyric_analysis — especially "character_insights" and "line_by_line_story". These fields contain a close reading of the actual lyrics.
+
+      EVERY creative decision must be grounded in what the lyrics actually say:
+      - Character ages MUST match what the lyrics imply. If lyrics describe young love, first experiences, or youthful energy, characters should be in their early-to-mid 20s. Do NOT default to 35+ unless the lyrics explicitly describe maturity, looking back on decades, or life experience.
+      - Character personalities, clothing, and demeanor must reflect the emotional tone and situation described in the lyrics — not generic archetypes.
+      - Locations must match settings mentioned or implied by the lyrics. If lyrics mention a car, a rooftop, a bedroom, rain — those should appear.
+      - The relationship dynamic between characters must match what the lyrics describe — are they falling in love? fighting? reuniting? strangers? Quote specific lyrics that justify your choices.
+      - Actions and props should come from imagery in the lyrics, not from stock music video clichés.
 
       For each Character, provide:
-      - role_in_story: Their purpose in the narrative.
-      - physical_appearance: You MUST be EXTREMELY SPECIFIC about every facial feature. This is critical for visual consistency across shots.
+      - role_in_story: Their purpose in the narrative — tied to what the lyrics say about them.
+      - physical_appearance: You MUST be EXTREMELY SPECIFIC about every facial feature. This is critical for visual consistency across shots. The age_range MUST be justified by the lyric analysis.
+        * age_range: Derived from lyric clues about life stage, relationship maturity, cultural references
         * skin_tone: Exact shade (e.g., "warm golden-brown", "pale ivory with light freckles across the nose bridge")
         * face_shape: Precise bone structure (e.g., "oval face with prominent high cheekbones and a narrow chin")
         * nose_description: Exact nose shape (e.g., "slightly upturned button nose with a narrow bridge", "broad flat nose with flared nostrils")
@@ -1039,38 +1112,34 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
         * hair_texture: Specific curl pattern/texture (e.g., "3B loose curls", "pin-straight and glossy", "thick wavy")
         * eye_color: Specific shade (e.g., "hazel-green with amber flecks around the pupil")
         * eye_shape: Exact shape (e.g., "large almond-shaped eyes with a slight upturn at the outer corners")
-      - costuming_and_props: Define ONE CONSISTENT outfit that the character wears throughout the video. Be hyper-specific about every clothing item — brand aesthetic, fabric, color, fit, layering. This outfit must remain IDENTICAL in every shot unless a wardrobe change is narratively justified. List EVERY visible item from head to toe.
-      - performance_and_demeanor: How do they act? What is their emotional journey?
+      - costuming_and_props: Define ONE CONSISTENT outfit that the character wears throughout the video. The outfit must reflect the character's age, personality, and world as described in the lyrics. Be hyper-specific about every clothing item — brand aesthetic, fabric, color, fit, layering. This outfit must remain IDENTICAL in every shot unless a wardrobe change is narratively justified. List EVERY visible item from head to toe.
+      - performance_and_demeanor: How do they act? What is their emotional journey? This MUST align with the emotional_arc from the lyric analysis.
       - cinematic_style: How should they be filmed? Specify lenses, lighting, and colors that define their presence.
 
       For each Location, provide:
-      - setting_type: What kind of place is this? Urban, natural, surreal?
-      - atmosphere_and_environment: The mood, time, and weather.
+      - setting_type: What kind of place is this? Derive from lyrics — if lyrics mention specific places, use them.
+      - atmosphere_and_environment: The mood, time, and weather — match the lyric tone.
       - architectural_and_natural_details: What makes this place unique? Mention styles and key features.
       - sensory_details: What textures and environmental effects are present (e.g., fog, dust, lens flare)?
       - cinematic_style: How should this location be filmed? Specify lighting, color palette, and camera perspectives.
-      
+
       VOCALS-DRIVEN CHARACTERS:
       - If analysis.vocals indicates a duet (vocals.count >= 2 or vocals.type == 'duet'), create TWO distinct main characters aligned to the detected vocalists (names, gender presentation, styling can differ). Otherwise, create ONE main character.
       - Map vocalist genders to character gender_presentation when reasonable.
-      
+
       LOCATIONS:
       - Always include at least ONE primary location.
+      - Locations should be derived from imagery in the lyrics where possible.
       - If the Creative Brief videoType is "Concert Performance" or the styling implies a performance video, ensure one location is a performance venue (e.g., concert stage, club, festival) with lighting and crowd atmosphere details.
 
       Song Analysis:
       ${JSON.stringify(analysis, null, 2)}
-      
+
       Creative Brief:
       ${JSON.stringify(brief, null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
+    const biblesSchema = {
                 type: Type.OBJECT,
                 properties: {
                     characters: {
@@ -1181,19 +1250,23 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
                     }
                 },
                 required: ['characters', 'locations']
-            }
-        }
+    };
+
+    const result = await generateText({
+        prompt,
+        responseSchema: biblesSchema,
+        providerSettings,
+        geminiModel,
     });
 
-    const bibles = JSON.parse(response.text) as Bibles;
-    return { bibles, tokenUsage: 2500 };
+    const bibles = JSON.parse(result.text) as Bibles;
+    return { bibles, tokenUsage: result.tokenUsage || 2500 };
 };
 
 
 export const generateStoryboard = async (analysis: SongAnalysis, brief: CreativeBrief, bibles: Bibles, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ storyboard: Storyboard, tokenUsage: number }> => {
     console.log(`AI Service: Generating Storyboard with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
       Act as an expert music video director and cinematographer. Create a complete storyboard based on the provided song analysis, creative brief, and visual bibles.
@@ -1293,87 +1366,87 @@ export const generateStoryboard = async (analysis: SongAnalysis, brief: Creative
       Visual Bibles: ${JSON.stringify(bibles, null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    id: { type: Type.STRING, description: "A unique project ID, e.g., proj-123" },
-                    title: { type: Type.STRING },
-                    artist: { type: Type.STRING },
-                    scenes: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.STRING },
-                                section: { type: Type.STRING },
-                                start: { type: Type.NUMBER },
-                                end: { type: Type.NUMBER },
-                                description: { type: Type.STRING, description: "An optional summary of the scene's content and mood." },
-                                narrative_beats: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                transitions: { type: Type.ARRAY, items: { type: Type.NULL }, description: "Set this to an empty array." },
-                                shots: {
-                                    type: Type.ARRAY,
-                                    items: {
+    const storyboardSchema = {
+        type: Type.OBJECT,
+        properties: {
+            id: { type: Type.STRING, description: "A unique project ID, e.g., proj-123" },
+            title: { type: Type.STRING },
+            artist: { type: Type.STRING },
+            scenes: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.STRING },
+                        section: { type: Type.STRING },
+                        start: { type: Type.NUMBER },
+                        end: { type: Type.NUMBER },
+                        description: { type: Type.STRING, description: "An optional summary of the scene's content and mood." },
+                        narrative_beats: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        transitions: { type: Type.ARRAY, items: { type: Type.NULL }, description: "Set this to an empty array." },
+                        shots: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    start: { type: Type.NUMBER },
+                                    end: { type: Type.NUMBER },
+                                    shot_type: { type: Type.STRING },
+                                    camera_move: { type: Type.STRING },
+                                    composition: { type: Type.STRING },
+                                    subject: { type: Type.STRING },
+                                    action: { type: Type.STRING, description: "What the character/subject is doing (e.g., 'smiling radiantly', 'looking at horizon')" },
+                                    location_ref: { type: Type.STRING },
+                                    character_refs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    performer_refs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Optional: which vocalist(s) are featured in this shot" },
+                                    lip_sync_hint: { type: Type.BOOLEAN, description: "Optional: true if this shot should be lip-synced" },
+                                    preview_image_url: { type: Type.STRING, description: "Set to an empty string" },
+                                    lyric_overlay: {
                                         type: Type.OBJECT,
                                         properties: {
-                                            id: { type: Type.STRING },
-                                            start: { type: Type.NUMBER },
-                                            end: { type: Type.NUMBER },
-                                            shot_type: { type: Type.STRING },
-                                            camera_move: { type: Type.STRING },
-                                            composition: { type: Type.STRING },
-                                            subject: { type: Type.STRING },
-                                            action: { type: Type.STRING, description: "What the character/subject is doing (e.g., 'smiling radiantly', 'looking at horizon')" },
-                                            location_ref: { type: Type.STRING },
-                                            character_refs: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                            performer_refs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Optional: which vocalist(s) are featured in this shot" },
-                                            lip_sync_hint: { type: Type.BOOLEAN, description: "Optional: true if this shot should be lip-synced" },
-                                            preview_image_url: { type: Type.STRING, description: "Set to an empty string" },
-                                            lyric_overlay: {
-                                                type: Type.OBJECT,
-                                                properties: {
-                                                    text: { type: Type.STRING },
-                                                    animation_style: { type: Type.STRING }
-                                                }
-                                            },
-                                            cinematic_enhancements: {
-                                                type: Type.OBJECT,
-                                                properties: {
-                                                    lighting_style: { type: Type.STRING },
-                                                    camera_lens: { type: Type.STRING },
-                                                    camera_motion: { type: Type.STRING },
-                                                },
-                                                required: ['lighting_style', 'camera_lens', 'camera_motion']
-                                            },
-                                            design_agent_feedback: {
-                                                type: Type.OBJECT,
-                                                properties: {
-                                                    sync_score: { type: Type.INTEGER },
-                                                    cohesion_score: { type: Type.INTEGER },
-                                                    placement: { type: Type.STRING },
-                                                    feedback: { type: Type.STRING },
-                                                },
-                                                required: ['sync_score', 'cohesion_score', 'placement', 'feedback']
-                                            }
-                                        },
-                                        required: ['id', 'start', 'end', 'shot_type', 'camera_move', 'composition', 'subject', 'action', 'location_ref', 'character_refs', 'preview_image_url', 'cinematic_enhancements', 'design_agent_feedback'],
+                                            text: { type: Type.STRING },
+                                            animation_style: { type: Type.STRING }
+                                        }
                                     },
+                                    cinematic_enhancements: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            lighting_style: { type: Type.STRING },
+                                            camera_lens: { type: Type.STRING },
+                                            camera_motion: { type: Type.STRING },
+                                        },
+                                        required: ['lighting_style', 'camera_lens', 'camera_motion']
+                                    },
+                                    design_agent_feedback: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            sync_score: { type: Type.INTEGER },
+                                            cohesion_score: { type: Type.INTEGER },
+                                            placement: { type: Type.STRING },
+                                            feedback: { type: Type.STRING },
+                                        },
+                                        required: ['sync_score', 'cohesion_score', 'placement', 'feedback']
+                                    }
                                 },
+                                required: ['id', 'start', 'end', 'shot_type', 'camera_move', 'composition', 'subject', 'action', 'location_ref', 'character_refs', 'preview_image_url', 'cinematic_enhancements', 'design_agent_feedback'],
                             },
-                            required: ['id', 'section', 'start', 'end', 'shots', 'narrative_beats', 'transitions'],
                         },
                     },
+                    required: ['id', 'section', 'start', 'end', 'shots', 'narrative_beats', 'transitions'],
                 },
-                required: ['id', 'title', 'artist', 'scenes'],
             },
         },
+        required: ['id', 'title', 'artist', 'scenes'],
+    };
+
+    const result = await generateText({
+        prompt,
+        responseSchema: storyboardSchema,
+        providerSettings,
+        geminiModel,
     });
-    const storyboard = JSON.parse(response.text) as Storyboard;
+    const storyboard = JSON.parse(result.text) as Storyboard;
 
     // Post-process to guarantee full coverage with 6–8s shots aligned to beats
     const covered = ensureStoryboardCoverage(analysis, brief, bibles, storyboard);
@@ -1584,12 +1657,141 @@ function ensureStoryboardCoverage(
     }
 }
 
+/**
+ * Generate an image using the user's configured image provider.
+ * OpenRouter uses /chat/completions with modalities: ["image"].
+ * Other providers (HuggingFace, etc.) use /images/generations.
+ */
+async function generateImageWithProvider(provider: AIProvider, prompt: string): Promise<{ imageUrl: string, tokenUsage: number }> {
+    const baseUrl = provider.baseUrl.replace(/\/+$/, '');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (provider.apiKey) {
+        headers['Authorization'] = `Bearer ${provider.apiKey}`;
+    }
+
+    const isOpenRouter = provider.id === 'openrouter' || baseUrl.includes('openrouter.ai');
+
+    if (isOpenRouter) {
+        // OpenRouter: image generation via /chat/completions with modalities param
+        const endpoint = `${baseUrl}/chat/completions`;
+        let model = provider.selectedModel;
+        console.log(`[ImageProvider] OpenRouter image gen: ${model}`);
+
+        let response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model,
+                modalities: ['image'],
+                messages: [{ role: 'user', content: prompt }],
+                image_config: {
+                    aspect_ratio: '16:9',
+                    image_size: '1K',
+                },
+            }),
+        });
+
+        // Retry with :free suffix if model not found
+        if (response.status === 404 && !model.includes(':')) {
+            model = model + ':free';
+            console.log(`[ImageProvider] Retrying with :free suffix: ${model}`);
+            response = await fetch(endpoint, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model,
+                    modalities: ['image'],
+                    messages: [{ role: 'user', content: prompt }],
+                    image_config: { aspect_ratio: '16:9', image_size: '1K' },
+                }),
+            });
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`OpenRouter image API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        const message = data.choices?.[0]?.message;
+
+        // OpenRouter returns images in message.images[].image_url as base64 data URLs
+        const imageUrl = message?.images?.[0]?.image_url;
+        if (imageUrl) {
+            const usage = data.usage;
+            const tokenUsage = (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0);
+            return { imageUrl, tokenUsage };
+        }
+
+        throw new Error('OpenRouter returned no image in response');
+    }
+
+    // Other providers: OpenAI-compatible /images/generations endpoint
+    const imageEndpoint = `${baseUrl}/images/generations`;
+    console.log(`[ImageProvider] Calling ${imageEndpoint} with model ${provider.selectedModel}`);
+
+    const response = await fetch(imageEndpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+            model: provider.selectedModel,
+            prompt,
+            n: 1,
+            size: '1024x576',
+            response_format: 'b64_json',
+        }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`${provider.name} image API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const imageData = data.data?.[0];
+
+    if (imageData?.b64_json) {
+        return { imageUrl: `data:image/png;base64,${imageData.b64_json}`, tokenUsage: 0 };
+    } else if (imageData?.url) {
+        const imgResp = await fetch(imageData.url);
+        const blob = await imgResp.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        return { imageUrl: base64, tokenUsage: 0 };
+    }
+
+    throw new Error(`${provider.name} returned no image data`);
+}
+
 export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium', providerSettings?: AIProviderSettings): Promise<{ imageUrl: string, tokenUsage: number }> => {
     // Use model-optimized prompt if provider settings are available
     const optimized = providerSettings ? getOptimizedImagePrompt(shot, bibles, brief, providerSettings) : null;
     const prompt = optimized?.prompt || getPromptForImageShot(shot, bibles, brief);
 
-    // Premium tier: Use Google Imagen (high quality, paid)
+    // --- Priority 1: Use configured image provider (OpenRouter, HuggingFace, etc.) ---
+    // Skip ComfyUI here — it's handled separately in Priority 3 with IP-Adapter support
+    const imageProvider = providerSettings?.image;
+    const isComfyUIProvider = imageProvider?.id === 'comfyui' || imageProvider?.id === 'comfyui-video';
+    if (imageProvider?.enabled && imageProvider.baseUrl && imageProvider.selectedModel && !isComfyUIProvider) {
+        // If image provider has no API key but shares the same service as thinking, borrow the key
+        const resolvedProvider = { ...imageProvider };
+        if (!resolvedProvider.apiKey && providerSettings?.thinking?.apiKey && resolvedProvider.id === providerSettings.thinking.id) {
+            resolvedProvider.apiKey = providerSettings.thinking.apiKey;
+            console.log('AI Service: Borrowing API key from thinking provider for image generation');
+        }
+        console.log(`AI Service: Generating image with configured provider: ${resolvedProvider.name} / ${resolvedProvider.selectedModel} (hasKey: ${!!resolvedProvider.apiKey})`, shot.id);
+        try {
+            return await generateImageWithProvider(resolvedProvider, prompt);
+        } catch (error) {
+            console.warn(`AI Service: ${imageProvider.name} image generation failed, falling through to fallbacks:`, error);
+        }
+    }
+
+    // --- Priority 2: Premium tier Google Imagen ---
     if (modelTier === 'premium') {
         console.log("AI Service: Generating image for shot with Google Imagen (Premium)...", shot.id);
         const ai = getAiClient();
@@ -1618,9 +1820,9 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
         }
     }
 
-    // Freemium tier: Try ComfyUI first, fallback to Pollinations AI
+    // --- Priority 3: ComfyUI (local) ---
     try {
-        console.log("AI Service: Checking ComfyUI availability (Freemium)...");
+        console.log("AI Service: Checking ComfyUI availability...");
         const health = await backendService.checkComfyUIHealth();
 
         if (health.available) {
@@ -1632,7 +1834,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             // Use the character's bible portrait (stored in source_images after generation) for IP-Adapter face consistency
             const referenceImageUrl = character?.source_images?.[0];
 
-            const enhancedPrompt = getEnhancedPromptForA1111(shot, bibles, brief);
+            const enhancedPrompt = getEnhancedPromptForComfyUI(shot, bibles, brief);
             console.log("AI Service: Enhanced prompt length:", enhancedPrompt.length);
             console.log("AI Service: Enhanced prompt preview:", enhancedPrompt.substring(0, 200));
             console.log("AI Service: Character reference for IP-Adapter:", referenceImageUrl ? "YES" : "NO");
@@ -1678,7 +1880,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
                 console.log("AI Service: No character portrait — generating without IP-Adapter face lock");
             }
 
-            const result = await backendService.generateImageWithA1111(params);
+            const result = await backendService.generateImageWithComfyUI(params);
             return { imageUrl: result.imageUrl, tokenUsage: 0 };
         } else {
             console.log("AI Service: ComfyUI unavailable, falling back to Pollinations AI...");
@@ -1687,36 +1889,7 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
         console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
     }
 
-    // Fallback for freemium: Use Pollinations AI (free)
-    console.log("AI Service: Generating image for shot with Pollinations AI (Freemium fallback)...", shot.id);
-    try {
-        const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=576&model=flux&nologo=true&enhance=true`;
-
-        // Fetch the image and convert to base64
-        const response = await fetch(pollinationsUrl);
-        if (!response.ok) {
-            throw new Error(`Pollinations AI request failed: ${response.statusText}`);
-        }
-
-        const blob = await response.blob();
-        const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const result = reader.result as string;
-                // Extract base64 data after the comma
-                const base64Data = result.split(',')[1];
-                resolve(base64Data);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-
-        const imageUrl = `data:image/jpeg;base64,${base64}`;
-        return { imageUrl, tokenUsage: 0 };
-    } catch (error) {
-        console.error("AI Service: Pollinations AI failed:", error);
-        throw new Error("All image generation methods failed. Please try again.");
-    }
+    throw new Error("All image generation methods failed. Please check your image provider settings and API key.");
 };
 
 export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
@@ -1764,7 +1937,7 @@ Style: ${cin.color_dominants_in_shots.join(', ')} color palette.
 Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurface scattering, anatomically perfect face, sharp focus, ${cin.camera_lenses}.
                 `.trim().replace(/^ +/gm, '');
 
-                const result = await backendService.generateImageWithA1111({
+                const result = await backendService.generateImageWithComfyUI({
                     prompt: enhancedPrompt,
                     negative_prompt: "blurry, low quality, worst quality, bad anatomy, deformed, disfigured, multiple heads, multiple people, extra limbs, extra fingers, missing limbs, watermark, text, signature, amateur, low res, duplicate face, inconsistent features, clone, bad proportions, plastic skin, airbrushed, smooth skin, doll-like, uncanny valley, asymmetric eyes, wrong eye color, face morphing, hair color change, outfit change",
                     width: 768,
@@ -1875,7 +2048,7 @@ Camera: ${cin.camera_perspective}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
                 `.trim().replace(/^ +/gm, '');
 
-                const result = await backendService.generateImageWithA1111({
+                const result = await backendService.generateImageWithComfyUI({
                     prompt: enhancedPrompt,
                     negative_prompt: "blurry, low quality, worst quality, distorted, people, characters, humans, figures, watermark, text, signature, amateur, low res, jpeg artifacts, grainy, unrealistic lighting",
                     width: 1024,
@@ -2153,48 +2326,44 @@ export const generateClipForShot = async (
 
 export const analyzeMoodboardImages = async (
     images: { mimeType: string, data: string }[],
-    modelTier: 'freemium' | 'premium'
+    modelTier: 'freemium' | 'premium',
+    providerSettings?: AIProviderSettings
 ): Promise<{ briefUpdate: Partial<CreativeBrief>, tokenUsage: number }> => {
     console.log(`AI Service: Analyzing ${images.length} moodboard images with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
-    const imageParts = images.map(img => ({
-        inlineData: {
-            mimeType: img.mimeType,
-            data: img.data,
-        },
-    }));
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: {
-            parts: [
-                { text: "Analyze the following images from a mood board for a music video. Describe the overall 'feel' and 'style', and extract the 5 most dominant colors as hex codes. Respond with a valid JSON object." },
-                ...imageParts,
-            ],
+    const moodboardPrompt = "Analyze the following images from a mood board for a music video. Describe the overall 'feel' and 'style', and extract the 5 most dominant colors as hex codes. Respond with a valid JSON object.";
+    const moodboardSchema = {
+        type: Type.OBJECT,
+        properties: {
+            feel: { type: Type.STRING },
+            style: { type: Type.STRING },
+            color_palette: { type: Type.ARRAY, items: { type: Type.STRING } },
         },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    feel: { type: Type.STRING },
-                    style: { type: Type.STRING },
-                    color_palette: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ['feel', 'style', 'color_palette'],
-            },
+        required: ['feel', 'style', 'color_palette'],
+    };
+
+    const result = await generateText({
+        prompt: moodboardPrompt,
+        responseSchema: moodboardSchema,
+        images: images.map(img => ({ data: img.data, mimeType: img.mimeType })),
+        providerSettings,
+        geminiModel,
+        geminiContents: {
+            parts: [
+                { text: moodboardPrompt },
+                ...images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+            ],
         },
     });
 
-    const briefUpdate = JSON.parse(response.text) as Partial<CreativeBrief>;
-    return { briefUpdate, tokenUsage: 1200 };
+    const briefUpdate = JSON.parse(result.text) as Partial<CreativeBrief>;
+    return { briefUpdate, tokenUsage: result.tokenUsage || 1200 };
 };
 
-export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, currentBrief: CreativeBrief, modelTier: 'freemium' | 'premium'): Promise<{ suggestions: Partial<CreativeBrief>, tokenUsage: number }> => {
+export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, currentBrief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ suggestions: Partial<CreativeBrief>, tokenUsage: number }> => {
     console.log(`AI Service: Getting director suggestions with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
       You are a helpful and creative AI music video director. Based on the provided song analysis and the user's current brief (which may be partially filled), enhance and complete the brief.
@@ -2207,31 +2376,30 @@ export const getDirectorSuggestions = async (songAnalysis: SongAnalysis, current
       Current User Brief: ${JSON.stringify(currentBrief, null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    feel: { type: Type.STRING },
-                    style: { type: Type.STRING },
-                    user_notes: { type: Type.STRING },
-                },
-                required: ['feel', 'style', 'user_notes'],
-            },
+    const directorSchema = {
+        type: Type.OBJECT,
+        properties: {
+            feel: { type: Type.STRING },
+            style: { type: Type.STRING },
+            user_notes: { type: Type.STRING },
         },
+        required: ['feel', 'style', 'user_notes'],
+    };
+
+    const result = await generateText({
+        prompt,
+        responseSchema: directorSchema,
+        providerSettings,
+        geminiModel,
     });
 
-    const suggestions = JSON.parse(response.text) as Partial<CreativeBrief>;
-    return { suggestions, tokenUsage: 1000 };
+    const suggestions = JSON.parse(result.text) as Partial<CreativeBrief>;
+    return { suggestions, tokenUsage: result.tokenUsage || 1000 };
 };
 
-export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboard: Storyboard, modelTier: 'freemium' | 'premium'): Promise<{ suggestions: { shotId: string; vfx: VFX_PRESET }[], tokenUsage: number }> => {
+export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboard: Storyboard, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ suggestions: { shotId: string; vfx: VFX_PRESET }[], tokenUsage: number }> => {
     console.log(`AI Service: Suggesting beat-synced VFX with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
       You are an AI music video editor. Your task is to suggest visual effects (VFX) that sync with the music's energy.
@@ -2239,46 +2407,43 @@ export const suggestBeatSyncedVfx = async (songAnalysis: SongAnalysis, storyboar
       Identify shots that occur during high-energy sections (like a 'chorus' or 'solo').
       For 1-2 of those shots, suggest a suitable VFX from the provided list.
       Return your suggestions as a valid JSON array.
-      
+
       Available VFX Presets: ${VFX_PRESETS.map(p => p.name).join(', ')}
-      
+
       Song Analysis:
       ${JSON.stringify(songAnalysis.structure, null, 2)}
-      
+
       Storyboard (shot IDs and timings):
       ${JSON.stringify(storyboard.scenes.map(s => ({ section: s.section, shots: s.shots.map(sh => ({ id: sh.id, start: sh.start, end: sh.end })) })), null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        shotId: { type: Type.STRING },
-                        vfx: { type: Type.STRING, enum: VFX_PRESETS.map(p => p.name) },
-                    },
-                    required: ['shotId', 'vfx'],
-                },
+    const vfxSchema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                shotId: { type: Type.STRING },
+                vfx: { type: Type.STRING, enum: VFX_PRESETS.map(p => p.name) },
             },
+            required: ['shotId', 'vfx'],
         },
+    };
+
+    const result = await generateText({
+        prompt,
+        responseSchema: vfxSchema,
+        providerSettings,
+        geminiModel,
     });
 
-    const suggestions = JSON.parse(response.text) as { shotId: string; vfx: VFX_PRESET }[];
-    return { suggestions, tokenUsage: 800 };
+    const suggestions = JSON.parse(result.text) as { shotId: string; vfx: VFX_PRESET }[];
+    return { suggestions, tokenUsage: result.tokenUsage || 800 };
 };
 
-export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium'): Promise<{ transitions: (Transition | null)[], tokenUsage: number }> => {
+export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ transitions: (Transition | null)[], tokenUsage: number }> => {
     console.log(`AI Service: Generating transitions for scene ${scene.id} with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
-    // FIX: The error "Cannot read properties of undefined (reading 'length')" can occur if `scene.shots` is not a valid array.
-    // This check ensures we handle malformed scene data gracefully before accessing .length.
     if (!scene.shots || scene.shots.length <= 1) {
         const numShots = scene.shots?.length || 0;
         return { transitions: new Array(numShots).fill(null), tokenUsage: 0 };
@@ -2301,44 +2466,41 @@ export const generateTransitions = async (scene: StoryboardScene, bibles: Bibles
         Shot Pairs: ${JSON.stringify(shotPairs.map(p => ({ from: p.from.subject, to: p.to.subject })), null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    transitions: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                type: { type: Type.STRING },
-                                duration: { type: Type.NUMBER },
-                                description: { type: Type.STRING },
-                            },
-                            required: ['type', 'duration', 'description'],
-                        },
+    const transitionSchema = {
+        type: Type.OBJECT,
+        properties: {
+            transitions: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        type: { type: Type.STRING },
+                        duration: { type: Type.NUMBER },
+                        description: { type: Type.STRING },
                     },
+                    required: ['type', 'duration', 'description'],
                 },
-                required: ['transitions']
             },
         },
+        required: ['transitions']
+    };
+
+    const genResult = await generateText({
+        prompt,
+        responseSchema: transitionSchema,
+        providerSettings,
+        geminiModel,
     });
 
-    // FIX: Safely handle the API response. The original code `result.transitions` would fail if `JSON.parse` returns null.
-    // Also, the model may not return a `transitions` array. Defaulting to an empty array prevents crashes.
-    const result = JSON.parse(response.text);
-    const transitions = result?.transitions || [];
-    const transitionsWithNull = [...transitions, null]; // Add null for the end of the last shot
-    return { transitions: transitionsWithNull, tokenUsage: 1000 };
+    const parsed = JSON.parse(genResult.text);
+    const transitions = parsed?.transitions || [];
+    const transitionsWithNull = [...transitions, null];
+    return { transitions: transitionsWithNull, tokenUsage: genResult.tokenUsage || 1000 };
 };
 
-export const generateExecutiveProducerFeedback = async (storyboard: Storyboard, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium'): Promise<{ feedback: ExecutiveProducerFeedback, tokenUsage: number }> => {
+export const generateExecutiveProducerFeedback = async (storyboard: Storyboard, bibles: Bibles, brief: CreativeBrief, modelTier: 'freemium' | 'premium', providerSettings?: AIProviderSettings): Promise<{ feedback: ExecutiveProducerFeedback, tokenUsage: number }> => {
     console.log(`AI Service: Generating Executive Producer feedback with ${modelTier} tier...`);
-    const ai = getAiClient();
-    const modelName = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const geminiModel = modelTier === 'premium' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     const prompt = `
       Act as a seasoned Executive Producer for a major record label. You are reviewing the complete pre-production package for a music video. Your task is to provide high-level, critical feedback on the project as a whole.
@@ -2356,24 +2518,24 @@ export const generateExecutiveProducerFeedback = async (storyboard: Storyboard, 
       Storyboard: ${JSON.stringify(storyboard.scenes.map(s => ({ section: s.section, description: s.description, shots: s.shots.length })), null, 2)}
     `;
 
-    const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    pacing_score: { type: Type.INTEGER },
-                    narrative_score: { type: Type.INTEGER },
-                    consistency_score: { type: Type.INTEGER },
-                    final_notes: { type: Type.STRING },
-                },
-                required: ['pacing_score', 'narrative_score', 'consistency_score', 'final_notes'],
-            },
+    const epSchema = {
+        type: Type.OBJECT,
+        properties: {
+            pacing_score: { type: Type.INTEGER },
+            narrative_score: { type: Type.INTEGER },
+            consistency_score: { type: Type.INTEGER },
+            final_notes: { type: Type.STRING },
         },
+        required: ['pacing_score', 'narrative_score', 'consistency_score', 'final_notes'],
+    };
+
+    const result = await generateText({
+        prompt,
+        responseSchema: epSchema,
+        providerSettings,
+        geminiModel,
     });
 
-    const feedback = JSON.parse(response.text) as ExecutiveProducerFeedback;
-    return { feedback, tokenUsage: 1500 };
+    const feedback = JSON.parse(result.text) as ExecutiveProducerFeedback;
+    return { feedback, tokenUsage: result.tokenUsage || 1500 };
 };

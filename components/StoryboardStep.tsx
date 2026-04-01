@@ -677,8 +677,11 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
   const scenes = storyboard.scenes || [];
   const allShots = scenes.flatMap(s => s.shots || []);
   const generatedClipsCount = allShots.filter(s => s.clip_url).length;
+  const generatedImagesCount = allShots.filter(s => s.preview_image_url && s.preview_image_url !== 'error').length;
   const allClipsGenerated = allShots.length > 0 && generatedClipsCount === allShots.length;
+  const allImagesGenerated = allShots.length > 0 && generatedImagesCount === allShots.length;
   const generatedPercent = allShots.length > 0 ? Math.min(100, Math.max(0, Math.round((generatedClipsCount / allShots.length) * 100))) : 0;
+  const imagePercent = allShots.length > 0 ? Math.min(100, Math.max(0, Math.round((generatedImagesCount / allShots.length) * 100))) : 0;
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   
   const PostProductionButton: React.FC<{
@@ -916,18 +919,18 @@ const StoryboardStep: React.FC<StoryboardStepProps> = ({ songAnalysis, storyboar
           <div className="flex items-center justify-between">
               <div>
                   <h4 className="font-bold text-white">Final Review</h4>
-                  <p className="text-sm text-gray-400">{generatedClipsCount} of {allShots.length} clips generated.</p>
+                  <p className="text-sm text-gray-400">{generatedImagesCount} of {allShots.length} images generated{generatedClipsCount > 0 ? `, ${generatedClipsCount} clips ready` : ''}.</p>
               </div>
               <button 
                   onClick={onGoToReview}
-                  disabled={!allClipsGenerated || isProcessing}
+                  disabled={(!allClipsGenerated && !allImagesGenerated) || isProcessing}
                   className="w-full max-w-xs flex items-center justify-center bg-brand-cyan text-brand-dark font-bold py-3 px-6 rounded-lg hover:bg-white disabled:bg-gray-500 disabled:cursor-not-allowed transition-all transform hover:scale-105"
                 >
                   {isProcessing ? <><Spinner /> Finalizing...</> : 'Finalize & Review'}
               </button>
           </div>
                     <div className="w-full bg-gray-700 rounded-full h-2.5 mt-3">
-                        <div className={`bg-brand-cyan h-2.5 rounded-full w-[${generatedPercent}%]`} />
+                        <div className={`bg-brand-cyan h-2.5 rounded-full`} style={{ width: `${generatedClipsCount > 0 ? generatedPercent : imagePercent}%` }} />
                     </div>
       </div>
       

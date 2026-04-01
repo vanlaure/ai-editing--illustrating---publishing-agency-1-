@@ -111,9 +111,14 @@ async function fetchOpenRouterModels(provider: AIProvider): Promise<AIProviderMo
     return rawModels
         .filter((m: any) => !m.hidden)
         .map((m: any) => {
-            // Frontend endpoint uses `slug`, `input_modalities`, `output_modalities`
-            // V1 API uses `id`, `architecture.modality`
-            const id = m.slug || m.id;
+            // V1 API uses `id` (includes variant suffix like `:free`)
+            // Frontend proxy uses `slug` (no variant suffix) + `endpoint.is_free`
+            // We must reconstruct the full model ID that the API actually accepts
+            let id = m.id || m.slug;
+            // Frontend proxy uses `slug` without `:free` suffix — reconstruct full API model ID
+            if (!m.id && m.slug && (m.is_free || m.endpoint?.is_free)) {
+                id = m.slug + ':free';
+            }
             const name = m.name || id;
             const inputMods: string[] = m.input_modalities || m.architecture?.input_modalities || ['text'];
             const outputMods: string[] = m.output_modalities || m.architecture?.output_modalities || ['text'];
@@ -150,6 +155,7 @@ async function fetchOpenRouterModels(provider: AIProvider): Promise<AIProviderMo
                 category,
             };
         })
+        .filter((m: AIProviderModel, i: number, arr: AIProviderModel[]) => arr.findIndex(x => x.id === m.id) === i)
         .sort((a: AIProviderModel, b: AIProviderModel) => {
             // Sort by category first, then by name within category
             const catCmp = (a.category || '').localeCompare(b.category || '');

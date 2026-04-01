@@ -100,16 +100,36 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 const SETTINGS_KEY = 'ai_music_video_provider_settings';
 
+// Resolve API key from env vars when not explicitly set
+
+function getEnvApiKey(providerId: string): string {
+    switch (providerId) {
+        case 'openrouter': return process.env.OPENROUTER_API_KEY || '';
+        case 'nvidia': return process.env.NVIDIA_API_KEY || '';
+        case 'huggingface': return process.env.HUGGINGFACE_API_KEY || '';
+        default: return '';
+    }
+}
+
+function resolveApiKey(provider: AIProvider): AIProvider {
+    // Always prefer env var if available, fall back to stored key
+    const envKey = getEnvApiKey(provider.id);
+    if (envKey) {
+        return { ...provider, apiKey: envKey };
+    }
+    return provider;
+}
+
 function loadSettings(): AIProviderSettings {
     try {
         const raw = localStorage.getItem(SETTINGS_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            // Merge with defaults to handle new fields
+            // Merge with defaults to handle new fields, then resolve env API keys
             return {
-                thinking: { ...defaultSettings.thinking, ...parsed.thinking },
-                image: { ...defaultSettings.image, ...parsed.image },
-                video: { ...defaultSettings.video, ...parsed.video },
+                thinking: resolveApiKey({ ...defaultSettings.thinking, ...parsed.thinking }),
+                image: resolveApiKey({ ...defaultSettings.image, ...parsed.image }),
+                video: resolveApiKey({ ...defaultSettings.video, ...parsed.video }),
             };
         }
     } catch (e) {
@@ -144,8 +164,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch({ type: 'SET_MODELS', role, models });
     }, []);
 
+    // Always resolve API keys from env vars before providing to consumers
+    const resolvedSettings = React.useMemo(() => ({
+        thinking: resolveApiKey(settings.thinking),
+        image: resolveApiKey(settings.image),
+        video: resolveApiKey(settings.video),
+    }), [settings]);
+
     return (
-        <SettingsContext.Provider value={{ settings, dispatch, setPreset, updateField, setModels }}>
+        <SettingsContext.Provider value={{ settings: resolvedSettings, dispatch, setPreset, updateField, setModels }}>
             {children}
         </SettingsContext.Provider>
     );
