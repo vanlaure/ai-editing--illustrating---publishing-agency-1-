@@ -191,9 +191,20 @@ export async function generateWithProvider(
         throw new Error(`${provider.name} returned empty response`);
     }
 
-    const text = choice.message.content;
+    let text = choice.message.content;
     const usage = data.usage;
     const tokenUsage = (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0);
+
+    // Strip thinking/reasoning tags (Qwen, DeepSeek, etc. wrap reasoning in <think> tags)
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    // If response should be JSON but has extra text around it, extract the JSON
+    if (responseSchema || jsonMode) {
+        const jsonMatch = text.match(/(\{[\s\S]*\})/);
+        if (jsonMatch) {
+            text = jsonMatch[1];
+        }
+    }
 
     return { text, tokenUsage };
 }

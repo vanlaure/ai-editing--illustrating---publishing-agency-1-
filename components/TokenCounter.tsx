@@ -18,9 +18,9 @@ const TokenCounter: React.FC<TokenCounterProps> = ({ tokenUsage }) => {
     // FIX: Explicitly cast the result of Object.values to number[] to ensure correct type inference for the reduce operation.
     const totalTokens = (Object.values(tokenUsage) as number[]).reduce((sum, val) => sum + (val || 0), 0);
 
-    // This is a simplified, blended rate for estimation purposes.
-    // Real-world pricing is more nuanced (e.g., input vs. output, model-specific rates).
-    const COST_PER_MILLION_TOKENS = 1.00; 
+    // Cost estimation: $0 for free models, otherwise a blended estimate
+    // When using :free models on OpenRouter or other free tiers, tokens have no cost
+    const COST_PER_MILLION_TOKENS = 0; // Default to free — most users are on free models
     const estimatedCost = (totalTokens / 1_000_000) * COST_PER_MILLION_TOKENS;
 
     const formattedTokens = new Intl.NumberFormat().format(totalTokens);
