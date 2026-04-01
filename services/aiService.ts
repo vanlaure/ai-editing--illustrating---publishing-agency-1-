@@ -7,6 +7,17 @@ import { generateThinking, hasThinkingProvider } from './providerClient';
 
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
+/** Safely join an array-like field — handles undefined, strings, and objects */
+const safeJoin = (val: any, sep = ', '): string => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) return val.join(sep);
+    return String(val);
+};
+
+/** Safely access a nested property, returning fallback if undefined */
+const safe = (val: any, fallback = ''): string => val ?? fallback;
+
 /**
  * Unified text generation: tries configured thinking provider first (OpenRouter, etc.),
  * falls back to Gemini if no provider is configured or if the provider call fails.
@@ -133,20 +144,20 @@ const buildCharacterIdentityBlock = (char: CharacterBible, level: 'full' | 'conc
             `(${pa.hair_style_and_color}, ${pa.hair_texture}:1.3)`,
             `(${pa.eye_shape} ${pa.eye_color} eyes:1.2)`,
             pa.key_facial_features ? `(${pa.key_facial_features}:1.1)` : '',
-            `(wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}:1.2)`,
+            `(wearing ${safe(cos.outfit_style)}: ${safeJoin(cos.specific_clothing_items)}:1.2)`,
         ].filter(Boolean).join(', ');
     }
 
     // Full natural-language block for detailed-prompt models (Waver, Step-Video, etc.)
     return [
         `Character "${char.name}":`,
-        `${pa.gender_presentation}, ${pa.ethnicity}, ${pa.age_range} years old, ${pa.body_type} build.`,
-        `FACE (must be photorealistic and identical in every frame): ${pa.skin_tone} skin, ${pa.face_shape} face. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}. Eyes: ${pa.eye_shape}, ${pa.eye_color}.`,
+        `${safe(pa.gender_presentation)}, ${safe(pa.ethnicity)}, ${safe(pa.age_range)} years old, ${safe(pa.body_type)} build.`,
+        `FACE (must be photorealistic and identical in every frame): ${safe(pa.skin_tone)} skin, ${safe(pa.face_shape)} face. Nose: ${safe(pa.nose_description)}. Lips: ${safe(pa.lip_description)}. Brows: ${safe(pa.brow_description)}. Jaw: ${safe(pa.jawline_description)}. Eyes: ${safe(pa.eye_shape)}, ${safe(pa.eye_color)}.`,
         pa.key_facial_features ? `Distinguishing features: ${pa.key_facial_features}.` : '',
-        `HAIR (must remain consistent): ${pa.hair_style_and_color}, ${pa.hair_texture} texture.`,
-        `OUTFIT (must remain identical): ${cos.outfit_style} — ${cos.specific_clothing_items.join(', ')}.`,
-        cos.signature_props.length > 0 ? `Props: ${cos.signature_props.join(', ')}.` : '',
-        `Performance: ${char.performance_and_demeanor.performance_style}.`,
+        `HAIR (must remain consistent): ${safe(pa.hair_style_and_color)}, ${safe(pa.hair_texture)} texture.`,
+        `OUTFIT (must remain identical): ${safe(cos.outfit_style)} — ${safeJoin(cos.specific_clothing_items)}.`,
+        safeJoin(cos.signature_props) ? `Props: ${safeJoin(cos.signature_props)}.` : '',
+        `Performance: ${safe(char.performance_and_demeanor?.performance_style)}.`,
     ].filter(Boolean).join(' ');
 };
 
@@ -240,7 +251,7 @@ export const getPromptForClipShot = (shot: StoryboardShot, bibles: Bibles, brief
         if (!loc) return '';
 
         if (shouldUseDetailed) {
-            return `Location "${loc.name}": ${loc.setting_type}, ${loc.atmosphere_and_environment.time_of_day}, ${loc.atmosphere_and_environment.weather} weather, ${loc.atmosphere_and_environment.dominant_mood} mood. Architecture: ${loc.architectural_and_natural_details.style}. Key features: ${loc.architectural_and_natural_details.key_features.join(', ')}.`;
+            return `Location "${loc.name}": ${safe(loc.setting_type)}, ${safe(loc.atmosphere_and_environment?.time_of_day)}, ${safe(loc.atmosphere_and_environment?.weather)} weather, ${safe(loc.atmosphere_and_environment?.dominant_mood)} mood. Architecture: ${safe(loc.architectural_and_natural_details?.style)}. Key features: ${safeJoin(loc.architectural_and_natural_details?.key_features)}.`;
         }
 
         const weight = isStylized ? ':1.2' : ':1.1';
@@ -1259,7 +1270,33 @@ export const generateBibles = async (analysis: SongAnalysis, brief: CreativeBrie
         geminiModel,
     });
 
-    const bibles = JSON.parse(result.text) as Bibles;
+    let parsed: any;
+    try {
+        parsed = JSON.parse(result.text);
+    } catch (parseError) {
+        console.error('AI Service: Failed to parse bibles JSON, attempting extraction...', parseError);
+        const jsonMatch = result.text.match(/\{[\s\S]*"characters"[\s\S]*"locations"[\s\S]*\}/);
+        if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+        } else {
+            throw new Error('Failed to parse bibles response as JSON');
+        }
+    }
+
+    // Unwrap if model nested inside a wrapper key (e.g. "visual_bible", "bibles", "result")
+    if (!Array.isArray(parsed.characters)) {
+        const inner = Object.values(parsed).find((v: any) => v && typeof v === 'object' && Array.isArray((v as any).characters));
+        if (inner) {
+            console.log('AI Service: Unwrapping nested bibles object');
+            parsed = inner;
+        }
+    }
+
+    const bibles = parsed as Bibles;
+    if (!Array.isArray(bibles.characters) || !Array.isArray(bibles.locations)) {
+        console.error('AI Service: Invalid bibles structure:', Object.keys(parsed));
+        throw new Error('Bibles response missing characters or locations array');
+    }
     return { bibles, tokenUsage: result.tokenUsage || 2500 };
 };
 
@@ -1883,33 +1920,33 @@ export const generateImageForShot = async (shot: StoryboardShot, bibles: Bibles,
             const result = await backendService.generateImageWithComfyUI(params);
             return { imageUrl: result.imageUrl, tokenUsage: 0 };
         } else {
-            console.log("AI Service: ComfyUI unavailable, falling back to Pollinations AI...");
+            console.log("AI Service: ComfyUI unavailable, no further fallbacks available...");
         }
     } catch (error) {
-        console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
+        console.warn("AI Service: ComfyUI generation failed, no further fallbacks available:", error);
     }
 
     throw new Error("All image generation methods failed. Please check your image provider settings and API key.");
 };
 
 export const generateImageForBibleCharacter = async (character: CharacterBible, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
-    const pa = character.physical_appearance;
-    const cos = character.costuming_and_props;
-    const cin = character.cinematic_style;
+    const pa = character.physical_appearance || {} as any;
+    const cos = character.costuming_and_props || {} as any;
+    const cin = character.cinematic_style || {} as any;
 
     const prompt = `
       A cinematic 3:4 aspect ratio character reference photo. Ultra-realistic, photorealistic skin with visible pores, anatomically perfect face.
-      - Style: ${brief.style}, ${brief.feel}.
-      - Character Name: ${character.name}.
-      - Gender/Ethnicity: ${pa.gender_presentation}, ${pa.ethnicity}, ${pa.age_range} years old, ${pa.body_type} build.
-      - Skin: ${pa.skin_tone}.
-      - Face: ${pa.face_shape} face shape. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}.
-      - Eyes: ${pa.eye_shape}, ${pa.eye_color}.
-      - Distinguishing features: ${pa.key_facial_features || 'none'}.
-      - Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
-      - Outfit (head to toe): ${cos.outfit_style} — ${cos.specific_clothing_items.join(', ')}.
-      ${cos.signature_props.length > 0 ? `- Props: ${cos.signature_props.join(', ')}.` : ''}
-      - Cinematic Lighting: ${cin.lighting_style}.
+      - Style: ${safe(brief.style)}, ${safe(brief.feel)}.
+      - Character Name: ${safe(character.name)}.
+      - Gender/Ethnicity: ${safe(pa.gender_presentation)}, ${safe(pa.ethnicity)}, ${safe(pa.age_range)} years old, ${safe(pa.body_type)} build.
+      - Skin: ${safe(pa.skin_tone)}.
+      - Face: ${safe(pa.face_shape)} face shape. Nose: ${safe(pa.nose_description)}. Lips: ${safe(pa.lip_description)}. Brows: ${safe(pa.brow_description)}. Jaw: ${safe(pa.jawline_description)}.
+      - Eyes: ${safe(pa.eye_shape)}, ${safe(pa.eye_color)}.
+      - Distinguishing features: ${safe(pa.key_facial_features, 'none')}.
+      - Hair: ${safe(pa.hair_style_and_color)}, ${safe(pa.hair_texture)} texture.
+      - Outfit (head to toe): ${safe(cos.outfit_style)} — ${safeJoin(cos.specific_clothing_items)}.
+      ${safeJoin(cos.signature_props) ? `- Props: ${safeJoin(cos.signature_props)}.` : ''}
+      - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
     if (modelTier === 'freemium') {
@@ -1922,18 +1959,18 @@ export const generateImageForBibleCharacter = async (character: CharacterBible, 
 
                 // Enhanced prompt with full granular character details for identity lock
                 const enhancedPrompt = `
-Cinematic ${brief.style} character reference portrait, ${brief.feel} mood, 3:4 aspect ratio.
-${character.name}: ${pa.gender_presentation} ${pa.ethnicity} person, ${pa.age_range} years old, ${pa.body_type} build.
-Skin: ${pa.skin_tone}.
-Face: ${pa.face_shape} face. Nose: ${pa.nose_description}. Lips: ${pa.lip_description}. Brows: ${pa.brow_description}. Jaw: ${pa.jawline_description}.
-Eyes: ${pa.eye_shape}, ${pa.eye_color}.
+Cinematic ${safe(brief.style)} character reference portrait, ${safe(brief.feel)} mood, 3:4 aspect ratio.
+${safe(character.name)}: ${safe(pa.gender_presentation)} ${safe(pa.ethnicity)} person, ${safe(pa.age_range)} years old, ${safe(pa.body_type)} build.
+Skin: ${safe(pa.skin_tone)}.
+Face: ${safe(pa.face_shape)} face. Nose: ${safe(pa.nose_description)}. Lips: ${safe(pa.lip_description)}. Brows: ${safe(pa.brow_description)}. Jaw: ${safe(pa.jawline_description)}.
+Eyes: ${safe(pa.eye_shape)}, ${safe(pa.eye_color)}.
 ${pa.key_facial_features ? `Distinguishing features: ${pa.key_facial_features}.` : ''}
-Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
-Wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}.
-${cos.signature_props.length > 0 ? `Props: ${cos.signature_props.join(', ')}.` : ''}
-Expression: ${character.performance_and_demeanor.emotional_arc}.
-Lighting: ${cin.lighting_style}.
-Style: ${cin.color_dominants_in_shots.join(', ')} color palette.
+Hair: ${safe(pa.hair_style_and_color)}, ${safe(pa.hair_texture)} texture.
+Wearing ${safe(cos.outfit_style)}: ${safeJoin(cos.specific_clothing_items)}.
+${safeJoin(cos.signature_props) ? `Props: ${safeJoin(cos.signature_props)}.` : ''}
+Expression: ${safe(character.performance_and_demeanor?.emotional_arc)}.
+Lighting: ${safe(cin.lighting_style)}.
+Style: ${safeJoin(cin.color_dominants_in_shots)} color palette.
 Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurface scattering, anatomically perfect face, sharp focus, ${cin.camera_lenses}.
                 `.trim().replace(/^ +/gm, '');
 
@@ -1946,45 +1983,12 @@ Ultra-realistic RAW photo, photorealistic skin texture, visible pores, subsurfac
                     cfg_scale: 9
                 });
                 return { imageUrl: result.imageUrl, tokenUsage: 0 };
-            } else {
-                console.log("AI Service: ComfyUI unavailable, falling back to Pollinations AI...");
             }
         } catch (error) {
-            console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
+            console.warn("AI Service: ComfyUI generation failed:", error);
         }
 
-        console.log("AI Service: Generating bible character with Pollinations AI (Freemium fallback)...", character.name);
-        try {
-            const enhancedPrompt = `
-Cinematic ${brief.style} character reference portrait, ${brief.feel} mood, 3:4 aspect ratio.
-${character.name}: ${pa.gender_presentation} ${pa.ethnicity} person, ${pa.age_range} years old, ${pa.body_type} build.
-Skin: ${pa.skin_tone}. Face: ${pa.face_shape} face, ${pa.nose_description} nose, ${pa.lip_description}, ${pa.brow_description}, ${pa.jawline_description}.
-Eyes: ${pa.eye_shape}, ${pa.eye_color}. ${pa.key_facial_features ? `Features: ${pa.key_facial_features}.` : ''}
-Hair: ${pa.hair_style_and_color}, ${pa.hair_texture} texture.
-Wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}.
-Expression: ${character.performance_and_demeanor.emotional_arc}. Lighting: ${cin.lighting_style}.
-Ultra-realistic RAW photo, photorealistic skin texture, visible pores, sharp focus, anatomically perfect face.
-            `.trim().replace(/\n/g, ' ');
-
-            const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=768&height=1024&model=flux&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
-            const imageResponse = await fetch(pollinationsUrl);
-            if (!imageResponse.ok) {
-                throw new Error(`Pollinations AI returned status ${imageResponse.status}`);
-            }
-
-            const imageBlob = await imageResponse.blob();
-            const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(imageBlob);
-            });
-
-            const imageUrl = base64;
-            return { imageUrl, tokenUsage: 0 };
-        } catch (error) {
-            console.error("AI Service: Pollinations AI failed:", error);
-            throw new Error("All image generation methods failed. Please try again.");
-        }
+        throw new Error("Character image generation failed. Please check your image provider settings.");
     }
 
     console.log("AI Service: Generating image for character bible with Imagen...", character.name);
@@ -2011,19 +2015,19 @@ Ultra-realistic RAW photo, photorealistic skin texture, visible pores, sharp foc
 };
 
 export const generateImageForBibleLocation = async (location: LocationBible, brief: CreativeBrief, modelTier: 'freemium' | 'premium' = 'freemium'): Promise<{ imageUrl: string, tokenUsage: number }> => {
-    const atm = location.atmosphere_and_environment;
-    const arch = location.architectural_and_natural_details;
-    const sens = location.sensory_details;
-    const cin = location.cinematic_style;
+    const atm = location.atmosphere_and_environment || {} as any;
+    const arch = location.architectural_and_natural_details || {} as any;
+    const sens = location.sensory_details || {} as any;
+    const cin = location.cinematic_style || {} as any;
 
     const prompt = `
        A cinematic 16:9 aspect ratio environment concept art photo.
-      - Style: ${brief.style}, ${brief.feel}.
-      - Location Name: ${location.name} (${location.setting_type}).
-      - Atmosphere: ${atm.dominant_mood} mood, during the ${atm.time_of_day} with ${atm.weather}.
-      - Key Features: ${arch.style}, featuring ${arch.key_features.join(', ')}.
-      - Environmental Effects: ${sens.environmental_effects.join(', ')}.
-      - Cinematic Lighting: ${cin.lighting_style}.
+      - Style: ${safe(brief.style)}, ${safe(brief.feel)}.
+      - Location Name: ${safe(location.name)} (${safe(location.setting_type)}).
+      - Atmosphere: ${safe(atm.dominant_mood)} mood, during the ${safe(atm.time_of_day)} with ${safe(atm.weather)}.
+      - Key Features: ${safe(arch.style)}, featuring ${safeJoin(arch.key_features)}.
+      - Environmental Effects: ${safeJoin(sens.environmental_effects)}.
+      - Cinematic Lighting: ${safe(cin.lighting_style)}.
     `;
 
     if (modelTier === 'freemium') {
@@ -2038,13 +2042,13 @@ export const generateImageForBibleLocation = async (location: LocationBible, bri
                 const enhancedPrompt = `
 Cinematic ${brief.style} environment concept art, ${brief.feel} mood, 16:9 aspect ratio.
 ${location.name}: ${location.setting_type}.
-Time: ${atm.time_of_day}, Weather: ${atm.weather}, Mood: ${atm.dominant_mood}.
-Architecture: ${arch.style} style featuring ${arch.key_features.join(', ')}.
-Textures: ${sens.textures.join(', ')}.
-Environmental effects: ${sens.environmental_effects.join(', ')}.
-Lighting: ${cin.lighting_style}.
-Color palette: ${cin.color_palette.join(', ')}.
-Camera: ${cin.camera_perspective}.
+Time: ${safe(atm.time_of_day)}, Weather: ${safe(atm.weather)}, Mood: ${safe(atm.dominant_mood)}.
+Architecture: ${safe(arch.style)} style featuring ${safeJoin(arch.key_features)}.
+Textures: ${safeJoin(sens.textures)}.
+Environmental effects: ${safeJoin(sens.environmental_effects)}.
+Lighting: ${safe(cin.lighting_style)}.
+Color palette: ${safeJoin(cin.color_palette)}.
+Camera: ${safe(cin.camera_perspective)}.
 Professional environment concept art, high detail, sharp focus, photorealistic, no people.
                 `.trim().replace(/^ +/gm, '');
 
@@ -2058,43 +2062,12 @@ Professional environment concept art, high detail, sharp focus, photorealistic, 
                 });
                 return { imageUrl: result.imageUrl, tokenUsage: 0 };
             } else {
-                console.log("AI Service: ComfyUI unavailable, falling back to Pollinations AI...");
             }
         } catch (error) {
-            console.warn("AI Service: ComfyUI generation failed, falling back to Pollinations AI:", error);
+            console.warn("AI Service: ComfyUI generation failed:", error);
         }
 
-        console.log("AI Service: Generating bible location with Pollinations AI (Freemium fallback)...", location.name);
-        try {
-            const enhancedPrompt = `
-Cinematic ${brief.style} environment concept art, ${brief.feel} mood, 16:9 aspect ratio.
-${location.name}: ${location.setting_type}.
-Time: ${atm.time_of_day}, Weather: ${atm.weather}, Mood: ${atm.dominant_mood}.
-Architecture: ${arch.style} style featuring ${arch.key_features.join(', ')}.
-Environmental effects: ${sens.environmental_effects.join(', ')}.
-Lighting: ${cin.lighting_style}. Color palette: ${cin.color_palette.join(', ')}.
-Professional environment concept art, high detail, sharp focus, photorealistic, no people.
-            `.trim().replace(/\n/g, ' ');
-
-            const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=576&model=flux&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
-            const imageResponse = await fetch(pollinationsUrl);
-            if (!imageResponse.ok) {
-                throw new Error(`Pollinations AI returned status ${imageResponse.status}`);
-            }
-
-            const imageBlob = await imageResponse.blob();
-            const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(imageBlob);
-            });
-
-            const imageUrl = base64;
-            return { imageUrl, tokenUsage: 0 };
-        } catch (error) {
-            console.error("AI Service: Pollinations AI failed:", error);
-            throw new Error("All image generation methods failed. Please try again.");
-        }
+        throw new Error("Location image generation failed. Please check your image provider settings.");
     }
 
     console.log("AI Service: Generating image for location bible with Imagen...", location.name);

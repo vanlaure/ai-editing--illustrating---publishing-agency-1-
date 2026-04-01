@@ -109,7 +109,7 @@ function buildCharacterBlockForProfile(
                 `(${pa.hair_style_and_color}, ${pa.hair_texture}:1.3)`,
                 `(${pa.eye_shape} ${pa.eye_color} eyes:1.2)`,
                 pa.key_facial_features ? `(${pa.key_facial_features}:1.1)` : '',
-                `(wearing ${cos.outfit_style}: ${cos.specific_clothing_items.join(', ')}:1.2)`,
+                `(wearing ${cos?.outfit_style || ''}: ${Array.isArray(cos?.specific_clothing_items) ? cos.specific_clothing_items.join(', ') : (cos?.specific_clothing_items || '')}:1.2)`,
             ].filter(Boolean).join(', ');
         }).join(', ');
     }
@@ -124,7 +124,7 @@ function buildCharacterBlockForProfile(
             `Face: ${pa.skin_tone} skin, ${pa.face_shape} face, ${pa.nose_description} nose, ${pa.lip_description}, ${pa.brow_description}, ${pa.jawline_description}. Eyes: ${pa.eye_shape}, ${pa.eye_color}.`,
             pa.key_facial_features ? `Distinguishing: ${pa.key_facial_features}.` : '',
             `Hair: ${pa.hair_style_and_color}, ${pa.hair_texture}.`,
-            `Outfit: ${cos.outfit_style} — ${cos.specific_clothing_items.join(', ')}.`,
+            `Outfit: ${cos?.outfit_style || ''} — ${Array.isArray(cos?.specific_clothing_items) ? cos.specific_clothing_items.join(', ') : (cos?.specific_clothing_items || '')}.`,
         ].filter(Boolean).join(' ');
     }).join('\n');
 }

@@ -602,7 +602,7 @@ export const useMusicVideoGenerator = () => {
   const generateBibleImages = useCallback(async (bibles: Bibles, brief: CreativeBrief) => {
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    for (const character of bibles.characters) {
+    for (const character of (bibles.characters || [])) {
       try {
         const { imageUrl, tokenUsage } = await aiService.generateImageForBibleCharacter(character, brief, state.modelTier);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'character', name: character.name, imageUrls: [imageUrl] } });
@@ -614,7 +614,7 @@ export const useMusicVideoGenerator = () => {
       }
       await delay(1500); // Wait between requests to avoid rate limiting
     }
-    for (const location of bibles.locations) {
+    for (const location of (bibles.locations || [])) {
       try {
         const { imageUrl, tokenUsage } = await aiService.generateImageForBibleLocation(location, brief, state.modelTier);
         dispatch({ type: 'SET_BIBLE_ITEM_IMAGES', payload: { type: 'location', name: location.name, imageUrls: [imageUrl] } });

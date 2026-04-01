@@ -139,10 +139,10 @@ For any mismatch, call out the exact storyboard section (e.g., verse_1, chorus_2
             text: `Creative brief style: ${brief.style || "n/a"} | Feel: ${brief.feel || "n/a"} | Mood: ${brief.mood?.join(", ") || "n/a"} | Color palette: ${brief.color_palette?.join(", ") || "n/a"}`,
         },
         {
-            text: `Key character looks: ${bibles.characters.map(c => `${c.name}: ${c.physical_appearance.gender_presentation}, ${c.physical_appearance.hair_style_and_color}, outfit ${c.costuming_and_props.outfit_style}`).join(" | ")}`,
+            text: `Key character looks: ${(bibles.characters || []).map(c => `${c.name}: ${c.physical_appearance?.gender_presentation || ''}, ${c.physical_appearance?.hair_style_and_color || ''}, outfit ${c.costuming_and_props?.outfit_style || ''}`).join(" | ")}`,
         },
         {
-            text: `Locations: ${bibles.locations.map(l => `${l.name}: ${l.setting_type}, ${l.atmosphere_and_environment.time_of_day}, palette ${l.cinematic_style.color_palette.join(",")}`).join(" | ")}`,
+            text: `Locations: ${(bibles.locations || []).map(l => `${l.name}: ${l.setting_type || ''}, ${l.atmosphere_and_environment?.time_of_day || ''}, palette ${Array.isArray(l.cinematic_style?.color_palette) ? l.cinematic_style.color_palette.join(",") : (l.cinematic_style?.color_palette || '')}`).join(" | ")}`,
         },
     ];
 
